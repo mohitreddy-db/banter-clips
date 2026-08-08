@@ -1,0 +1,35 @@
+# ── Secrets & infrastructure details — NEVER commit ─────────────
+infra/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# ── Node (frontend) ─────────────────────────────────────────────
+node_modules/
+dist/
+.vercel/
+
+# ── Python (backend) ────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# ── Generated media & experiment outputs (large, reproducible) ──
+artifacts/**/*.mp4
+artifacts/**/*.MP4
+artifacts/**/*.png
+artifacts/**/*.mp3
+generated-videos/
+generated-scenes/
+backend/data/
+
+# ── Editor / OS noise ───────────────────────────────────────────
+.DS_Store
+*.log
+.idea/
+.vscode/

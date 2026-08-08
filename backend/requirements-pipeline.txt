@@ -1,0 +1,5 @@
+# Extra deps for the real video pipeline (app/pipeline/) — not needed while
+# generation runs in dummy mode. Install on top of requirements.txt when the
+# provider bake-off is done and real generation is wired in.
+openai>=2.52.0
+Pillow

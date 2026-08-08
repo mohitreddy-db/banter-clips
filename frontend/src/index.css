@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+/* ---------- Landing theme (client's design — do not reinterpret) ---------- */
+:root {
+  --bg: #0b0d13;
+  --bg2: #12141d;
+  --bg3: #181b26;
+  --card: #141824;
+  --elev: #1c2130;
+  --border: #242a3a;
+  --border2: #333a4e;
+  --text: #f2f4fa;
+  --muted: #98a1b5;
+  --muted2: #6b7488;
+  --accent: oklch(0.66 0.19 253);
+  --accent2: oklch(0.8 0.16 152);
+  --accentSoft: oklch(0.66 0.19 253 / 0.16);
+  --greenSoft: oklch(0.8 0.16 152 / 0.16);
+  --grad: linear-gradient(120deg, oklch(0.66 0.19 253), oklch(0.8 0.16 152));
+  --display: "Space Grotesk", system-ui, sans-serif;
+
+  /* ---------- App theme (Figma) ---------- */
+  --app-bg: #0b0f1c;
+  --app-sidebar: #080c16;
+  --app-surface: #131a2b;
+  --app-panel: #0f1524;
+  --app-border: #232c40;
+  --app-cyan: #22d3ee;
+  --app-green: #34e27a;
+  --app-text: #f4f6fb;
+  --app-muted: #8b93a7;
+  --app-muted2: #4a5468;
+  --app-error: #f0546c;
+  --app-grad: linear-gradient(90deg, #22d3ee, #34e27a);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3143;
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+}
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(6px);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes prog {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--border), 0 0 30px -8px var(--accentSoft);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 46px 0 var(--accentSoft);
+  }
+}
+
+/* Landing responsive rules (from the client's page) */
+@media (max-width: 860px) {
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+    padding: 44px 20px 30px !important;
+  }
+  .land-nav-links,
+  .land-nav-signin {
+    display: none !important;
+  }
+  .feat-grid,
+  .plan-grid,
+  .step-grid,
+  .testi-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .step-grid > div {
+    grid-column: auto !important;
+  }
+  h1.hero-h1 {
+    font-size: 38px !important;
+  }
+  .ob-sports {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .app-shell {
+    grid-template-columns: 1fr !important;
+  }
+  .app-sidebar {
+    display: none !important;
+  }
+  .studio-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .result-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .price-cards {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* App-side utility classes (Figma theme) */
+.app-font {
+  font-family: "Inter", system-ui, sans-serif;
+}
+.grad-btn {
+  background: var(--app-grad);
+  color: #06121a;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+.grad-btn:hover {
+  filter: brightness(1.08);
+}
+.grad-btn:active {
+  transform: scale(0.99);
+}
+.grad-btn:disabled {
+  background: #1a2234;
+  color: var(--app-muted2);
+  cursor: not-allowed;
+  filter: none;
+}
+.ghost-btn {
+  background: transparent;
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ghost-btn:hover {
+  border-color: var(--app-cyan);
+  background: rgba(34, 211, 238, 0.06);
+}
+.chip {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--app-border);
+  background: #161e30;
+  color: var(--app-muted);
+  transition: all 0.15s;
+}
+.chip:hover {
+  border-color: var(--app-cyan);
+  color: var(--app-text);
+}
+.chip.on {
+  background: #12303d;
+  border-color: var(--app-cyan);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 20px;
+}
+.panel {
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+}
