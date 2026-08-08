@@ -12,14 +12,13 @@ publish (all plans, watermarked on Free) or download (Creator only).
 banter-clips/
 ├── frontend/              React SPA — deployed to Vercel
 ├── backend/               FastAPI API — deployed to a DigitalOcean droplet
-├── infra/                 ⚠ gitignored — droplet IPs, certs, keys, Supabase creds
-├── BRD.md                 Business requirements (v1.4) — the source of truth
-├── VIDEO-PIPELINE-SPEC.md Companion technical spec for the real video pipeline
-├── PRD.md / PRD2.md       Earlier product docs (historical)
-├── figma-scripts/         Scripter scripts that build/update the Figma designs
-├── artifacts/             Experiment outputs (media files gitignored)
-└── script.txt             Prompt pack for testing video-gen providers
+├── deploy/                Droplet setup script, systemd unit, Caddyfile, runbook
+├── infra/                 ⚠ gitignored — droplet IPs, certs, keys, Supabase/Meta creds
+└── BRD.md                 Business requirements (v1.4) — the source of truth
 ```
+
+(Design experiments, Figma scripts, prompt packs, and earlier PRDs live only
+in the local working folder — they're gitignored to keep the repo focused.)
 
 `frontend/` and `backend/` are fully independent projects: separate
 dependencies (`package-lock.json` vs `requirements.txt`), separate `.env`

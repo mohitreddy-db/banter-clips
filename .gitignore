@@ -33,3 +33,17 @@ backend/data/
 *.log
 .idea/
 .vscode/
+
+# ── Local-only docs & experiments (kept on disk, not in the repo) ──
+figma-scripts/
+artifacts/
+generated-scenes/
+generated-videos/
+.claude/
+PRD.md
+PRD2.md
+BanterClips-AI-chat.md
+yt_transcript.txt
+script.txt
+VIDEO-PIPELINE-SPEC.md
+instagram-app.txt
