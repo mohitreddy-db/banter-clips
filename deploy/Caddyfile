@@ -1,0 +1,12 @@
+# /etc/caddy/Caddyfile — reverse proxy with automatic HTTPS (Let's Encrypt).
+# Replace api.example.com with the real API subdomain pointed at this droplet.
+
+api.example.com {
+    reverse_proxy 127.0.0.1:8000
+    encode gzip
+
+    # Large-ish video responses from /media
+    request_body {
+        max_size 200MB
+    }
+}
