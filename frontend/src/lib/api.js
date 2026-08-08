@@ -47,7 +47,10 @@ async function request(path, { method = "GET", body } = {}) {
 }
 
 export const api = {
-  // auth (magic link — DEV_MODE returns the token directly)
+  // auth
+  exchangeSupabase: (access_token) =>
+    request("/auth/supabase", { method: "POST", body: { access_token } }),
+  // dev-only fallback (backend returns 404 unless DEV_MODE)
   requestLink: (email, display_name) =>
     request("/auth/request-link", { method: "POST", body: { email, display_name } }),
   verify: (token) => request("/auth/verify", { method: "POST", body: { token } }),

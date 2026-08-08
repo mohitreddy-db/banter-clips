@@ -45,6 +45,8 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    # Supabase Auth user id (auth.users.id) once the account signs in via Supabase.
+    supabase_uid: Mapped[str | None] = mapped_column(Text, unique=True)
     display_name: Mapped[str | None] = mapped_column(Text)
     plan: Mapped[str] = mapped_column(Text, nullable=False, server_default="free")
     plan_renews_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

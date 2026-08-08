@@ -6,6 +6,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE users (
     id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     email                 text NOT NULL UNIQUE,          -- stored lowercased
+    supabase_uid          text UNIQUE,                   -- Supabase auth.users.id
     display_name          text,
     plan                  text NOT NULL DEFAULT 'free'
                           CHECK (plan IN ('free', 'creator')),

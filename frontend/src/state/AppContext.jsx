@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, clearToken, getToken, setToken } from "../lib/api.js";
+import { supabase, supabaseEnabled } from "../lib/supabase.js";
 
 const AppContext = createContext(null);
 
@@ -63,10 +64,56 @@ export function AppProvider({ children }) {
     })();
   }, [loadAll]);
 
-  const signIn = useCallback(
+  // Trade a Supabase access token for a BanterClips API session.
+  const exchange = useCallback(
+    async (supabaseAccessToken) => {
+      const session = await api.exchangeSupabase(supabaseAccessToken);
+      setToken(session.access_token);
+      await loadAll();
+      return session.user;
+    },
+    [loadAll]
+  );
+
+  // Real auth (Supabase): email + password.
+  const signUp = useCallback(
+    async (email, password, displayName) => {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { display_name: displayName || email.split("@")[0] },
+          emailRedirectTo: `${window.location.origin}/signin`,
+        },
+      });
+      if (error) throw new Error(error.message);
+      // With email confirmation enabled there is no session yet.
+      if (!data.session) return { needsConfirmation: true };
+      return { user: await exchange(data.session.access_token) };
+    },
+    [exchange]
+  );
+
+  const signInPassword = useCallback(
+    async (email, password) => {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw new Error(error.message);
+      return exchange(data.session.access_token);
+    },
+    [exchange]
+  );
+
+  const sendMagicLink = useCallback(async (email) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/signin` },
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  // Dev fallback when Supabase isn't configured (backend DEV_MODE only).
+  const devSignIn = useCallback(
     async (email) => {
-      // Magic-link flow. DEV_MODE hands the token straight back so the demo
-      // signs in without a mailbox; production emails a real link.
       const { dev_token } = await api.requestLink(email);
       if (!dev_token) throw new Error("Check your inbox for the sign-in link.");
       const session = await api.verify(dev_token);
@@ -77,8 +124,21 @@ export function AppProvider({ children }) {
     [loadAll]
   );
 
+  // When the user lands back from a confirmation / magic-link email, Supabase
+  // picks the session out of the URL — exchange it for an API session.
+  useEffect(() => {
+    if (!supabaseEnabled) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session && !getToken()) {
+        exchange(session.access_token).catch(() => {});
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [exchange]);
+
   const signOut = useCallback(() => {
     clearToken();
+    if (supabaseEnabled) supabase.auth.signOut().catch(() => {});
     setUser(null);
     setUsage(null);
     setClips([]);
@@ -139,7 +199,11 @@ export function AppProvider({ children }) {
     apiDown,
     user,
     signedIn: !!user,
-    signIn,
+    supabaseEnabled,
+    signUp,
+    signInPassword,
+    sendMagicLink,
+    devSignIn,
     signOut,
     plan,
     used,
