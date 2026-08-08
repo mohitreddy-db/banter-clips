@@ -83,7 +83,16 @@ export default function Clips() {
               <div style={{ position: "relative", width: "100%", height: 300, background: "#080C16", display: "grid", placeItems: "center" }}>
                 <div style={{ position: "relative", height: "100%", aspectRatio: "9/16", background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", borderRadius: 4, overflow: "hidden" }}>
                   {c.status === "ready" && c.video_url ? (
-                    <video src={c.video_url} controls playsInline onPlay={() => api.track("preview_played")} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                    <video
+                      src={c.video_url}
+                      controls
+                      playsInline
+                      controlsList="nodownload noremoteplayback"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
+                      onPlay={() => api.track("preview_played")}
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    />
                   ) : (
                     <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
                       {inFlight ? (

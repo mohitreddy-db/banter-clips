@@ -336,7 +336,16 @@ export default function Studio() {
           <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start" }}>
             <div className="card" style={{ padding: 20, display: "grid", placeItems: "center" }}>
               <div style={{ position: "relative", width: "100%", aspectRatio: "9/16", borderRadius: 16, overflow: "hidden", background: "#000" }}>
-                <video src={clip.video_url} controls playsInline onPlay={() => api.track("preview_played")} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                <video
+                  src={clip.video_url}
+                  controls
+                  playsInline
+                  controlsList="nodownload noremoteplayback"
+                  disablePictureInPicture
+                  onContextMenu={(e) => e.preventDefault()}
+                  onPlay={() => api.track("preview_played")}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                />
                 {clip.watermarked && (
                   <div style={{ position: "absolute", right: 10, bottom: 44, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 6, pointerEvents: "none" }}>
                     ▶ BanterClips
