@@ -79,29 +79,32 @@ export default function Clips() {
           const inFlight = c.status !== "ready" && c.status !== "failed";
           return (
             <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16 }}>
-              <div style={{ position: "relative", aspectRatio: "9/16", background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", maxHeight: 280 }}>
-                {c.status === "ready" && c.video_url ? (
-                  <video src={c.video_url} controls playsInline onPlay={() => api.track("preview_played")} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
-                    {inFlight ? (
-                      <div style={{ textAlign: "center", color: "#fff" }}>
-                        <span style={{ display: "inline-block", width: 26, height: 26, borderRadius: "50%", border: "3px solid rgba(255,255,255,.25)", borderTopColor: "#fff", animation: "spin 1s linear infinite" }} />
-                        <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{STATUS_LABEL[c.status] || "Working…"}</div>
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
-                    )}
-                  </div>
-                )}
+              {/* media frame: fixed height, 9:16 video centered inside */}
+              <div style={{ position: "relative", width: "100%", height: 300, background: "#080C16", display: "grid", placeItems: "center" }}>
+                <div style={{ position: "relative", height: "100%", aspectRatio: "9/16", background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", borderRadius: 4, overflow: "hidden" }}>
+                  {c.status === "ready" && c.video_url ? (
+                    <video src={c.video_url} controls playsInline onPlay={() => api.track("preview_played")} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
+                      {inFlight ? (
+                        <div style={{ textAlign: "center", color: "#fff" }}>
+                          <span style={{ display: "inline-block", width: 26, height: 26, borderRadius: "50%", border: "3px solid rgba(255,255,255,.25)", borderTopColor: "#fff", animation: "spin 1s linear infinite" }} />
+                          <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{STATUS_LABEL[c.status] || "Working…"}</div>
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
+                      )}
+                    </div>
+                  )}
+                  {c.status === "ready" && c.watermarked && (
+                    <div style={{ position: "absolute", right: 6, bottom: 38, background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
+                      ▶ BanterClips
+                    </div>
+                  )}
+                </div>
                 <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
                   {c.sport} · {c.tone?.toUpperCase()}
                 </div>
-                {c.status === "ready" && c.watermarked && (
-                  <div style={{ position: "absolute", right: 8, bottom: 8, background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
-                    ▶ BanterClips
-                  </div>
-                )}
               </div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35 }}>{c.take}</div>
@@ -118,13 +121,28 @@ export default function Clips() {
                     <button className="grad-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9 }} onClick={() => setPublishClip(c)}>
                       ⤴ Publish
                     </button>
-                    <button
-                      className="ghost-btn"
-                      style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, color: canDownload ? "var(--app-text)" : "var(--app-muted)" }}
-                      onClick={() => (canDownload ? download(c) : setUpgradeOpen(true))}
-                    >
-                      {canDownload ? "⬇ Download" : "🔒 Download"}
-                    </button>
+                    {canDownload ? (
+                      <button className="ghost-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, color: "var(--app-text)" }} onClick={() => download(c)}>
+                        ⬇ Download
+                      </button>
+                    ) : (
+                      // BR-08: visible-but-locked download is the upgrade prompt.
+                      <button
+                        title="Downloading in HD without the watermark is a Creator feature"
+                        style={{
+                          flex: 1, padding: "9px 0", fontSize: 12, borderRadius: 9, cursor: "pointer",
+                          background: "transparent", border: "1px dashed var(--app-border)",
+                          color: "var(--app-muted2)", display: "inline-flex", alignItems: "center",
+                          justifyContent: "center", gap: 6, fontWeight: 600,
+                        }}
+                        onClick={() => setUpgradeOpen(true)}
+                      >
+                        🔒 Download
+                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                          CREATOR
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
                 {c.status === "failed" && (
