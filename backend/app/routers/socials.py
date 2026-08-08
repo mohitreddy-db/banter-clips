@@ -7,12 +7,17 @@ real ones. When OAuth approval lands, `connect` becomes a redirect to the
 platform's consent screen and a callback fills in the same row.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 
+import httpx
+import jwt as pyjwt
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
 from ..models import SocialAccount, User
@@ -22,6 +27,135 @@ router = APIRouter(prefix="/socials", tags=["socials"])
 
 # One platform at MVP launch (BR-13); the rest are visible but locked.
 CONNECTABLE = {"instagram"}
+
+IG_AUTHORIZE = "https://www.instagram.com/oauth/authorize"
+IG_TOKEN = "https://api.instagram.com/oauth/access_token"
+IG_GRAPH = "https://graph.instagram.com"
+IG_SCOPES = "instagram_business_basic,instagram_business_content_publish"
+
+ig_oauth_configured = lambda: bool(settings.META_APP_ID and settings.META_APP_SECRET and settings.IG_REDIRECT_URI)  # noqa: E731
+
+
+def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_user_id: str | None) -> SocialAccount:
+    account = db.scalar(
+        select(SocialAccount).where(
+            SocialAccount.user_id == user_id, SocialAccount.platform == "instagram"
+        )
+    )
+    if account is None:
+        account = SocialAccount(user_id=user_id, platform="instagram", handle=handle)
+        db.add(account)
+    account.handle = handle
+    account.access_token = token
+    account.platform_user_id = platform_user_id
+    account.status = "connected"
+    account.revoked_at = None
+    db.commit()
+    return account
+
+
+@router.get("/instagram/oauth-url")
+def instagram_oauth_url(
+    next: str = "/account",
+    user: User = Depends(get_current_user),
+):
+    """Real Instagram Business Login (BR-13). Returns the Meta consent URL;
+    503 when the Meta app isn't configured so the client can fall back to the
+    mock connector."""
+    if not ig_oauth_configured():
+        raise HTTPException(503, detail={"code": "oauth_not_configured", "message": "Instagram OAuth is not configured."})
+    state = pyjwt.encode(
+        {
+            "sub": str(user.id),
+            "purpose": "ig_oauth",
+            "next": next if next.startswith("/") else "/account",
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
+    query = urlencode(
+        {
+            "client_id": settings.META_APP_ID,
+            "redirect_uri": settings.IG_REDIRECT_URI,
+            "response_type": "code",
+            "scope": IG_SCOPES,
+            "state": state,
+        }
+    )
+    return {"url": f"{IG_AUTHORIZE}?{query}"}
+
+
+@router.get("/instagram/callback")
+def instagram_callback(
+    code: str | None = None,
+    state: str = "",
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """OAuth redirect target. Exchanges the code for a long-lived token, stores
+    the real account, and bounces the browser back to the frontend."""
+
+    def bounce(next_path: str, **params) -> RedirectResponse:
+        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+
+    try:
+        claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        assert claims.get("purpose") == "ig_oauth"
+        user_id = claims["sub"]
+        next_path = claims.get("next", "/account")
+    except Exception:
+        return bounce("/account", ig="error", reason="invalid_state")
+
+    if error or not code:
+        return bounce(next_path, ig="denied", reason=error_description or error or "cancelled")
+
+    try:
+        # 1. authorization code → short-lived token
+        tok = httpx.post(
+            IG_TOKEN,
+            data={
+                "client_id": settings.META_APP_ID,
+                "client_secret": settings.META_APP_SECRET,
+                "grant_type": "authorization_code",
+                "redirect_uri": settings.IG_REDIRECT_URI,
+                "code": code,
+            },
+            timeout=15,
+        ).json()
+        short_token = tok["access_token"]
+
+        # 2. short-lived → long-lived (60 days, refreshable)
+        long_tok = httpx.get(
+            f"{IG_GRAPH}/access_token",
+            params={
+                "grant_type": "ig_exchange_token",
+                "client_secret": settings.META_APP_SECRET,
+                "access_token": short_token,
+            },
+            timeout=15,
+        ).json()
+        token = long_tok.get("access_token", short_token)
+
+        # 3. who is this?
+        me = httpx.get(
+            f"{IG_GRAPH}/v23.0/me",
+            params={"fields": "user_id,username,account_type", "access_token": token},
+            timeout=15,
+        ).json()
+        username = me.get("username") or "connected"
+        ig_user_id = str(me.get("user_id") or tok.get("user_id") or "")
+    except Exception:
+        return bounce(next_path, ig="error", reason="token_exchange_failed")
+
+    user = db.get(User, user_id)
+    if user is None:
+        return bounce(next_path, ig="error", reason="unknown_user")
+
+    _upsert_account(db, user.id, handle=f"@{username}", token=token, platform_user_id=ig_user_id)
+    record_event(db, "social_connected", user, platform="instagram", real=True)
+    return bounce(next_path, ig="connected", handle=username)
 
 
 @router.get("", response_model=list[SocialAccountOut])

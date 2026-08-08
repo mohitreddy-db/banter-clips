@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 
 export default function Account() {
@@ -11,6 +11,17 @@ export default function Account() {
   const isCreator = plan === "creator";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [params, setParams] = useSearchParams();
+  const [igNotice, setIgNotice] = useState(null);
+
+  // Result of the Instagram OAuth round-trip (?ig=connected|denied|error).
+  useEffect(() => {
+    const ig = params.get("ig");
+    if (!ig) return;
+    if (ig === "connected") setIgNotice({ ok: true, text: `Instagram connected${params.get("handle") ? ` as @${params.get("handle")}` : ""}.` });
+    else setIgNotice({ ok: false, text: `Instagram connect ${ig === "denied" ? "was cancelled" : "failed"}${params.get("reason") ? ` — ${params.get("reason")}` : ""}.` });
+    setParams({}, { replace: true });
+  }, [params, setParams]);
 
   const withBusy = (fn) => async () => {
     setBusy(true);
@@ -46,6 +57,11 @@ export default function Account() {
       {error && (
         <div style={{ fontSize: 13.5, color: "var(--app-error)", background: "rgba(240,84,108,.1)", borderRadius: 12, padding: "12px 16px" }}>
           {error}
+        </div>
+      )}
+      {igNotice && (
+        <div style={{ fontSize: 13.5, color: igNotice.ok ? "var(--app-green)" : "var(--app-error)", background: igNotice.ok ? "rgba(52,226,122,.1)" : "rgba(240,84,108,.1)", borderRadius: 12, padding: "12px 16px" }}>
+          {igNotice.text}
         </div>
       )}
 

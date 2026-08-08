@@ -134,6 +134,8 @@ class SocialAccount(Base):
     handle: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="connected")
     access_token: Mapped[str | None] = mapped_column(Text)
+    # The platform-side user id (Instagram professional account id).
+    platform_user_id: Mapped[str | None] = mapped_column(Text)
     connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

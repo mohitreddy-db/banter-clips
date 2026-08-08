@@ -64,7 +64,8 @@ CREATE TABLE social_accounts (
     handle        text NOT NULL,
     status        text NOT NULL DEFAULT 'connected'
                   CHECK (status IN ('connected', 'revoked')),
-    access_token  text,                                  -- mock until real OAuth
+    access_token  text,                                  -- long-lived IG token (or mock)
+    platform_user_id text,                               -- IG professional account id
     connected_at  timestamptz NOT NULL DEFAULT now(),
     revoked_at    timestamptz,
     UNIQUE (user_id, platform)

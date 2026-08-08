@@ -166,6 +166,20 @@ export function AppProvider({ children }) {
 
   const connectSocial = useCallback(
     async (platform) => {
+      if (platform === "instagram") {
+        // Real Instagram Business Login when the Meta app is configured —
+        // the whole tab goes to Meta's consent screen and comes back.
+        try {
+          const { url } = await api.igOauthUrl(window.location.pathname);
+          if (url) {
+            window.location.href = url;
+            return null;
+          }
+        } catch (e) {
+          if (e.status !== 503) throw e;
+          // 503 → OAuth not configured; fall through to the mock connector.
+        }
+      }
       const acc = await api.connectSocial(platform);
       await refreshSocials();
       return acc;

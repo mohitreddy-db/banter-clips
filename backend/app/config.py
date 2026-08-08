@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
 
+    # Meta / Instagram Business Login (BR-13 real publishing). When unset,
+    # /socials/connect falls back to the mock connector.
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    # Must exactly match an OAuth redirect URI registered in the Meta app.
+    IG_REDIRECT_URI: str = ""
+    # Where the OAuth callback sends the browser afterwards.
+    FRONTEND_URL: str = "http://localhost:5173"
+
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
     # Plan matrix (BR-15). Only successful videos count (BR-09).
