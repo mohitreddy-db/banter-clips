@@ -35,8 +35,46 @@ IG_SCOPES = "instagram_business_basic,instagram_business_content_publish"
 
 ig_oauth_configured = lambda: bool(settings.META_APP_ID and settings.META_APP_SECRET and settings.IG_REDIRECT_URI)  # noqa: E731
 
+MOCK_TOKEN = "mock-oauth-token"
+REFRESH_WINDOW = timedelta(days=15)
 
-def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_user_id: str | None) -> SocialAccount:
+
+def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
+    """Instagram long-lived tokens last ~60 days and do NOT renew themselves.
+    When one is inside its last 15 days, roll it via ig_refresh_token (allowed
+    once the token is >24h old). Called on every /socials read and before each
+    real publish, so any account used at least once in two months never lapses."""
+    if (
+        account.status != "connected"
+        or not account.access_token
+        or account.access_token == MOCK_TOKEN
+        or account.token_expires_at is None
+        or account.token_expires_at - datetime.now(timezone.utc) > REFRESH_WINDOW
+    ):
+        return
+    try:
+        body = httpx.get(
+            f"{IG_GRAPH}/refresh_access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": account.access_token},
+            timeout=15,
+        ).json()
+    except httpx.HTTPError:
+        return  # transient — retry on the next touch
+    if "access_token" in body:
+        account.access_token = body["access_token"]
+        account.token_expires_at = datetime.now(timezone.utc) + timedelta(
+            seconds=body.get("expires_in", 60 * 24 * 3600)
+        )
+        db.commit()
+    elif account.token_expires_at < datetime.now(timezone.utc):
+        # Expired and unrefreshable — surface as disconnected so the UI
+        # prompts a clean reconnect instead of failing publishes.
+        account.status = "revoked"
+        account.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+
+
+def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_user_id: str | None, expires_in: int | None = None) -> SocialAccount:
     account = db.scalar(
         select(SocialAccount).where(
             SocialAccount.user_id == user_id, SocialAccount.platform == "instagram"
@@ -48,6 +86,9 @@ def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_u
     account.handle = handle
     account.access_token = token
     account.platform_user_id = platform_user_id
+    account.token_expires_at = (
+        datetime.now(timezone.utc) + timedelta(seconds=expires_in) if expires_in else None
+    )
     account.status = "connected"
     account.revoked_at = None
     db.commit()
@@ -137,6 +178,7 @@ def instagram_callback(
             timeout=15,
         ).json()
         token = long_tok.get("access_token", short_token)
+        expires_in = long_tok.get("expires_in")
 
         # 3. who is this?
         me = httpx.get(
@@ -153,18 +195,21 @@ def instagram_callback(
     if user is None:
         return bounce(next_path, ig="error", reason="unknown_user")
 
-    _upsert_account(db, user.id, handle=f"@{username}", token=token, platform_user_id=ig_user_id)
+    _upsert_account(db, user.id, handle=f"@{username}", token=token, platform_user_id=ig_user_id, expires_in=expires_in)
     record_event(db, "social_connected", user, platform="instagram", real=True)
     return bounce(next_path, ig="connected", handle=username)
 
 
 @router.get("", response_model=list[SocialAccountOut])
 def list_accounts(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.scalars(
+    accounts = db.scalars(
         select(SocialAccount)
         .where(SocialAccount.user_id == user.id, SocialAccount.status == "connected")
         .order_by(SocialAccount.connected_at)
     ).all()
+    for account in accounts:
+        maybe_refresh_token(db, account)
+    return [a for a in accounts if a.status == "connected"]
 
 
 @router.post("/connect", response_model=SocialAccountOut, status_code=201)

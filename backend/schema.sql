@@ -66,6 +66,7 @@ CREATE TABLE social_accounts (
                   CHECK (status IN ('connected', 'revoked')),
     access_token  text,                                  -- long-lived IG token (or mock)
     platform_user_id text,                               -- IG professional account id
+    token_expires_at timestamptz,                        -- auto-refreshed near expiry
     connected_at  timestamptz NOT NULL DEFAULT now(),
     revoked_at    timestamptz,
     UNIQUE (user_id, platform)

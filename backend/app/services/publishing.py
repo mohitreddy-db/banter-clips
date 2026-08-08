@@ -135,6 +135,12 @@ def _run_publish(publish_id: uuid.UUID) -> None:
         account = pub.account
         real = bool(account and account.access_token and account.access_token != MOCK_TOKEN and account.platform_user_id)
         if real:
+            # Roll the 60-day token if it's near expiry before using it.
+            from ..routers.socials import maybe_refresh_token
+
+            maybe_refresh_token(db, account)
+            if account.status != "connected":
+                return _fail(db, pub, "Your Instagram session expired — reconnect the account and retry (it's free).")
             pub.status = "uploading"
             db.commit()
             try:

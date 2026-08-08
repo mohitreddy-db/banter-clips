@@ -136,6 +136,8 @@ class SocialAccount(Base):
     access_token: Mapped[str | None] = mapped_column(Text)
     # The platform-side user id (Instagram professional account id).
     platform_user_id: Mapped[str | None] = mapped_column(Text)
+    # When the long-lived token expires; refreshed automatically near expiry.
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
