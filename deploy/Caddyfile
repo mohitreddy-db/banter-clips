@@ -1,7 +1,7 @@
 # /etc/caddy/Caddyfile — reverse proxy with automatic HTTPS (Let's Encrypt).
-# Replace api.example.com with the real API subdomain pointed at this droplet.
+# Serves the API on both the primary domain and the legacy alias.
 
-api.example.com {
+api.banterclips.com, api.banterclips.goroutine.in {
     reverse_proxy 127.0.0.1:8000
     encode gzip
 
