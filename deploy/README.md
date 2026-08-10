@@ -67,7 +67,10 @@ ssh root@<droplet-ip> 'cd /opt/banter-clips && git pull && backend/.venv/bin/pip
   add `http://localhost:5173` to Additional Redirect URLs for local dev.
 - Settings → Database → note/reset the **database password** (needed for the
   droplet's `DATABASE_URL`). Store it in `infra/supabase.md`.
-- Before public launch: Auth → custom SMTP (built-in mailer is rate-limited).
+- Auth emails: custom SMTP via Resend (smtp.resend.com:465, user `resend`,
+  password = Resend API key, sender noreply@banterclips.com) — the built-in
+  mailer is rate-limited. Branded templates to paste into Auth → Templates:
+  [`email-templates/`](email-templates/).
 
 ## 4. Meta dashboard (one-time)
 
