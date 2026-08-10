@@ -113,6 +113,20 @@ export function AppProvider({ children }) {
     if (error) throw new Error(error.message);
   }, []);
 
+  // Password reset (also how a Google-signup account adds a password):
+  // email link → /reset-password → updatePassword() in the recovery session.
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
+  const updatePassword = useCallback(async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+  }, []);
+
   const sendMagicLink = useCallback(async (email) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -238,6 +252,8 @@ export function AppProvider({ children }) {
     signInPassword,
     signInWithGoogle,
     sendMagicLink,
+    resetPassword,
+    updatePassword,
     devSignIn,
     signOut,
     plan,

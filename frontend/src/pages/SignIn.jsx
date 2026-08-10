@@ -25,7 +25,7 @@ const input = { padding: "14px 16px", fontSize: 15, color: "var(--app-text)", ba
 
 export default function SignIn() {
   const nav = useNavigate();
-  const { supabaseEnabled, signedIn, user: sessionUser, signUp, signInPassword, signInWithGoogle, sendMagicLink, devSignIn } = useApp();
+  const { supabaseEnabled, signedIn, user: sessionUser, signUp, signInPassword, signInWithGoogle, sendMagicLink, resetPassword, devSignIn } = useApp();
   const [mode, setMode] = useState("signin"); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -167,7 +167,32 @@ export default function SignIn() {
               </div>
               {supabaseEnabled && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <label style={label}>PASSWORD</label>
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <label style={label}>PASSWORD</label>
+                    {mode === "signin" && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!email.includes("@")) return setError("Enter your email above first, then tap Forgot password.");
+                          setBusy(true);
+                          setError("");
+                          try {
+                            await resetPassword(email.trim());
+                            setNotice({
+                              title: "Reset link sent",
+                              body: `Check ${email.trim()} for a link to set a new password. It also works for accounts created with Google.`,
+                            });
+                          } catch (err) {
+                            setError(err.message || "Could not send the reset email.");
+                          }
+                          setBusy(false);
+                        }}
+                        style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--app-cyan)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
                   <div style={{ position: "relative" }}>
                     <input
                       type={showPw ? "text" : "password"}

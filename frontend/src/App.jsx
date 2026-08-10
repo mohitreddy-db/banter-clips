@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Landing from "./pages/Landing.jsx";
 import SignIn from "./pages/SignIn.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
 import AppShell from "./components/AppShell.jsx";
 import Studio from "./pages/Studio.jsx";
@@ -13,6 +14,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/signin" element={<SignIn />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/onboarding" element={<Onboarding />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
