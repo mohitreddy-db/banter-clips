@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 
@@ -57,7 +57,16 @@ const TOTAL = 5;
 export default function Onboarding() {
   const nav = useNavigate();
   const { booted, signedIn, profile, savePreferences, connected, connectSocial, plan, upgrade } = useApp();
-  const [step, setStep] = useState(1);
+  // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
+  // resume at the connect step instead of restarting the flow.
+  const [searchParams] = useSearchParams();
+  const igReturn = searchParams.get("ig");
+  const [step, setStep] = useState(igReturn ? 4 : 1);
+  const [igNotice] = useState(
+    igReturn && igReturn !== "connected"
+      ? `Instagram connect ${igReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
+      : ""
+  );
   const [sports, setSports] = useState(profile.sports || []);
   const [teams, setTeams] = useState(profile.teams?.length ? profile.teams : []);
   const [players, setPlayers] = useState(profile.players?.length ? profile.players : []);
@@ -212,6 +221,11 @@ export default function Onboarding() {
 
         {step === 4 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {igNotice && (
+              <div style={{ fontSize: 13, color: "var(--app-error)", background: "rgba(240,84,108,.1)", borderRadius: 10, padding: "10px 14px" }}>
+                {igNotice}
+              </div>
+            )}
             {PLATFORMS.map((p) => (
               <div key={p.name} className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 14 }}>
                 <div style={{ width: 38, height: 38, borderRadius: 10, background: p.tile, display: "grid", placeItems: "center", border: p.glyph === "note" || p.glyph === "x" ? "1px solid var(--app-border)" : "none" }}>

@@ -20,13 +20,17 @@ export default function Clips() {
   const [publishClip, setPublishClip] = useState(null);
   const [error, setError] = useState("");
 
-  // Keep in-flight generations live while this page is open.
+  // Keep in-flight generations AND in-flight publishes live while this page
+  // is open (publishing is async — the modal doesn't wait for it).
   const generating = clips.some((c) => c.status !== "ready" && c.status !== "failed");
+  const publishing = clips.some((c) =>
+    ["queued", "uploading"].includes(c.publishes?.[0]?.status)
+  );
   useEffect(() => {
-    if (!generating) return;
+    if (!generating && !publishing) return;
     const t = setInterval(refreshClips, 1500);
     return () => clearInterval(t);
-  }, [generating, refreshClips]);
+  }, [generating, publishing, refreshClips]);
 
   const download = async (clip) => {
     try {
@@ -75,7 +79,11 @@ export default function Clips() {
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 20 }}>
         {clips.map((c) => {
+          const latestPub = c.publishes?.[0];
           const published = c.publishes?.some((p) => p.status === "published");
+          const publishedPub = c.publishes?.find((p) => p.status === "published");
+          const pubInFlight = ["queued", "uploading"].includes(latestPub?.status);
+          const pubFailed = latestPub?.status === "failed";
           const inFlight = c.status !== "ready" && c.status !== "failed";
           return (
             <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16 }}>
@@ -117,18 +125,41 @@ export default function Clips() {
               </div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35 }}>{c.take}</div>
-                <div style={{ fontSize: 12, color: "var(--app-muted)" }}>
+                <div style={{ fontSize: 12, color: "var(--app-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   {c.status === "ready"
-                    ? `${c.duration_seconds || 14}s ${published ? "" : "· not published yet"}`
+                    ? `${c.duration_seconds || 14}s`
                     : c.status === "failed"
                       ? "failed · retry is free"
                       : STATUS_LABEL[c.status]}
-                  {published && <span style={{ color: "var(--app-green)" }}> · published</span>}
+                  {c.status === "ready" && pubInFlight && (
+                    <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
+                      publishing to Instagram…
+                    </span>
+                  )}
+                  {c.status === "ready" && !pubInFlight && published && (
+                    publishedPub?.external_url ? (
+                      <a href={publishedPub.external_url} target="_blank" rel="noreferrer" style={{ color: "var(--app-green)", fontWeight: 600, textDecoration: "none" }}>
+                        · published — view post ↗
+                      </a>
+                    ) : (
+                      <span style={{ color: "var(--app-green)" }}>· published</span>
+                    )
+                  )}
+                  {c.status === "ready" && !pubInFlight && !published && !pubFailed && "· not published yet"}
+                  {c.status === "ready" && pubFailed && (
+                    <span style={{ color: "var(--app-error)", fontWeight: 600 }}>· publish failed — retry below, it’s free</span>
+                  )}
                 </div>
                 {c.status === "ready" && (
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="grad-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9 }} onClick={() => setPublishClip(c)}>
-                      ⤴ Publish
+                    <button
+                      className="grad-btn"
+                      style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, opacity: pubInFlight ? 0.55 : 1 }}
+                      disabled={pubInFlight}
+                      onClick={() => setPublishClip(c)}
+                    >
+                      {pubInFlight ? "Publishing…" : pubFailed ? "↻ Retry publish" : "⤴ Publish"}
                     </button>
                     {canDownload ? (
                       <button className="ghost-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, color: "var(--app-text)" }} onClick={() => download(c)}>

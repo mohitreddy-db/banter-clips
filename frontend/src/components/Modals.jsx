@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 
@@ -85,15 +86,12 @@ export function UpgradeModal({ onClose, reason }) {
 }
 
 export function PublishModal({ clip, onClose }) {
+  const nav = useNavigate();
   const { instagram, connected, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
-  const [state, setState] = useState("compose"); // compose | publishing | done | failed
-  const [pub, setPub] = useState(null);
+  const [state, setState] = useState("compose"); // compose | queued
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
-  const pollRef = useRef(null);
-
-  useEffect(() => () => clearInterval(pollRef.current), []);
 
   const doConnect = async () => {
     setConnecting(true);
@@ -106,37 +104,16 @@ export function PublishModal({ clip, onClose }) {
     setConnecting(false);
   };
 
-  const watchPublish = (publishId) => {
-    clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const p = await api.getPublish(clip.id, publishId);
-        setPub(p);
-        if (p.status === "published") {
-          clearInterval(pollRef.current);
-          setState("done");
-          refreshClips();
-        } else if (p.status === "failed") {
-          clearInterval(pollRef.current);
-          setState("failed");
-        }
-      } catch {
-        /* keep polling */
-      }
-    }, 800);
-  };
-
+  // Fire-and-forget: the upload runs server-side; My Clips shows live status.
   const publish = async () => {
     if (!instagram) return;
-    setState("publishing");
     setError("");
     try {
-      const p = await api.publishClip(clip.id, instagram.id, caption);
-      setPub(p);
-      watchPublish(p.id);
+      await api.publishClip(clip.id, instagram.id, caption);
+      refreshClips();
+      setState("queued");
     } catch (e) {
       setError(e.message);
-      setState("compose");
     }
   };
 
@@ -182,53 +159,21 @@ export function PublishModal({ clip, onClose }) {
           </button>
         </div>
       )}
-      {state === "publishing" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, padding: "22px 0", textAlign: "center" }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", border: "3px solid #12303d", borderTopColor: "#22d3ee", animation: "spin 1s linear infinite" }} />
-          <div style={{ fontWeight: 600, fontSize: 16, color: "var(--app-text)" }}>
-            {pub?.status === "uploading" ? "Uploading to Instagram…" : "Queued for upload…"}
-          </div>
-          <div style={{ fontSize: 12.5, color: "var(--app-muted)" }}>Honest status — we never fake a publish.</div>
-        </div>
-      )}
-      {state === "failed" && (
+      {state === "queued" && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "12px 0", textAlign: "center" }}>
-          <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(240,84,108,.14)", display: "grid", placeItems: "center", fontSize: 24 }}>⚠️</div>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publish failed</div>
-          <div style={{ fontSize: 13.5, color: "var(--app-muted)", lineHeight: 1.5 }}>{pub?.error || "The platform rejected the upload."}</div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="ghost-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => onClose()}>
-              Close
-            </button>
-            <button className="grad-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => setState("compose")}>
-              ↻ Retry — it’s free
-            </button>
+          <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(34,211,238,.12)", display: "grid", placeItems: "center", fontSize: 26 }}>🚀</div>
+          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publishing in the background</div>
+          <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>
+            Your Reel is uploading to Instagram{watermarked ? " (with watermark)" : ""}. Track live status in
+            <b style={{ color: "var(--app-text)" }}> My Clips</b> — you can keep creating meanwhile.
           </div>
-        </div>
-      )}
-      {state === "done" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "12px 0", textAlign: "center" }}>
-          <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(52,226,122,.14)", display: "grid", placeItems: "center" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#34e27a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="m8 12.5 2.6 2.6L16 9.5" />
-            </svg>
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Published to Instagram</div>
-          <div style={{ fontSize: 14, color: "var(--app-muted)" }}>Your Reel is live{watermarked ? " (with watermark)" : ""}.</div>
           <div style={{ display: "flex", gap: 10 }}>
             <button className="ghost-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => onClose()}>
               Done
             </button>
-            <a
-              href={pub?.external_url || "#"}
-              target="_blank"
-              rel="noreferrer"
-              className="grad-btn"
-              style={{ padding: "11px 18px", fontSize: 14, textDecoration: "none", display: "inline-flex", alignItems: "center" }}
-            >
-              View post ↗
-            </a>
+            <button className="grad-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => { onClose(); nav("/clips"); }}>
+              Track in My Clips →
+            </button>
           </div>
         </div>
       )}

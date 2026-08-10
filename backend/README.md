@@ -15,7 +15,7 @@ gated delivery, real Instagram connect + Reels publishing, and BR-11 analytics.
 | ORM / DB | SQLAlchemy 2 + psycopg 3 → Postgres 16 (local docker) / Supabase (prod) |
 | Auth | Supabase Auth (email+password, magic links) exchanged for our own PyJWT 30-day sessions |
 | Social publishing | Instagram Graph API (Business Login OAuth, Reels container publish) |
-| Video generation | **Dummy worker** — walks the honest BR-07 stages, attaches a demo MP4. Real pipeline design: `../VIDEO-PIPELINE-SPEC.md` (local-only doc); legacy experiments in `app/pipeline/` |
+| Video generation | **Dummy worker** — walks the honest BR-07 stages, attaches a demo MP4. Real pipeline design: `others/VIDEO-PIPELINE-SPEC.md` (local-only doc); legacy experiments in `app/pipeline/` |
 
 ## Local setup (from zero)
 

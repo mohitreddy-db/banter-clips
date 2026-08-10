@@ -103,6 +103,16 @@ export function AppProvider({ children }) {
     [exchange]
   );
 
+  // Google via Supabase OAuth. Full-page redirect to Google; on return the
+  // onAuthStateChange listener below exchanges the session automatically.
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/signin` },
+    });
+    if (error) throw new Error(error.message);
+  }, []);
+
   const sendMagicLink = useCallback(async (email) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -216,6 +226,7 @@ export function AppProvider({ children }) {
     supabaseEnabled,
     signUp,
     signInPassword,
+    signInWithGoogle,
     sendMagicLink,
     devSignIn,
     signOut,
