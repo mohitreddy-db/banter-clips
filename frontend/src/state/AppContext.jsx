@@ -134,13 +134,23 @@ export function AppProvider({ children }) {
     [loadAll]
   );
 
-  // When the user lands back from a confirmation / magic-link email, Supabase
-  // picks the session out of the URL — exchange it for an API session.
+  // When the user lands back from a confirmation / magic-link / Google OAuth
+  // redirect, Supabase picks the session out of the URL — exchange it for an
+  // API session. If Supabase dropped us on a public page (its redirect
+  // allow-list can fall back to the Site URL → landing), forward into the app.
   useEffect(() => {
     if (!supabaseEnabled) return;
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session && !getToken()) {
-        exchange(session.access_token).catch(() => {});
+        exchange(session.access_token)
+          .then((u) => {
+            if (["/", "/signin"].includes(window.location.pathname)) {
+              window.location.replace(
+                u?.preferences?.onboarding_completed ? "/studio" : "/onboarding"
+              );
+            }
+          })
+          .catch(() => {});
       }
     });
     return () => sub.subscription.unsubscribe();
