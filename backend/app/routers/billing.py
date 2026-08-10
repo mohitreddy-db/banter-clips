@@ -192,7 +192,7 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
 
     # Record AFTER successful processing: a mid-processing crash lets Stripe's
     # retry reprocess (sync is convergent, so replays are safe).
-    ts = event.get("created")
+    ts = _g(event, "created")
     db.add(
         StripeEvent(
             id=event_id,
