@@ -52,12 +52,21 @@ def _ensure_customer(db: Session, user: User) -> str:
     return customer.id
 
 
+def _g(obj, key, default=None):
+    """StripeObject supports [key] but not .get() (stripe-python v15)."""
+    try:
+        value = obj[key]
+    except (KeyError, TypeError, IndexError):
+        return default
+    return default if value is None else value
+
+
 def _period_end(subscription) -> datetime | None:
     """current_period_end lives on the sub (older API) or its items (newer)."""
-    ts = subscription.get("current_period_end")
+    ts = _g(subscription, "current_period_end")
     if not ts:
-        items = subscription.get("items", {}).get("data", [])
-        ts = items[0].get("current_period_end") if items else None
+        items = _g(_g(subscription, "items", {}), "data", [])
+        ts = _g(items[0], "current_period_end") if items else None
     return datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
 
 
@@ -104,27 +113,27 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     obj = event["data"]["object"]
 
     if event["type"] == "checkout.session.completed":
-        user = db.get(User, obj.get("client_reference_id"))
+        user = db.get(User, _g(obj, "client_reference_id"))
         if user is not None:
-            user.stripe_customer_id = obj.get("customer") or user.stripe_customer_id
-            user.stripe_subscription_id = obj.get("subscription")
+            user.stripe_customer_id = _g(obj, "customer") or user.stripe_customer_id
+            user.stripe_subscription_id = _g(obj, "subscription")
             user.plan = "creator"
             user.cancel_at_period_end = False
             db.commit()
             record_event(db, "upgrade_completed", user, provider="stripe")
 
     elif event["type"] in ("customer.subscription.updated", "customer.subscription.created"):
-        user = db.scalar(select(User).where(User.stripe_customer_id == obj.get("customer")))
+        user = db.scalar(select(User).where(User.stripe_customer_id == _g(obj, "customer")))
         if user is not None:
-            active = obj.get("status") in ("active", "trialing", "past_due")
+            active = _g(obj, "status") in ("active", "trialing", "past_due")
             user.plan = "creator" if active else "free"
-            user.stripe_subscription_id = obj.get("id")
-            user.cancel_at_period_end = bool(obj.get("cancel_at_period_end"))
+            user.stripe_subscription_id = _g(obj, "id")
+            user.cancel_at_period_end = bool(_g(obj, "cancel_at_period_end"))
             user.plan_renews_at = _period_end(obj)
             db.commit()
 
     elif event["type"] == "customer.subscription.deleted":
-        user = db.scalar(select(User).where(User.stripe_customer_id == obj.get("customer")))
+        user = db.scalar(select(User).where(User.stripe_customer_id == _g(obj, "customer")))
         if user is not None:
             # BR-15: downgrade at period end, videos never deleted.
             user.plan = "free"
