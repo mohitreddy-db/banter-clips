@@ -88,6 +88,15 @@ CREATE TABLE publishes (
 );
 CREATE INDEX publishes_clip ON publishes (clip_id, created_at DESC);
 
+-- Audit/idempotency log for Stripe webhook deliveries. Stripe is the billing
+-- ledger; we only mirror derived entitlement (users.plan) + this trail.
+CREATE TABLE stripe_events (
+    id                text PRIMARY KEY,            -- evt_...
+    type              text NOT NULL,
+    event_created_at  timestamptz,
+    processed_at      timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE events (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id     uuid REFERENCES users(id) ON DELETE SET NULL,

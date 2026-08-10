@@ -169,6 +169,19 @@ class Publish(Base):
     __table_args__ = (Index("publishes_clip", "clip_id", "created_at"),)
 
 
+class StripeEvent(Base):
+    """Audit log + idempotency marker for processed Stripe webhook events.
+    Stripe itself is the billing ledger; this table records which deliveries
+    we acted on (at-least-once delivery means retries and duplicates)."""
+
+    __tablename__ = "stripe_events"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)  # evt_...
+    type: Mapped[str] = mapped_column(Text, nullable=False)
+    event_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Event(Base):
     __tablename__ = "events"
 

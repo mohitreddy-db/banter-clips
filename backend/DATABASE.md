@@ -24,12 +24,21 @@ erDiagram
     users {
         uuid id PK
         text email UK "stored lowercased"
+        text supabase_uid UK "Supabase Auth identity"
         text display_name
-        text plan "free | creator"
+        text plan "free | creator — derived from Stripe"
         timestamptz plan_renews_at
         boolean cancel_at_period_end
+        text stripe_customer_id UK
+        text stripe_subscription_id
         timestamptz created_at
         timestamptz last_login_at
+    }
+    stripe_events {
+        text id PK "evt_... webhook delivery"
+        text type
+        timestamptz event_created_at
+        timestamptz processed_at
     }
     user_preferences {
         uuid user_id PK,FK
@@ -100,7 +109,18 @@ One row per account. `plan` is the whole monetization switch (BR-15):
 `free` → publish-only, watermark always, 5 successful videos/month;
 `creator` → downloads + watermark-free, 30/month. `cancel_at_period_end`
 models "downgrade applies at period end" without deleting anything.
-Stripe customer/subscription ids get added here when real Stripe lands.
+
+**Billing design: Stripe is the ledger.** We never mirror invoices/charges —
+`plan`, `stripe_customer_id`, `stripe_subscription_id`, `plan_renews_at`, and
+`cancel_at_period_end` are *derived entitlement state*, converged from
+Stripe's API on every billing webhook (webhooks are treated as triggers, not
+truth, because Stripe delivers at-least-once and unordered). The sync also
+enforces one-live-subscription-per-user by cancelling extras.
+
+### `stripe_events`
+Audit log + idempotency marker: one row per processed Stripe webhook
+delivery. Duplicate deliveries are acknowledged without side effects; the
+trail answers "what did billing do and when" during disputes/debugging.
 
 ### `user_preferences` (1:1 with users)
 The entire output of onboarding (BR-14): sports multi-select, favorite
