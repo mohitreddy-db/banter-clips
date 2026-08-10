@@ -55,8 +55,24 @@ function Glyph({ kind }) {
 const TOTAL = 5;
 
 export default function Onboarding() {
+  const { booted, signedIn } = useApp();
+  // Selections initialize from the saved profile, so don't mount the flow
+  // until the session (and profile) have loaded — critical when returning
+  // from the Instagram OAuth redirect.
+  if (!booted) {
+    return (
+      <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center" }}>
+        <span style={{ width: 30, height: 30, borderRadius: "50%", border: "3px solid #12303d", borderTopColor: "#22d3ee", animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+  if (!signedIn) return <Navigate to="/signin" replace />;
+  return <OnboardingFlow />;
+}
+
+function OnboardingFlow() {
   const nav = useNavigate();
-  const { booted, signedIn, profile, savePreferences, connected, connectSocial, plan, upgrade } = useApp();
+  const { profile, savePreferences, connected, connectSocial, plan, upgrade } = useApp();
   // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
   // resume at the connect step instead of restarting the flow.
   const [searchParams] = useSearchParams();
@@ -98,7 +114,19 @@ export default function Onboarding() {
     nav("/studio");
   };
 
-  const next = () => (step === TOTAL ? finish(false) : setStep(step + 1));
+  // Persist each step as it's completed, so selections survive the full-page
+  // Instagram OAuth redirect (and refreshes). onboarding_completed only at the end.
+  const saveStep = () => {
+    const partial =
+      step === 1 ? { sports } : step === 2 ? { teams, players } : step === 3 ? { role: role || null } : null;
+    if (partial) savePreferences(partial).catch(() => {});
+  };
+
+  const next = () => {
+    if (step === TOTAL) return finish(false);
+    saveStep();
+    setStep(step + 1);
+  };
   const back = () => setStep(Math.max(1, step - 1));
   const skipStep = () => {
     api.track("onboarding_step_skipped", { step });
@@ -123,8 +151,6 @@ export default function Onboarding() {
     }
     setConnecting(false);
   };
-
-  if (booted && !signedIn) return <Navigate to="/signin" replace />;
 
   const optional = step === 4 || step === 5;
   const stepLabel = `STEP ${step} OF ${TOTAL}${optional ? " · OPTIONAL" : ""}`;
