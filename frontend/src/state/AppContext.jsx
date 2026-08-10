@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, clearToken, getToken, setToken } from "../lib/api.js";
-import { supabase, supabaseEnabled } from "../lib/supabase.js";
+import { supabase, supabaseEnabled, urlIsPasswordRecovery } from "../lib/supabase.js";
 
 const AppContext = createContext(null);
 
@@ -155,9 +155,16 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!supabaseEnabled) return;
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // A recovery link must land on the reset form, no matter where the
+      // Supabase redirect allow-list dropped us.
+      if (session && urlIsPasswordRecovery && window.location.pathname !== "/reset-password") {
+        window.location.replace("/reset-password");
+        return;
+      }
       if (event === "SIGNED_IN" && session && !getToken()) {
         exchange(session.access_token)
           .then((u) => {
+            if (urlIsPasswordRecovery) return;
             if (["/", "/signin"].includes(window.location.pathname)) {
               window.location.replace(
                 u?.preferences?.onboarding_completed ? "/studio" : "/onboarding"
