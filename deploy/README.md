@@ -23,7 +23,8 @@ bash /opt/banter-clips/deploy/setup-droplet.sh
 Then fill `/opt/banter-clips/backend/.env`:
 
 ```env
-DATABASE_URL=postgresql+psycopg://postgres:<DB-PASSWORD>@db.taphbakizdagamimbhjh.supabase.co:5432/postgres
+# Supabase session pooler (IPv4 — droplets often lack IPv6 for the direct host)
+DATABASE_URL=postgresql+psycopg://postgres.taphbakizdagamimbhjh:<DB-PASSWORD>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
 JWT_SECRET=<long random string — openssl rand -hex 32>
 CORS_ORIGINS=https://www.banterclips.com
 DEV_MODE=false

@@ -3,78 +3,70 @@
 Turn any sports opinion into a cinematic, post-ready vertical video — then
 publish it to social without leaving the app.
 
-**Phase 1 MVP:** sports opinion → generated 12–15s vertical video → preview →
-publish (all plans, watermarked on Free) or download (Creator only).
+**Live:** https://www.banterclips.com · API: https://api.banterclips.com
+
+## Documentation map — where the truth lives
+
+| Topic | Source of truth |
+|---|---|
+| Product scope, business rules, plans | [`BRD.md`](BRD.md) (v1.4) |
+| Database schema / ERD | [`backend/DATABASE.md`](backend/DATABASE.md) + [`backend/schema.sql`](backend/schema.sql) |
+| Backend — stack, local setup, API, env | [`backend/README.md`](backend/README.md) |
+| Frontend — stack, local setup, env | [`frontend/README.md`](frontend/README.md) |
+| Deploying from scratch (runbook) | [`deploy/README.md`](deploy/README.md) |
+| **Production state & secrets** (droplet, keys, Supabase, Vercel, DNS, Meta) | `infra/PROD.md` — **gitignored**, lives only on this machine |
 
 ## Repository layout
 
 ```
 banter-clips/
-├── frontend/              React SPA — deployed to Vercel
-├── backend/               FastAPI API — deployed to a DigitalOcean droplet
-├── deploy/                Droplet setup script, systemd unit, Caddyfile, runbook
-├── infra/                 ⚠ gitignored — droplet IPs, certs, keys, Supabase/Meta creds
-└── BRD.md                 Business requirements (v1.4) — the source of truth
+├── frontend/    React SPA — Vercel          (own package.json + .env)
+├── backend/     FastAPI API — DO droplet    (own requirements.txt + .env)
+├── deploy/      Droplet setup script, systemd unit, Caddyfile, runbook
+├── infra/       ⚠ gitignored — prod details, creds, DNS, key inventory
+└── BRD.md       Business requirements — the product source of truth
 ```
 
-(Design experiments, Figma scripts, prompt packs, and earlier PRDs live only
-in the local working folder — they're gitignored to keep the repo focused.)
+`frontend/` and `backend/` are independent projects: separate dependencies,
+separate `.env` files (each has a commented `.env.example`), separate deploys.
 
-`frontend/` and `backend/` are fully independent projects: separate
-dependencies (`package-lock.json` vs `requirements.txt`), separate `.env`
-files, separate deploys. This repo just keeps them under one roof with the
-shared product docs.
+## Architecture
 
-## Stack at a glance
-
-| Piece | Tech | Deploy target |
+| Piece | Local dev | Production |
 |---|---|---|
-| Frontend | React 18 · Vite 6 · Tailwind 4 · react-router-dom 7 | Vercel |
-| Backend | Python 3.12 · FastAPI · SQLAlchemy 2 · PyJWT | DigitalOcean droplet |
-| Database | Postgres 16 (local docker) → Supabase in production | Supabase |
-| Video generation | **Dummy mode** — honest job stages + pre-rendered demo MP4, pending the provider bake-off (see VIDEO-PIPELINE-SPEC.md) | — |
+| Frontend | Vite dev server :5173 | Vercel — www.banterclips.com (auto-deploys `main`) |
+| Backend | uvicorn :8000 | Droplet 168.144.149.99 — api.banterclips.com (Caddy TLS) |
+| App database | Postgres 16 in docker (`banterclips-postgres`, :5433) | Supabase Postgres |
+| Auth | Supabase Auth (same project) or offline dev magic-link | Supabase Auth |
+| Instagram | Mock connect, or real OAuth via cloudflared tunnel | Real OAuth + Reels publishing |
+| Video generation | **Dummy** — honest job stages + pre-rendered demo MP4 | Same (provider bake-off pending) |
 
-## Run it locally
+## Local quick start
 
 ```bash
-# 1. Database (postgres 16 in docker, port 5433)
-docker start banterclips-postgres   # created with user banter / db banterclips
+# 0. one-time: local postgres (skip if the container exists — then just `docker start banterclips-postgres`)
+docker run -d --name banterclips-postgres \
+  -e POSTGRES_USER=banter -e POSTGRES_PASSWORD=banter_dev -e POSTGRES_DB=banterclips \
+  -p 5433:5432 -v banterclips_pgdata:/var/lib/postgresql/data \
+  --restart unless-stopped postgres:16-alpine
 
-# 2. Backend  →  http://localhost:8000  (docs at /docs)
+# 1. backend  → http://localhost:8000 (docs at /docs)
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env                # defaults work for local dev
+cp .env.example .env          # local defaults work as-is
 .venv/bin/uvicorn app.main:app --reload --port 8000
 
-# 3. Frontend  →  http://localhost:5173
+# 2. frontend → http://localhost:5173
 cd frontend
 npm install
+cp .env.example .env          # then choose local vs prod API (see the file)
 npm run dev
 ```
 
-Sign in with any email — in `DEV_MODE` the magic link resolves instantly
-without a mailbox. Type `[fail]` inside a take or caption to demo the
-failure + free-retry paths.
+Full details, env-variable tables, and demo tricks: the two app READMEs.
 
-## Deployment
+## Deploying changes
 
-- **Frontend → Vercel:** import the repo, set the project root to `frontend/`,
-  add `VITE_API_URL=https://<backend-domain>`. `vercel.json` already handles
-  the SPA rewrite.
-- **Backend → droplet:** install Python 3.12, clone, create the venv, run
-  uvicorn behind nginx/caddy with TLS. Set `DATABASE_URL` (Supabase),
-  `JWT_SECRET`, `CORS_ORIGINS=https://<vercel-domain>`, `DEV_MODE=false`,
-  `API_BASE_URL=https://<backend-domain>`.
-- **Database → Supabase:** apply `backend/schema.sql`; details and keys live
-  in `infra/supabase.md` (never committed).
-
-All deployment secrets, IPs, certs and key files belong in `infra/` — that
-folder is gitignored by design.
-
-## Where things are documented
-
-- Product scope and rules: `BRD.md`
-- Database entities/ERD: `backend/DATABASE.md` (+ `backend/schema.sql`)
-- API and backend details: `backend/README.md`
-- Frontend structure and UX flows: `frontend/README.md`
-- Real video pipeline design (future): `VIDEO-PIPELINE-SPEC.md`
+- **Frontend:** `git push` → Vercel auto-deploys `main`.
+- **Backend:** `git push`, then the one-liner in `infra/PROD.md` (git pull +
+  service restart on the droplet).
