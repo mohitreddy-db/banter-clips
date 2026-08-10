@@ -193,12 +193,27 @@ export function AppProvider({ children }) {
     return saved;
   }, []);
 
-  const upgrade = useCallback(async () => {
-    await api.upgrade();
-    const me = await api.me();
-    setUser(me);
+  const refreshUser = useCallback(async () => {
+    setUser(await api.me());
     await refreshUsage();
   }, [refreshUsage]);
+
+  // Real path: Stripe Checkout — returns a URL to redirect the browser to.
+  // Falls back to the dev mock upgrade when Stripe isn't configured (503).
+  const startCheckout = useCallback(async () => {
+    try {
+      const { url } = await api.checkout();
+      return url;
+    } catch (e) {
+      if (e.status === 503) return null; // caller uses the mock path
+      throw e;
+    }
+  }, []);
+
+  const upgrade = useCallback(async () => {
+    await api.upgrade();
+    await refreshUser();
+  }, [refreshUser]);
 
   const cancelPlan = useCallback(async () => {
     await api.cancelPlan();
@@ -272,6 +287,8 @@ export function AppProvider({ children }) {
     onboarded,
     profile: user?.preferences || { sports: [], teams: [], players: [], role: "" },
     savePreferences,
+    refreshUser,
+    startCheckout,
     upgrade,
     cancelPlan,
     clips,

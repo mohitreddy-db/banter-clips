@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_ANON_KEY: str = ""
 
+    # Stripe (BR-15 Creator plan). When unset, /billing/upgrade acts as the
+    # dev mock. STRIPE_PRICE_CREATOR is the recurring $9.99/mo price id.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PRICE_CREATOR: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+
     # Meta / Instagram Business Login (BR-13 real publishing). When unset,
     # /socials/connect falls back to the mock connector.
     META_APP_ID: str = ""

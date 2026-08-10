@@ -72,7 +72,7 @@ export default function Onboarding() {
 
 function OnboardingFlow() {
   const nav = useNavigate();
-  const { profile, savePreferences, connected, connectSocial, plan, upgrade } = useApp();
+  const { profile, savePreferences, connected, connectSocial, plan, upgrade, startCheckout } = useApp();
   // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
   // resume at the connect step instead of restarting the flow.
   const [searchParams] = useSearchParams();
@@ -96,11 +96,7 @@ function OnboardingFlow() {
   const finish = async (pickedCreator = false) => {
     setFinishing(true);
     try {
-      if (pickedCreator && plan !== "creator") {
-        setUpgrading(true);
-        await upgrade();
-        setUpgrading(false);
-      }
+      // Save first — a Stripe redirect must not lose onboarding completion.
       await savePreferences({
         sports,
         teams,
@@ -108,6 +104,16 @@ function OnboardingFlow() {
         role: role || null,
         onboarding_completed: true,
       });
+      if (pickedCreator && plan !== "creator") {
+        setUpgrading(true);
+        const url = await startCheckout();
+        if (url) {
+          window.location.href = url; // Stripe Checkout; returns to /account
+          return;
+        }
+        await upgrade(); // dev fallback
+        setUpgrading(false);
+      }
     } catch {
       /* onboarding must never block creation — go to the studio regardless */
     }

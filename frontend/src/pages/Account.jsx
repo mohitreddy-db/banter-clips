@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
+import { api } from "../lib/api.js";
 
 export default function Account() {
   const nav = useNavigate();
   const {
-    user, plan, used, limit, left, profile, signOut, cancelPlan,
+    user, plan, used, limit, left, profile, signOut, cancelPlan, refreshUser,
     instagram, connected, connectSocial, disconnectSocial,
   } = useApp();
   const isCreator = plan === "creator";
@@ -22,6 +23,34 @@ export default function Account() {
     else setIgNotice({ ok: false, text: `Instagram connect ${ig === "denied" ? "was cancelled" : "failed"}${params.get("reason") ? ` — ${params.get("reason")}` : ""}.` });
     setParams({}, { replace: true });
   }, [params, setParams]);
+
+  // Return from Stripe Checkout (?checkout=success|cancelled). The webhook
+  // flips the plan server-side, which can lag a beat — poll briefly.
+  useEffect(() => {
+    const co = params.get("checkout");
+    if (!co) return;
+    setParams({}, { replace: true });
+    if (co === "cancelled") {
+      setIgNotice({ ok: false, text: "Checkout cancelled — you're still on the Free plan." });
+      return;
+    }
+    setIgNotice({ ok: true, text: "Payment received — activating Creator…" });
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries += 1;
+      await refreshUser();
+      const me = await api.me().catch(() => null);
+      if (me?.plan === "creator" || tries >= 10) {
+        clearInterval(t);
+        setIgNotice(
+          me?.plan === "creator"
+            ? { ok: true, text: "Welcome to Creator — downloads and watermark-free publishing are unlocked. 🎉" }
+            : { ok: false, text: "Payment is processing — refresh in a moment if the plan hasn't updated." }
+        );
+      }
+    }, 1500);
+    return () => clearInterval(t);
+  }, [params, setParams, refreshUser]);
 
   const withBusy = (fn) => async () => {
     setBusy(true);
@@ -97,7 +126,18 @@ export default function Account() {
             Creator stays active until the end of the billing period, then you move to Free. Your videos are never deleted.
           </div>
         ) : (
-          <div style={{ paddingTop: 4 }}>
+          <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
+            <button
+              className="ghost-btn"
+              style={{ padding: "11px 20px", fontSize: 13.5, opacity: busy ? 0.7 : 1, color: "var(--app-text)" }}
+              disabled={busy}
+              onClick={withBusy(async () => {
+                const { url } = await api.billingPortal();
+                window.location.href = url;
+              })}
+            >
+              Manage billing ↗
+            </button>
             <button className="ghost-btn" style={{ padding: "11px 20px", fontSize: 13.5, color: "var(--app-muted)", opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(cancelPlan)}>
               Cancel Creator — applies at period end
             </button>

@@ -12,6 +12,8 @@ CREATE TABLE users (
                           CHECK (plan IN ('free', 'creator')),
     plan_renews_at        timestamptz,
     cancel_at_period_end  boolean NOT NULL DEFAULT false,
+    stripe_customer_id    text UNIQUE,
+    stripe_subscription_id text,
     created_at            timestamptz NOT NULL DEFAULT now(),
     last_login_at         timestamptz
 );

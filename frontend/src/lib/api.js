@@ -79,7 +79,9 @@ export const api = {
   connectSocial: (platform) => request("/socials/connect", { method: "POST", body: { platform } }),
   disconnectSocial: (platform) => request(`/socials/${platform}`, { method: "DELETE" }),
 
-  // billing (mock Stripe for now)
+  // billing — Stripe Checkout when configured, mock upgrade as dev fallback
+  checkout: () => request("/billing/checkout", { method: "POST" }),
+  billingPortal: () => request("/billing/portal", { method: "POST" }),
   upgrade: () => request("/billing/upgrade", { method: "POST" }),
   cancelPlan: () => request("/billing/cancel", { method: "POST" }),
 

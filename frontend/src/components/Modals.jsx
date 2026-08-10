@@ -17,7 +17,7 @@ function Overlay({ children, onClose }) {
 }
 
 export function UpgradeModal({ onClose, reason }) {
-  const { upgrade } = useApp();
+  const { upgrade, startCheckout } = useApp();
   const [state, setState] = useState("offer"); // offer | paying | done
   const [error, setError] = useState("");
 
@@ -26,7 +26,12 @@ export function UpgradeModal({ onClose, reason }) {
     setError("");
     api.track("upgrade_started");
     try {
-      // Real Stripe Checkout replaces this pause before launch.
+      // Stripe Checkout (hosted page). Null → Stripe not configured → dev mock.
+      const url = await startCheckout();
+      if (url) {
+        window.location.href = url;
+        return;
+      }
       await Promise.all([upgrade(), new Promise((r) => setTimeout(r, 1400))]);
       setState("done");
     } catch (e) {
