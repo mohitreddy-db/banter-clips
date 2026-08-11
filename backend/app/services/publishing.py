@@ -134,6 +134,11 @@ def _run_publish(publish_id: uuid.UUID) -> None:
             return
         account = pub.account
         real = bool(account and account.access_token and account.access_token != MOCK_TOKEN and account.platform_user_id)
+        # Meta downloads the video from our public URL — with a localhost
+        # API_BASE_URL that's unreachable, so real publishing can't work.
+        # Local dev simulates instead (even for genuinely connected accounts).
+        if real and settings.API_BASE_URL.startswith("http://localhost"):
+            real = False
         if real:
             # Roll the 60-day token if it's near expiry before using it.
             from ..routers.socials import maybe_refresh_token
