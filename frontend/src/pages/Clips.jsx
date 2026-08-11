@@ -162,7 +162,7 @@ export default function Clips() {
                       disabled={pubInFlight}
                       onClick={() => setPublishClip(c)}
                     >
-                      {pubInFlight ? "Publishing…" : pubFailed ? "↻ Retry publish" : "⤴ Publish"}
+                      {pubInFlight ? "Publishing…" : pubFailed ? "Retry publish" : "Publish"}
                     </button>
                     {canDownload ? (
                       <button className="ghost-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }} onClick={() => download(c)}>

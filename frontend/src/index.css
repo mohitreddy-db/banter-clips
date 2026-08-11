@@ -273,3 +273,14 @@ textarea:focus {
   border: 1px solid var(--app-border);
   border-radius: 12px;
 }
+
+/* Fullscreen playback letterboxes instead of cropping — cards use
+   object-fit: cover, which must not apply once the video goes fullscreen. */
+video:fullscreen {
+  object-fit: contain !important;
+  background: #000;
+}
+video:-webkit-full-screen {
+  object-fit: contain !important;
+  background: #000;
+}
