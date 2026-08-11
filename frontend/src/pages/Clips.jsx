@@ -20,6 +20,13 @@ export default function Clips() {
   const [publishClip, setPublishClip] = useState(null);
   const [error, setError] = useState("");
 
+  // Always refetch on mount — jobs may have started elsewhere (Studio)
+  // since the context last loaded the list.
+  useEffect(() => {
+    refreshClips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Keep in-flight generations AND in-flight publishes live while this page
   // is open (publishing is async — the modal doesn't wait for it).
   const generating = clips.some((c) => c.status !== "ready" && c.status !== "failed");

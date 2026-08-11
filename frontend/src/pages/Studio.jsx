@@ -92,6 +92,7 @@ export default function Studio() {
     try {
       const c = await api.createClip(take.trim(), sport, tone, duration);
       setClip(c);
+      refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id);
     } catch (e) {
       if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
