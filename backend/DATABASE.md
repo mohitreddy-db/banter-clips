@@ -61,9 +61,10 @@ erDiagram
         uuid user_id FK
         text take "10-280 chars"
         text sport "NBA | NFL | Soccer | MLB"
-        text tone "Funny | Savage | Hype"
+        text tone "Funny | Savage | Hype | Bold"
         text status "queued .. ready | failed"
         int stage_index "0-6 while generating"
+        int duration_target "10/15/30s; >15 Creator-only"
         text error
         numeric duration_seconds
         text video_url

@@ -59,17 +59,28 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
             },
         )
 
+    # Longer videos are a Creator feature (Free tops out at 15s).
+    if body.duration > 15 and user.plan != "creator":
+        raise HTTPException(
+            403,
+            detail={
+                "code": "upgrade_required",
+                "message": "Videos longer than 15 seconds are a Creator feature.",
+            },
+        )
+
     clip = Clip(
         user_id=user.id,
         take=body.take.strip(),
         sport=body.sport,
         tone=body.tone,
+        duration_target=body.duration,
         # Watermark policy frozen per-clip from the plan at creation time.
         watermarked=user.plan != "creator",
     )
     db.add(clip)
     db.commit()
-    record_event(db, "generation_started", user, sport=body.sport, tone=body.tone)
+    record_event(db, "generation_started", user, sport=body.sport, tone=body.tone, duration=body.duration)
     start_generation(clip.id)
     return _serialize(clip)
 

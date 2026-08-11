@@ -9,7 +9,11 @@ const TONES = [
   { key: "Funny", icon: "😄", sub: "Playful roast" },
   { key: "Savage", icon: "🔪", sub: "No mercy" },
   { key: "Hype", icon: "📣", sub: "Full energy" },
+  { key: "Bold", icon: "💪", sub: "Fearless claim" },
 ];
+// Free tops out at 15s; longer runs are a Creator feature (server-enforced too).
+const DURATIONS = [10, 15, 30];
+const FREE_MAX_DURATION = 15;
 const STAGE_LABELS = {
   queued: "Queued",
   planning_story: "Planning story",
@@ -36,6 +40,7 @@ export default function Studio() {
   const [take, setTake] = useState("");
   const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
   const [tone, setTone] = useState("Funny");
+  const [duration, setDuration] = useState(15);
   const [clip, setClip] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
@@ -85,11 +90,11 @@ export default function Studio() {
     if (!valid) return;
     setError("");
     try {
-      const c = await api.createClip(take.trim(), sport, tone);
+      const c = await api.createClip(take.trim(), sport, tone, duration);
       setClip(c);
       watchClip(c.id);
     } catch (e) {
-      if (e.code === "limit_reached") setUpgradeOpen(true);
+      if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
     }
   };
@@ -178,7 +183,7 @@ export default function Studio() {
           {/* tone cards */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>TONE</span>
-            <div className="tone-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+            <div className="tone-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 14 }}>
               {TONES.map((t) => {
                 const on = tone === t.key;
                 return (
@@ -196,6 +201,33 @@ export default function Studio() {
                     <span style={{ fontSize: 26 }}>{t.icon}</span>
                     <span style={{ fontWeight: 700, fontSize: 15, color: on ? "var(--app-cyan)" : "var(--app-text)" }}>{t.key}</span>
                     <span style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{t.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* duration */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>LENGTH</span>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {DURATIONS.map((d) => {
+                const locked = d > FREE_MAX_DURATION && plan !== "creator";
+                const on = duration === d;
+                return (
+                  <button
+                    key={d}
+                    className={`chip${on ? " on" : ""}`}
+                    style={locked ? { color: "var(--app-muted2)", borderStyle: "dashed", display: "inline-flex", alignItems: "center", gap: 6 } : undefined}
+                    title={locked ? "Videos longer than 15 seconds are a Creator feature" : undefined}
+                    onClick={() => (locked ? setUpgradeOpen(true) : setDuration(d))}
+                  >
+                    {d}s
+                    {locked && (
+                      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                        CREATOR
+                      </span>
+                    )}
                   </button>
                 );
               })}

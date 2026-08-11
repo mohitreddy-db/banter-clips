@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 Sport = Literal["NBA", "NFL", "Soccer", "MLB"]
-Tone = Literal["Funny", "Savage", "Hype"]
+Tone = Literal["Funny", "Savage", "Hype", "Bold"]
 Platform = Literal["instagram", "tiktok", "youtube", "x", "linkedin"]
 Role = Literal["Sports Fan", "Creator", "Podcaster", "Media Company", "Fantasy Creator"]
 
@@ -77,6 +77,7 @@ class ClipCreate(BaseModel):
     take: str = Field(min_length=10, max_length=280)
     sport: Sport
     tone: Tone
+    duration: Literal[10, 15, 30] = 15
 
 
 class PublishOut(BaseModel):
@@ -105,6 +106,7 @@ class ClipOut(BaseModel):
     status: str
     stage_index: int
     error: str | None
+    duration_target: int = 15
     duration_seconds: float | None
     video_url: str | None
     thumb_gradient: str | None

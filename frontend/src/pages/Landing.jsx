@@ -279,7 +279,7 @@ export default function Landing() {
           <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Made with BanterClips</h2>
           <span onClick={go("/signin")} style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", cursor: "pointer" }}>Start creating →</span>
         </div>
-        <div style={{ display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory", boxSizing: "border-box" }}>
           {examples.map((c, i) => (
             <div key={i} style={{ flex: "0 0 172px", scrollSnapAlign: "start", position: "relative", borderRadius: 16, overflow: "hidden", aspectRatio: "9/16", background: `linear-gradient(160deg,${c.c1},${c.c2})`, cursor: "pointer" }}>
               <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 15%,#ffffff26,transparent 55%)" }} />

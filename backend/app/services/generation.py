@@ -57,7 +57,8 @@ def _run_job(clip_id: uuid.UUID) -> None:
 
         clip.status = "ready"
         clip.error = None
-        clip.duration_seconds = round(random.uniform(12.0, 15.0), 1)
+        target = clip.duration_target or 15
+        clip.duration_seconds = round(random.uniform(max(target - 3, 8), target), 1)
         clip.video_url = f"{settings.API_BASE_URL}/media/demo.mp4"
         clip.thumb_gradient = random.choice(GRADIENTS)
         clip.completed_at = datetime.now(timezone.utc)

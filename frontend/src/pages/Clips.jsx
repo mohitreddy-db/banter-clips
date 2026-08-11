@@ -86,51 +86,54 @@ export default function Clips() {
           const pubFailed = latestPub?.status === "failed";
           const inFlight = c.status !== "ready" && c.status !== "failed";
           return (
-            <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16 }}>
-              {/* media frame: fixed height, 9:16 video centered inside */}
-              <div style={{ position: "relative", width: "100%", height: 300, background: "#080C16", display: "grid", placeItems: "center" }}>
-                <div style={{ position: "relative", height: "100%", aspectRatio: "9/16", background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", borderRadius: 4, overflow: "hidden" }}>
-                  {c.status === "ready" && c.video_url ? (
-                    <video
-                      src={c.video_url}
-                      controls
-                      playsInline
-                      controlsList="nodownload noremoteplayback"
-                      disablePictureInPicture
-                      onContextMenu={(e) => e.preventDefault()}
-                      onPlay={() => api.track("preview_played")}
-                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
-                      {inFlight ? (
-                        <div style={{ textAlign: "center", color: "#fff" }}>
-                          <span style={{ display: "inline-block", width: 26, height: 26, borderRadius: "50%", border: "3px solid rgba(255,255,255,.25)", borderTopColor: "#fff", animation: "spin 1s linear infinite" }} />
-                          <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{STATUS_LABEL[c.status] || "Working…"}</div>
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
-                      )}
-                    </div>
-                  )}
-                  {c.status === "ready" && c.watermarked && (
-                    <div style={{ position: "absolute", right: 6, bottom: 38, background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
-                      ▶ BanterClips
-                    </div>
-                  )}
-                </div>
+            <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16, display: "flex", flexDirection: "column" }}>
+              {/* media frame: video covers the whole box, no gaps */}
+              <div style={{ position: "relative", width: "100%", height: 300, background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", overflow: "hidden" }}>
+                {c.status === "ready" && c.video_url ? (
+                  <video
+                    src={c.video_url}
+                    controls
+                    playsInline
+                    controlsList="nodownload noremoteplayback"
+                    disablePictureInPicture
+                    onContextMenu={(e) => e.preventDefault()}
+                    onPlay={() => api.track("preview_played")}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
+                    {inFlight ? (
+                      <div style={{ textAlign: "center", color: "#fff" }}>
+                        <span style={{ display: "inline-block", width: 26, height: 26, borderRadius: "50%", border: "3px solid rgba(255,255,255,.25)", borderTopColor: "#fff", animation: "spin 1s linear infinite" }} />
+                        <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{STATUS_LABEL[c.status] || "Working…"}</div>
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
+                    )}
+                  </div>
+                )}
+                {c.status === "ready" && c.watermarked && (
+                  <div style={{ position: "absolute", right: 8, bottom: 40, background: "rgba(0,0,0,.5)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
+                    ▶ BanterClips
+                  </div>
+                )}
                 <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
                   {c.sport} · {c.tone?.toUpperCase()}
                 </div>
               </div>
-              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35 }}>{c.take}</div>
+              <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                {/* fixed two-line title box so action rows align across cards */}
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35, minHeight: 38, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  {c.take}
+                </div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  {c.status === "ready"
-                    ? `${c.duration_seconds || 14}s`
-                    : c.status === "failed"
-                      ? "failed · retry is free"
-                      : STATUS_LABEL[c.status]}
+                  <span>
+                    {c.status === "ready"
+                      ? `${c.duration_seconds || 14}s`
+                      : c.status === "failed"
+                        ? "failed · retry is free"
+                        : STATUS_LABEL[c.status]}
+                  </span>
                   {c.status === "ready" && pubInFlight && (
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
@@ -146,23 +149,23 @@ export default function Clips() {
                       <span style={{ color: "var(--app-green)" }}>· published</span>
                     )
                   )}
-                  {c.status === "ready" && !pubInFlight && !published && !pubFailed && "· not published yet"}
+                  {c.status === "ready" && !pubInFlight && !published && !pubFailed && <span>· not published yet</span>}
                   {c.status === "ready" && pubFailed && (
                     <span style={{ color: "var(--app-error)", fontWeight: 600 }}>· publish failed — retry below, it’s free</span>
                   )}
                 </div>
                 {c.status === "ready" && (
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
                     <button
                       className="grad-btn"
-                      style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, opacity: pubInFlight ? 0.55 : 1 }}
+                      style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", opacity: pubInFlight ? 0.55 : 1 }}
                       disabled={pubInFlight}
                       onClick={() => setPublishClip(c)}
                     >
                       {pubInFlight ? "Publishing…" : pubFailed ? "↻ Retry publish" : "⤴ Publish"}
                     </button>
                     {canDownload ? (
-                      <button className="ghost-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9, color: "var(--app-text)" }} onClick={() => download(c)}>
+                      <button className="ghost-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }} onClick={() => download(c)}>
                         ⬇ Download
                       </button>
                     ) : (
@@ -170,15 +173,15 @@ export default function Clips() {
                       <button
                         title="Downloading in HD without the watermark is a Creator feature"
                         style={{
-                          flex: 1, padding: "9px 0", fontSize: 12, borderRadius: 9, cursor: "pointer",
+                          flex: 1, height: 38, padding: 0, fontSize: 12, borderRadius: 9, cursor: "pointer",
                           background: "transparent", border: "1px dashed var(--app-border)",
                           color: "var(--app-muted2)", display: "inline-flex", alignItems: "center",
-                          justifyContent: "center", gap: 6, fontWeight: 600,
+                          justifyContent: "center", gap: 5, fontWeight: 600, whiteSpace: "nowrap",
                         }}
                         onClick={() => setUpgradeOpen(true)}
                       >
                         🔒 Download
-                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                        <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".04em", padding: "2px 5px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
                           CREATOR
                         </span>
                       </button>
@@ -186,11 +189,11 @@ export default function Clips() {
                   </div>
                 )}
                 {c.status === "failed" && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="grad-btn" style={{ flex: 1, padding: "9px 0", fontSize: 13, borderRadius: 9 }} onClick={() => retry(c)}>
+                  <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+                    <button className="grad-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9 }} onClick={() => retry(c)}>
                       ↻ Retry free
                     </button>
-                    <button className="ghost-btn" style={{ padding: "9px 14px", fontSize: 13, borderRadius: 9, color: "var(--app-muted)" }} onClick={() => remove(c)}>
+                    <button className="ghost-btn" style={{ height: 38, padding: "0 14px", fontSize: 13, borderRadius: 9, color: "var(--app-muted)" }} onClick={() => remove(c)}>
                       🗑
                     </button>
                   </div>

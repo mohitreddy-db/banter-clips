@@ -1,15 +1,16 @@
 # BanterClips — MVP Business Requirements
 
-**Version:** 2.0 (simplified from v1.4 — same requirement IDs; the full v1.4
-narrative is archived) · **Product:** Web app · **Phase:** 1 — private beta
+**Version:** 2.1 (2.0 simplified from v1.4 — same requirement IDs; the full
+v1.4 narrative is archived. 2.1 adds the Bold tone and selectable duration) · **Product:** Web app · **Phase:** 1 — private beta
 
 ---
 
 ## 1. What we are building
 
-Turn a written sports opinion into a finished **12–15 second cinematic
-vertical video** — script, commentator voiceover, AI scenes, captions — and
-let the user **publish it to social without leaving the app**.
+Turn a written sports opinion into a finished **short cinematic vertical
+video** (10–30 seconds, chosen by the user) — script, commentator voiceover,
+AI scenes, captions — and let the user **publish it to social without
+leaving the app**.
 
 > One-line promise: *any sports take becomes a post-ready video, no editing.*
 
@@ -49,14 +50,17 @@ Each requirement is satisfied when every bullet under it is true.
 - A user can only ever see their own videos and data.
 
 **BR-03 — Creation input**
-- Exactly three inputs: the take (10–280 characters), a sport
-  (NBA / NFL / Soccer / MLB), and a tone (**Funny / Savage / Hype**).
+- Exactly four inputs: the take (10–280 characters), a sport
+  (NBA / NFL / Soccer / MLB), a tone (**Funny / Savage / Hype / Bold**),
+  and a video length (**10s / 15s / 30s**).
+- Lengths above 15s are a paid-plan feature: visible to free users but
+  locked, acting as an upgrade prompt.
 - Invalid input is rejected before generation starts.
 - Onboarding choices pre-fill defaults but are never required.
 
 **BR-04 — Script quality**
 - The generated script has a hook, the user's take, and a punchline, spoken
-  within 12–15 seconds.
+  within the chosen video length.
 - The script never reverses the user's stated opinion.
 
 **BR-05 — Voice**
@@ -64,7 +68,8 @@ Each requirement is satisfied when every bullet under it is true.
 - Speech is clear and synchronized with the captions.
 
 **BR-06 — Video output**
-- 9:16 vertical MP4, 1080×1920, 12–15s, burned-in animated captions.
+- 9:16 vertical MP4, 1080×1920, matching the chosen length (10/15/30s),
+  with burned-in animated captions.
 - One curated cinematic style; fictional or licensed characters only — no
   real-person likenesses, team logos, or match footage.
 - Every video carries an AI/parody disclosure on every plan.
@@ -127,6 +132,7 @@ Each requirement is satisfied when every bullet under it is true.
 | | Free | Creator — $9.99/mo (introductory) |
 |---|---|---|
 | Successful videos | 5 / month | 30 / month |
+| Video length | Up to 15s | Up to 30s |
 | Publish to Instagram | Yes — watermarked | Yes — no watermark |
 | Download MP4 | No | Yes — no watermark |
 | Watermark | Always | Removed (AI disclosure stays) |

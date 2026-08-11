@@ -62,8 +62,8 @@ export const api = {
 
   // clips
   listClips: () => request("/clips"),
-  createClip: (take, sport, tone) =>
-    request("/clips", { method: "POST", body: { take, sport, tone } }),
+  createClip: (take, sport, tone, duration = 15) =>
+    request("/clips", { method: "POST", body: { take, sport, tone, duration } }),
   getClip: (id) => request(`/clips/${id}`),
   retryClip: (id) => request(`/clips/${id}/retry`, { method: "POST" }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),

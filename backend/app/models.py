@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .db import Base
 
 SPORTS = ("NBA", "NFL", "Soccer", "MLB")
-TONES = ("Funny", "Savage", "Hype")
+TONES = ("Funny", "Savage", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 
 # Honest generation stages (BR-07), in order. Index into this list = stage_index.
@@ -106,6 +106,8 @@ class Clip(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     stage_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     error: Mapped[str | None] = mapped_column(Text)
+    # Requested length in seconds (10/15/30); >15 is Creator-only.
+    duration_target: Mapped[int] = mapped_column(Integer, nullable=False, server_default="15")
     duration_seconds: Mapped[float | None] = mapped_column(Numeric(4, 1))
     video_url: Mapped[str | None] = mapped_column(Text)
     thumb_gradient: Mapped[str | None] = mapped_column(Text)
