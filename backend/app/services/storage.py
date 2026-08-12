@@ -41,6 +41,19 @@ from ..config import settings
 
 log = logging.getLogger("banter.storage")
 
+# How long a public object may be cached at the CDN edge.
+#
+# Deleting an object removes it from storage immediately, but Cloudflare keeps
+# serving a cached copy until it expires — measured: after delete_prefix the
+# bucket listing was empty while the public URL still returned 200 (cf-cache
+# -status: HIT). Supabase exposes no purge API, so the TTL *is* the window in
+# which a deleted video remains fetchable by anyone holding the URL.
+#
+# Five minutes trades a little egress for a deletion that means something.
+# These files are fetched once by Instagram at publish and occasionally for
+# playback, so the caching was never doing much work anyway.
+PUBLIC_CACHE_SECONDS = 300
+
 # Retention per tier, in days. 0 means "keep until the clip is deleted".
 KEEP_FOREVER = 0
 RETENTION_DAYS = {
@@ -190,7 +203,12 @@ class SupabaseStorage(Storage):
             resp = client.post(
                 self._object_url(key),
                 content=payload,
-                headers={**self._headers, "content-type": ctype, "x-upsert": "true"},
+                headers={
+                    **self._headers,
+                    "content-type": ctype,
+                    "x-upsert": "true",
+                    "cache-control": f"max-age={PUBLIC_CACHE_SECONDS}",
+                },
             )
         if resp.status_code >= 400:
             raise RuntimeError(f"upload failed {resp.status_code}: {resp.text[:200]}")
@@ -259,7 +277,7 @@ def get() -> Storage:
     mode = str(getattr(settings, "STORAGE_BACKEND", "local")).lower()
     if mode == "supabase":
         url = getattr(settings, "SUPABASE_URL", "")
-        key = getattr(settings, "SUPABASE_SERVICE_KEY", "")
+        key = getattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "")
         bucket = getattr(settings, "STORAGE_BUCKET", "clips")
         if url and key:
             _backend = SupabaseStorage(url, key, bucket)

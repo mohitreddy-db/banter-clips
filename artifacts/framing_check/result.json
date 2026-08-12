@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "duration": 16.1,
+  "cost_usd": 2.36,
+  "warnings": [],
+  "plan_source": "llm",
+  "focus": {
+    "kind": "player",
+    "players": [
+      "wembanyama"
+    ],
+    "teams": [
+      "spurs"
+    ]
+  },
+  "scenes": 2,
+  "delivered_scenes": 2,
+  "captions": 2
+}

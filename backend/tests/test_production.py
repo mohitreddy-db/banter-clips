@@ -137,14 +137,20 @@ def test_purge_removes_only_expired_scratch():
 def test_backend_falls_back_to_local_when_supabase_is_misconfigured():
     from app.config import settings
 
-    original = (settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_KEY)
+    original = (settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_ROLE_KEY)
     try:
-        settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_KEY = "supabase", ""
+        settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_ROLE_KEY = "supabase", ""
         storage.reset()
         assert isinstance(storage.get(), storage.LocalStorage)
     finally:
-        settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_KEY = original
+        settings.STORAGE_BACKEND, settings.SUPABASE_SERVICE_ROLE_KEY = original
         storage.reset()
+
+
+def test_public_cache_window_is_short_enough_for_deletion_to_matter():
+    """Supabase has no purge API, so the TTL is how long a deleted video
+    stays fetchable at the CDN edge."""
+    assert storage.PUBLIC_CACHE_SECONDS <= 600
 
 
 # ------------------------------------------------------------- housekeeping

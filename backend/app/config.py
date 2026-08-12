@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     STORAGE_BUCKET: str = "clips"
     # Service-role key: server-side only, never sent to a browser. Needed to
-    # upload and delete; the anon key cannot.
-    SUPABASE_SERVICE_KEY: str = ""
+    # upload and delete; the anon key cannot (row-level security refuses it).
+    # Named as Supabase names it in the dashboard, so there is no translation
+    # step between copying it and pasting it.
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
     # Working files (per-scene clips, rejected keyframes) are deleted after
     # this many days. The deliverable and its poster are kept for the clip's
     # lifetime. Measured: ~14 MB worth keeping per 15s clip, ~38 MB scratch.
