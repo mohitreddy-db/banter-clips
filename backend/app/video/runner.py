@@ -130,6 +130,7 @@ def generate_video(
         # A fixed preset beats a per-job invented style: it is the same look in
         # every scene, which is what keeps a multi-scene video consistent.
         plan.style = brief.style
+    plan.disclosure = str(getattr(settings, "VIDEO_DISCLOSURE", "") or "")
     result.plan = plan
     if plan.source != "llm":
         result.warn(f"story plan came from the {plan.source} path")

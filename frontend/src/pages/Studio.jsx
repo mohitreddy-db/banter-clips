@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
@@ -36,6 +36,7 @@ const EXAMPLES_BY_SPORT = {
 
 export default function Studio() {
   const nav = useNavigate();
+  const { search } = useLocation();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
   // input → review (enhancer questions) → generating → result | failed
   const [phase, setPhase] = useState("input");
@@ -58,6 +59,31 @@ export default function Studio() {
     clearInterval(tickRef.current);
   }, []);
   useEffect(() => stopTimers, [stopTimers]);
+
+  // Opened from My Clips as /studio?clip=<id>: jump straight to that clip's
+  // state — live status while it renders, the player when it is done.
+  useEffect(() => {
+    const id = new URLSearchParams(search).get("clip");
+    if (!id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const c = await api.getClip(id);
+        if (cancelled) return;
+        setClip(c);
+        if (c.status === "ready") setPhase("result");
+        else if (c.status === "failed") setPhase("failed");
+        else watchClip(c.id);
+      } catch {
+        setError("That clip could not be opened.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // watchClip is stable; re-running on it would restart the poll needlessly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   const valid = take.trim().length >= 10 && take.length <= 280;
 
@@ -477,9 +503,6 @@ export default function Studio() {
                     ▶ BanterClips
                   </div>
                 )}
-                <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 6, letterSpacing: ".04em", pointerEvents: "none" }}>
-                  AI-GENERATED PARODY
-                </div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
+    # Text burned across the top of every frame. Empty means none.
+    # Applies to every plan. Note that Instagram's own policy expects
+    # realistic AI-generated content to be labelled, and these videos carry
+    # real athletes' likenesses — see the note in VIDEO-GENERATION-PLAN.md.
+    VIDEO_DISCLOSURE: str = ""
+
     # Hard ceiling per job. Cost scales with duration, so a runaway plan is
     # expensive; the pipeline degrades to stills rather than exceeding this.
     MAX_JOB_COST_USD: float = 8.0

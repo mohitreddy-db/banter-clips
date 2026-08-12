@@ -114,7 +114,10 @@ class VideoPlan:
     take: str = ""
     sport: str = "NBA"
     tone: str = "Bold"
-    disclosure: str = "AI-generated parody"
+    # Burned into the top of every frame when set. Empty by default: the
+    # product owner decides whether to label output, and the value comes from
+    # VIDEO_DISCLOSURE so turning it back on is a config change, not a deploy.
+    disclosure: str = ""
     style: str = ""
     focus: str = "generic"  # "player" | "team" | "matchup" | "generic"
     team_ids: list[str] = field(default_factory=list)

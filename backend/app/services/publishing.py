@@ -26,10 +26,30 @@ IG_GRAPH = "https://graph.instagram.com/v23.0"
 
 
 def _public_video_url(clip) -> str:
-    # Meta downloads the video itself, so the URL must be publicly reachable
-    # (the cloudflared tunnel in dev, the droplet domain in prod).
-    filename = (clip.video_url or "demo.mp4").rsplit("/", 1)[-1]
-    return f"{settings.API_BASE_URL}/media/{filename}"
+    """The URL Meta will fetch the video from. It must be publicly reachable —
+    Instagram downloads the file itself and cannot present credentials.
+
+    This used to keep only the last path segment of `clip.video_url` and
+    rebuild `{API_BASE_URL}/media/{filename}`, which worked only while every
+    clip was the demo file in the local media directory. Once clips moved to
+    storage the real path became `users/{uid}/clips/{cid}/final.mp4`, so the
+    rebuilt URL resolved to `/media/final.mp4` — a 404. Instagram fetched
+    nothing and reported it as "could not process the video", which sent us
+    looking at the encoding rather than the URL.
+
+    Use the URL the pipeline recorded. It already points at wherever the clip
+    actually lives, local or remote.
+    """
+    if clip.video_key:
+        try:
+            from .storage import get as get_storage
+
+            return get_storage().url(clip.video_key)
+        except Exception:  # noqa: BLE001 — fall through to the stored URL
+            pass
+    if clip.video_url:
+        return clip.video_url
+    return f"{settings.API_BASE_URL}/media/demo.mp4"
 
 
 def _fail(db, pub, message: str) -> None:

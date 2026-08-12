@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
@@ -15,6 +16,7 @@ const STATUS_LABEL = {
 };
 
 export default function Clips() {
+  const nav = useNavigate();
   const { clips, canDownload, refreshClips } = useApp();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [publishClip, setPublishClip] = useState(null);
@@ -108,11 +110,22 @@ export default function Clips() {
                     style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 ) : (
-                  <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}>
+                  // Not watchable yet — the whole panel opens the clip in the
+                  // Studio, where an in-flight one shows its live status and a
+                  // failed one offers the free retry.
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    title={inFlight ? "Watch progress" : "Open"}
+                    onClick={() => nav(`/studio?clip=${c.id}`)}
+                    onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav(`/studio?clip=${c.id}`)}
+                    style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", cursor: "pointer", background: "radial-gradient(circle at 30% 15%,#ffffff22,transparent 55%)" }}
+                  >
                     {inFlight ? (
                       <div style={{ textAlign: "center", color: "#fff" }}>
                         <span style={{ display: "inline-block", width: 26, height: 26, borderRadius: "50%", border: "3px solid rgba(255,255,255,.25)", borderTopColor: "#fff", animation: "spin 1s linear infinite" }} />
-                        <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{STATUS_LABEL[c.status] || "Working…"}</div>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{c.current_step || STATUS_LABEL[c.status] || "Working…"}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.75 }}>Tap to watch progress →</div>
                       </div>
                     ) : (
                       <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
