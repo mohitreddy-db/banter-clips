@@ -1,0 +1,36 @@
+[Unit]
+Description=BanterClips generation worker
+After=network.target
+# Not a hard dependency: the worker retries a database that is not up yet.
+Wants=postgresql.service
+# Rate-limit restarts. These belong in [Unit] — systemd ignores them in
+# [Service] with "Unknown key name", which is silent unless you read the log.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+User=banterclips
+Group=banterclips
+WorkingDirectory=/opt/banter-clips/backend
+# systemd REPLACES PATH rather than extending it, so the system directories
+# have to be listed explicitly. Without /usr/bin the worker cannot see ffmpeg
+# or ffprobe, and every real render fails at the first check with "ffmpeg and
+# ffprobe are required but were not found on PATH".
+Environment=PATH=/opt/banter-clips/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/banter-clips/backend/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=5
+
+# The worker traps SIGTERM, stops claiming, and puts any in-flight job back on
+# the queue without counting an attempt. Give it room to do that: a single
+# scene can be mid-animation with no natural checkpoint. After this it is
+# killed and the job is reclaimed as stale instead — correct either way, just
+# slower for the user.
+KillSignal=SIGTERM
+TimeoutStopSec=180
+
+# One render pins a core for minutes; keep it from starving the API.
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

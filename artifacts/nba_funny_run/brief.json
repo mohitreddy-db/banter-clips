@@ -1,0 +1,45 @@
+{
+  "take": "Wemby swats every shot but can\u2019t stop the Spurs from losing every close fourth quarter on national TV.",
+  "original_take": "Wemby blocks everything except the Spurs from winning games that matter.",
+  "sport": "NBA",
+  "tone": "Funny",
+  "seconds": 15,
+  "style_id": "broadcast",
+  "style": "crisp broadcast lighting, neutral colour grade, deep clarity",
+  "cast_ids": [
+    "wembanyama"
+  ],
+  "team_ids": [
+    "spurs"
+  ],
+  "unknown_names": [],
+  "questions": [
+    {
+      "id": "style",
+      "prompt": "Look \u2014 we picked Broadcast real. Keep it?",
+      "why": "Fixes the grade and lighting for every scene, so the video stays visually consistent end to end.",
+      "options": [
+        {
+          "value": "broadcast",
+          "label": "Broadcast real",
+          "detail": "Bright, clean live-sport television look. The safe default."
+        },
+        {
+          "value": "cinematic",
+          "label": "Golden-hour cinematic",
+          "detail": "Warm, film-like, flattering. Best for hype and celebration."
+        },
+        {
+          "value": "gritty",
+          "label": "Gritty documentary",
+          "detail": "Hand-held, tungsten, unglamorous. Best for savage takes."
+        }
+      ],
+      "kind": "choice",
+      "default": "broadcast",
+      "required": false
+    }
+  ],
+  "notes": [],
+  "source": "llm"
+}

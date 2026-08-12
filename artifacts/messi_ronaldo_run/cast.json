@@ -1,0 +1,24 @@
+[
+  {
+    "id": "messi",
+    "name": "Lionel Messi",
+    "look": "a short left-footed Argentine forward with a full short beard, dark hair and calm knowing eyes",
+    "wardrobe": "a plain solid pink soccer jersey with black trim, no logos, no numbers, no lettering",
+    "voice": "quiet, Spanish-accented, deadpan",
+    "reference_images": [
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/messi_face_01.jpg",
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/messi_full_01.jpg"
+    ]
+  },
+  {
+    "id": "ronaldo",
+    "name": "Cristiano Ronaldo",
+    "look": "an athletic muscular forward with short dark hair with faded sides, sharp jawline, intense focused eyes, light stubble, Portuguese features",
+    "wardrobe": "a plain solid yellow soccer jersey with blue trim, no logos, no numbers, no lettering",
+    "voice": "confident, slightly accented, declarative and intense",
+    "reference_images": [
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/ronaldo_face_01.jpg",
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/ronaldo_full_01.jpg"
+    ]
+  }
+]

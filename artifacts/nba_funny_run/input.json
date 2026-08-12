@@ -1,0 +1,16 @@
+{
+  "take": "Wemby swats every shot but can\u2019t stop the Spurs from losing every close fourth quarter on national TV.",
+  "sport": "NBA",
+  "tone": "Funny",
+  "seconds": 15,
+  "scene_count": 2,
+  "focus": {
+    "kind": "player",
+    "players": [
+      "wembanyama"
+    ],
+    "teams": [
+      "spurs"
+    ]
+  }
+}

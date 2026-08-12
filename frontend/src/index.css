@@ -83,6 +83,17 @@ textarea:focus {
     transform: rotate(360deg);
   }
 }
+/* The live status line: each new step slides up into place. */
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 @keyframes pulse {
   0%,
   100% {

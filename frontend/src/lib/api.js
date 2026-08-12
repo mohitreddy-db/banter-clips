@@ -62,6 +62,10 @@ export const api = {
 
   // clips
   listClips: () => request("/clips"),
+  // Sharpens the take and returns what still needs asking. Cheap and
+  // read-only, so it is safe to call again after every answer.
+  enhanceTake: (take, sport, tone, duration, answers = {}) =>
+    request("/clips/enhance", { method: "POST", body: { take, sport, tone, duration, answers } }),
   createClip: (take, sport, tone, duration = 15) =>
     request("/clips", { method: "POST", body: { take, sport, tone, duration } }),
   getClip: (id) => request(`/clips/${id}`),

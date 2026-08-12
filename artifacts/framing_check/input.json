@@ -1,0 +1,16 @@
+{
+  "take": "Wemby is so tall the Spurs stopped calling timeouts and just pass him the roof.",
+  "sport": "NBA",
+  "tone": "Funny",
+  "seconds": 15,
+  "scene_count": 2,
+  "focus": {
+    "kind": "player",
+    "players": [
+      "wembanyama"
+    ],
+    "teams": [
+      "spurs"
+    ]
+  }
+}

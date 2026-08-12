@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import ReviewStep from "../components/ReviewStep.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
@@ -36,7 +37,10 @@ const EXAMPLES_BY_SPORT = {
 export default function Studio() {
   const nav = useNavigate();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
-  const [phase, setPhase] = useState("input"); // input | generating | result | failed
+  // input → review (enhancer questions) → generating → result | failed
+  const [phase, setPhase] = useState("input");
+  const [brief, setBrief] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [take, setTake] = useState("");
   const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
   const [tone, setTone] = useState("Funny");
@@ -86,17 +90,46 @@ export default function Studio() {
     [refreshClips, refreshUsage, stopTimers]
   );
 
-  const generate = async () => {
+  // Step 1: sharpen the take and find out what still needs asking. Cheap and
+  // read-only — nothing is generated and no allowance is used yet.
+  const review = async () => {
     if (!valid) return;
     setError("");
+    setBusy(true);
     try {
-      const c = await api.createClip(take.trim(), sport, tone, duration);
+      const b = await api.enhanceTake(take.trim(), sport, tone, duration);
+      setBrief(b);
+      setPhase("review");
+    } catch (e) {
+      // Enhancement is a nicety; never let it block a user from generating.
+      setError(`Could not prepare your take (${e.message}) — generating as written.`);
+      await generate({});
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 2: commit. This is the call that starts real work.
+  const generate = async (answers = {}) => {
+    setError("");
+    setBusy(true);
+    try {
+      const finalTake = (brief?.take || take).trim();
+      const c = await api.createClip(
+        answers.take?.trim() || finalTake,
+        sport,
+        answers.tone || brief?.tone || tone,
+        Number(answers.seconds) || duration
+      );
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id);
     } catch (e) {
       if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
+      setPhase("review");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -124,11 +157,13 @@ export default function Studio() {
     setPhase("input");
     setTake("");
     setClip(null);
+    setBrief(null);
     setError("");
   };
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const stageIdx = clip ? clip.stage_index : 0;
+  const latestStep = clip?.current_step || null;
   const examples = EXAMPLES_BY_SPORT[sport] || EXAMPLES_BY_SPORT.NBA;
 
   return (
@@ -256,8 +291,8 @@ export default function Studio() {
           )}
 
           {/* generate */}
-          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid} onClick={generate}>
-            🪄 Generate BanterClip
+          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid || busy} onClick={review}>
+            {busy ? "Reading your take…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
             Hot Take format · three cinematic scenes · 12–15s vertical MP4 · 1080 × 1920 · AI-parody labeled
@@ -287,6 +322,30 @@ export default function Studio() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {phase === "review" && brief && (
+        <>
+          <div style={{ textAlign: "center", paddingTop: 18 }}>
+            <h1 style={{ fontSize: 34, fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>
+              Here's the plan
+            </h1>
+            <div style={{ fontSize: 15, color: "var(--app-muted)" }}>
+              Tweak anything, or hit go.
+            </div>
+          </div>
+          {error && (
+            <div style={{ fontSize: 13.5, color: "var(--app-error)", background: "rgba(240,84,108,.1)", borderRadius: 12, padding: "12px 16px" }}>
+              {error}
+            </div>
+          )}
+          <ReviewStep
+            brief={brief}
+            busy={busy}
+            onBack={() => setPhase("input")}
+            onNext={generate}
+          />
         </>
       )}
 
@@ -327,6 +386,40 @@ export default function Studio() {
                   );
                 })}
               </div>
+
+              {/* One line, always the current one. The stage rows above move
+                  every minute or two; this moves every few seconds, which is
+                  what makes a four-minute wait feel alive. */}
+              {latestStep && (
+                <div
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12, minHeight: 26,
+                    padding: "16px 20px", borderRadius: 14,
+                    background: "rgba(34,211,238,.06)",
+                    border: "1px solid rgba(34,211,238,.18)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 16, height: 16, flexShrink: 0, borderRadius: "50%",
+                      border: "2px solid rgba(34,211,238,.25)", borderTopColor: "var(--app-cyan)",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  {/* keyed on the text so React remounts and replays the slide */}
+                  <span
+                    key={latestStep}
+                    style={{
+                      fontSize: 14.5, fontWeight: 600, color: "var(--app-text)",
+                      animation: "stepIn .45s cubic-bezier(.2,.8,.2,1)",
+                    }}
+                  >
+                    {latestStep}
+                  </span>
+                </div>
+              )}
+
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(34,211,238,.07)", fontSize: 13, color: "var(--app-muted)" }}>
                 ℹ️ You can leave this page — your video keeps rendering and will be waiting in My Clips.
               </div>

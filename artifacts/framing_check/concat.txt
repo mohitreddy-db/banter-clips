@@ -1,0 +1,2 @@
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/framing_check/scene0_n.mp4'
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/framing_check/scene1_n.mp4'

@@ -1,0 +1,21 @@
+[
+  {
+    "id": "wembanyama",
+    "name": "Victor Wembanyama",
+    "look": "an extremely tall, very slim 7-foot-4 French basketball player with very long limbs, short dark hair and sharp youthful features, towering over everyone around him",
+    "wardrobe": "a plain solid black or silver basketball jersey with no logos, no numbers, no lettering",
+    "voice": "calm, French-accented, understated",
+    "reference_images": [
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/wembanyama_face_01.jpg",
+      "/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/backend/app/video/catalog/references/wembanyama_full_01.jpg"
+    ]
+  },
+  {
+    "id": "coach_nba",
+    "name": "a weary head coach",
+    "look": "a tired middle-aged basketball head coach holding a clipboard, sleeves rolled up, thousand-yard stare",
+    "wardrobe": "a plain grey polo shirt and dark trousers with no lettering",
+    "voice": "flat, exhausted, deadpan",
+    "reference_images": []
+  }
+]

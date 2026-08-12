@@ -6,7 +6,10 @@ After=network.target
 User=banterclips
 Group=banterclips
 WorkingDirectory=/opt/banter-clips/backend
-Environment=PATH=/opt/banter-clips/backend/.venv/bin
+# systemd REPLACES PATH rather than extending it. The API only needs ffmpeg
+# when QUEUE_MODE=thread (renders run in-process), but the cost of listing the
+# system directories is nothing and the failure without them is total.
+Environment=PATH=/opt/banter-clips/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin
 ExecStart=/opt/banter-clips/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=always
 RestartSec=3

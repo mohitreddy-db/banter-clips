@@ -1,0 +1,2 @@
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/nba_funny_run/scene0_n.mp4'
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/nba_funny_run/scene1_n.mp4'

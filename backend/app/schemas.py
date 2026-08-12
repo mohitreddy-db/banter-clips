@@ -80,6 +80,57 @@ class ClipCreate(BaseModel):
     duration: Literal[10, 15, 30] = 15
 
 
+# ---------- prompt enhancement ----------
+class EnhanceRequest(BaseModel):
+    """Anything the user has typed so far. Every field is optional except the
+    take, because the point of enhancement is to work out what is missing."""
+
+    take: str = Field(max_length=280, default="")
+    sport: Sport | None = None
+    tone: Tone | None = None
+    duration: int | None = None
+    # question id -> chosen value, from a previous round of answers.
+    answers: dict[str, str] = Field(default_factory=dict)
+
+
+class EnhanceOptionOut(BaseModel):
+    value: str
+    label: str
+    detail: str = ""
+
+
+class EnhanceQuestionOut(BaseModel):
+    id: str
+    prompt: str
+    why: str
+    kind: str = "choice"
+    default: str = ""
+    required: bool = False
+    options: list[EnhanceOptionOut] = []
+
+
+class EnhanceOut(BaseModel):
+    """The sharpened brief plus whatever is still worth asking."""
+
+    take: str
+    original_take: str = ""
+    sport: str
+    tone: str
+    seconds: int
+    style_id: str
+    style: str
+    style_label: str = ""
+    cast_ids: list[str] = []
+    team_ids: list[str] = []
+    cast_names: list[str] = []
+    team_names: list[str] = []
+    unknown_names: list[str] = []
+    questions: list[EnhanceQuestionOut] = []
+    source: str = "fallback"
+
+
+
+
 class PublishOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,6 +165,10 @@ class ClipOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     publishes: list[PublishOut] = []
+    # What the pipeline is doing right now, in the user's language. Read from
+    # the row, so it is correct whichever worker serves the poll.
+    current_step: str | None = None
+    is_simulated: bool = False
 
 
 # ---------- socials ----------

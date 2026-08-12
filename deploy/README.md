@@ -49,10 +49,45 @@ systemctl restart banterclips-api caddy
 curl https://api.banterclips.com/health   # → {"ok":true,...}
 ```
 
+### Generation worker
+
+Real generation runs in its own process, so a deploy never interrupts a render
+and a four-minute render never competes with request handling. It needs
+`ffmpeg`, which the API does not.
+
+```bash
+apt-get install -y ffmpeg
+cp deploy/banterclips-worker.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now banterclips-worker
+journalctl -u banterclips-worker -f
+```
+
+Set `QUEUE_MODE=postgres` in the backend `.env` — without it the API keeps
+running renders on its own threads and the worker sits idle.
+
+**Watch this, not CPU:** `/health/ready` reports queue depth. A rising
+`queued` with a flat `running` means no worker is alive; the API stays
+perfectly healthy while every clip waits forever. Alert on
+`queued > 5 for 10 minutes`.
+
+### Housekeeping (cron, hourly)
+
+Purges expired working files and fails clips whose render was interrupted, so
+a user is never stuck watching a spinner with no way to retry.
+
+```bash
+crontab -e
+0 * * * * cd /opt/banter-clips/backend && .venv/bin/python -m app.services.housekeeping
+```
+
 **Updates after a git push:**
 ```bash
-ssh root@<droplet-ip> 'cd /opt/banter-clips && git pull && backend/.venv/bin/pip install -q -r backend/requirements.txt && systemctl restart banterclips-api'
+ssh root@<droplet-ip> 'cd /opt/banter-clips && git pull && backend/.venv/bin/pip install -q -r backend/requirements.txt && systemctl restart banterclips-api banterclips-worker'
 ```
+
+Restarting the worker is safe at any time: it finishes the render in flight
+(systemd waits up to 3 minutes), and anything it cannot finish returns to the
+queue without counting as a failed attempt.
 
 ## 2. Vercel (frontend)
 
