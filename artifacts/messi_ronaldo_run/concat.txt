@@ -1,0 +1,2 @@
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/messi_ronaldo_run/scene0_n.mp4'
+file '/home/mohit/Documents/appx/banter-clips/.claude/worktrees/video-generation/artifacts/messi_ronaldo_run/scene1_n.mp4'

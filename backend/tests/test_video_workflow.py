@@ -9,13 +9,16 @@ Runs under pytest, or standalone:
 
 from __future__ import annotations
 
+import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.video import catalog, defaults, focus, library, media, planner, prompts  # noqa: E402
-from app.video import prompt_registry  # noqa: E402
+from app.video import enhancer, prompt_registry, review  # noqa: E402
 from app.video.types import CastMember, Scene, VideoPlan  # noqa: E402
 
 
@@ -200,9 +203,12 @@ def test_every_wardrobe_forbids_lettering():
 
 
 def test_catalog_reference_selection_never_fails():
-    char = catalog.get_character("wembanyama")
-    assert catalog.select_references(char, "tight close-up on his face") == []
     assert catalog.select_references(None) == []
+    # A character with no stills yields none rather than raising.
+    assert catalog.select_references(catalog.get_character("jokic")) == []
+    built = catalog.get_character("wembanyama")
+    refs = catalog.select_references(built, "tight close-up on his face")
+    assert len(refs) <= 2 and all(p.exists() for p in refs)
 
 
 # ----------------------------------------------------------------------- focus
@@ -260,6 +266,184 @@ def test_caption_wrapping_and_filters():
     assert filters and "between(t,0.00,3.50)" in filters[0]
     # Newlines never reach drawtext — they render literally as "n" (measured).
     assert not any("\n" in f for f in filters)
+
+
+def test_caption_text_goes_through_a_file_not_the_filtergraph():
+    """An apostrophe once terminated the quoted string and broke the graph."""
+    nasty = "He's got 100%, right: no — see \\this\\"
+    filters = media.caption_filters([(0.0, 3.0, nasty)], "/font.ttf")
+    assert filters
+    for f in filters:
+        assert "textfile=" in f and ":text=" not in f   # never inline text
+        assert "'" not in f.split(":enable")[0]         # no raw quotes in the graph
+    written = Path(filters[0].split("textfile=")[1].split(":")[0]).read_text()
+    assert written and written in nasty             # verbatim, unescaped
+
+
+def test_branding_survives_apostrophes_end_to_end():
+    """Real ffmpeg, real caption text — the exact string that broke a run."""
+    if not media.available():
+        return
+    scratch = Path(tempfile.mkdtemp(prefix="banter_test_"))
+    try:
+        source = scratch / "in.mp4"
+        media._run([
+            "ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+            "-i", f"color=c=black:s=270x480:d=2:r=15",
+            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-shortest", "-c:v", "libx264", "-c:a", "aac", str(source),
+        ], "test fixture")
+        out = media.brand(
+            source, scratch / "out.mp4", "AI-generated parody", "BanterClips",
+            captions=[(0.1, 1.9, "He's run out of things to throw: 100%")],
+        )
+        assert media.probe(out).get("duration", 0) > 0
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+# ------------------------------------------------------------ photorealism
+
+def test_model_style_can_never_replace_the_photoreal_anchor():
+    """The bug that made one scene a cartoon: style REPLACED the bible."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    plan.style = "harsh spotlights, metallic silver-blue grade"
+    image = prompts.build_image_prompt(plan, plan.scenes[0])
+    motion = prompts.build_motion_prompt(plan, plan.scenes[0])
+    for text in (image, motion):
+        assert "REAL PHOTOGRAPH" in text
+        assert "photoreal" in text.lower()
+        assert "NOT a cartoon" in text
+        assert "metallic silver-blue grade" in text   # flavour still survives
+
+
+def test_medium_words_are_stripped_from_model_style():
+    assert "cartoon" not in prompts.safe_style("moody grade, cartoon shading").lower()
+    assert "3D render" not in prompts.safe_style("warm light, 3D render")
+    assert "warm light" in prompts.safe_style("warm light, 3D render")
+    assert prompts.safe_style("") == ""
+
+
+def test_review_hard_fails_a_non_photoreal_frame():
+    class FakeVision:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return ('{"readable_text":"NONE","has_text_defect":false,'
+                    '"has_real_logo":false,"subject_matches":true,'
+                    '"is_single_frame":true,"is_photoreal":false,'
+                    '"medium":"cartoon","minor_defects":"NONE",'
+                    '"severe_defects":"NONE","lower_quarter_clean":true}')
+
+    verdict = review.review_keyframe(Path(__file__), "Messi", FakeVision())
+    assert not verdict
+    assert any("photoreal" in h for h in verdict.hard)
+
+
+# ------------------------------------------------------------- text props
+
+def test_text_bearing_props_are_detected_and_blanked():
+    props = prompts.text_props_in("Ronaldo scrolls through polls on a tablet", "")
+    assert "tablet" in props and "poll" in props
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    plan.scenes[0].action = "he reads a newspaper on the bench"
+    image = prompts.build_image_prompt(plan, plan.scenes[0])
+    assert "newspaper" in image and "completely blank" in image
+
+
+def test_planner_is_told_to_avoid_text_props():
+    assert "newspaper" in prompts.PLANNER_SYSTEM
+    assert "LIVE ACTION" in prompts.PLANNER_SYSTEM
+
+
+def test_retry_escalation_targets_the_actual_failure():
+    base = "a prompt"
+    assert "REAL PHOTOGRAPH" in prompts.escalate(base, ["not photoreal: cartoon"])
+    assert "blank" in prompts.escalate(base, ["text visible: NIKE"]).lower()
+    assert "ONE single" in prompts.escalate(base, ["not a single frame: collage"])
+    assert prompts.escalate(base, []) != base       # always adds something
+
+
+# --------------------------------------------------------------- enhancer
+
+def _brief(**kw):
+    return enhancer.enhance(client=None, **kw)
+
+
+def test_enhancer_returns_a_complete_brief_with_no_model_and_no_input():
+    brief = _brief()
+    assert brief.take and brief.sport and brief.tone and brief.seconds
+    assert brief.style_id in enhancer.STYLE_PRESETS
+    assert brief.style                       # a real style string, always
+
+
+def test_enhancer_asks_about_a_vague_take():
+    brief = _brief(take="lakers bad")
+    ids = {q.id for q in brief.questions}
+    assert "take" in ids
+    assert all(q.why for q in brief.questions)          # every question justified
+
+
+def test_a_specific_take_is_not_interrogated_about_itself():
+    brief = _brief(take="The Lakers are frauds and everyone in the building knows it",
+                   sport="NBA", tone="Savage", seconds=15)
+    assert "take" not in {q.id for q in brief.questions}
+
+
+def test_explicit_inputs_are_never_asked_about_again():
+    brief = _brief(take="The Lakers are frauds and everyone knows it by now",
+                   sport="NBA", tone="Savage", seconds=30)
+    ids = {q.id for q in brief.questions}
+    assert "tone" not in ids and "seconds" not in ids
+
+
+def test_every_question_has_a_usable_default():
+    for take in ("", "no", "The Lakers are frauds and everyone knows it"):
+        for question in _brief(take=take).questions:
+            assert question.default or question.kind == "text"
+
+
+def test_answers_are_applied_and_stop_being_asked():
+    brief = _brief(take="The Lakers are frauds and everyone knows it")
+    answered = enhancer.apply_answers(brief, {"style": "gritty", "tone": "Savage"})
+    assert answered.style_id == "gritty"
+    assert answered.tone == "Savage"
+    assert "style" not in {q.id for q in answered.questions}
+
+
+def test_style_presets_are_all_photographic():
+    for preset in enhancer.STYLE_PRESETS.values():
+        assert not prompts._MEDIUM_WORDS.search(preset["style"]), preset
+
+
+def test_brief_converts_to_a_resolved_input():
+    brief = _brief(take="The Lakers are frauds and everyone knows it", sport="NBA")
+    resolved = enhancer.resolved_from(brief)
+    assert resolved.sport == brief.sport
+    assert resolved.seconds == brief.seconds
+    assert resolved.scene_count >= 2
+
+
+def test_enhancer_survives_a_broken_model():
+    class Broken:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            raise RuntimeError("boom")
+
+    brief = enhancer.enhance("The Lakers are frauds", client=Broken())
+    assert brief.take and brief.source == "fallback"
+
+
+def test_enhancer_ignores_a_model_that_rewrites_the_take_into_an_essay():
+    class Windbag:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"take": "x " * 400})
+
+    original = "The Lakers are frauds and everyone knows it"
+    assert enhancer.enhance(original, client=Windbag()).take == original
 
 
 # ------------------------------------------------------------- prompt registry

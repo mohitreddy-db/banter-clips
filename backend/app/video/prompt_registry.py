@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from . import prompts, research, review
+from . import enhancer, prompts, research, review
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,19 @@ class PromptSpec:
 
 
 REGISTRY: tuple[PromptSpec, ...] = (
+    PromptSpec(
+        key="enhancer",
+        kind="system",
+        stage="enhance (before planning)",
+        model="OPENAI_PLAN_MODEL",
+        purpose=(
+            "Sharpens a rough take into something specific, visual and "
+            "speakable while keeping the stance, and reports who/what it is "
+            "about plus any genuine ambiguity. Its output drives which "
+            "questions the user is asked before any money is spent."
+        ),
+        text=enhancer.ENHANCER_SYSTEM,
+    ),
     PromptSpec(
         key="planner",
         kind="system",
@@ -147,6 +160,32 @@ REGISTRY: tuple[PromptSpec, ...] = (
             "direction produced a three-panel collage keyframe."
         ),
         text=prompts.SINGLE_FRAME,
+    ),
+    PromptSpec(
+        key="photoreal",
+        kind="fragment",
+        stage="opens AND closes every image and motion prompt",
+        model="IMAGE_MODEL / VIDEO_MODEL",
+        purpose=(
+            "The medium anchor — states that the output is a real photograph, "
+            "never artwork. Non-overridable, deliberately separate from the "
+            "style bible: a model-authored style line once replaced the bible "
+            "and with it the only mention of photorealism, and a scene "
+            "rendered as an isometric cartoon inside an otherwise real video."
+        ),
+        text=prompts.PHOTOREAL,
+    ),
+    PromptSpec(
+        key="corrections",
+        kind="fragment",
+        stage="keyframe retries",
+        model="IMAGE_MODEL",
+        purpose=(
+            "Per-defect corrective clauses appended on retry, chosen from what "
+            "the review gate actually rejected. Resending an identical prompt "
+            "mostly reproduces the identical defect."
+        ),
+        text="\n".join(f"[{key}] {text}" for key, text in prompts._CORRECTIONS),
     ),
     PromptSpec(
         key="tone_direction",

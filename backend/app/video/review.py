@@ -7,8 +7,8 @@ Severity matters. An early binary version of this gate failed *every*
 candidate, because near-perfect hands are rare in generated images and it
 treated slightly odd fingers the same as a brand logo. Split the checks:
 
-  hard  — readable or garbled text, real logos, collages, severe anatomy.
-          Regenerate.
+  hard  — readable or garbled text, real logos, collages, non-photoreal
+          medium, severe anatomy. Regenerate.
   soft  — hands, minor anatomy, background oddities, subject doubt. Note it
           and move on. (`subject_matches` is soft because it measured noisy:
           it rejected correct frames of the intended players.)
@@ -35,6 +35,8 @@ Judge only what is visible. Return ONLY JSON with exactly these keys:
  "has_real_logo": true/false,
  "subject_matches": true/false,
  "is_single_frame": true/false,
+ "is_photoreal": true/false,
+ "medium": "<photograph | illustration | cartoon | 3d_render | painting | other>",
  "minor_defects": "<odd hands, small anatomy or background issues, or NONE>",
  "severe_defects": "<extra limbs, melted or duplicated faces, impossible bodies, or NONE>",
  "lower_quarter_clean": true/false}
@@ -46,7 +48,15 @@ duplicated or missing, which is severe.
 is_single_frame is false if the image is a collage, split screen, grid,
 storyboard, or otherwise shows the same scene from two camera positions
 stacked or side by side. A single photograph is true. Look for horizontal or
-vertical dividing lines separating different shots."""
+vertical dividing lines separating different shots.
+
+is_photoreal is true ONLY for something that could plausibly be a real
+photograph of real people: real skin texture and pores, real fabric weave,
+real optical depth of field and lighting. It is FALSE for cartoons, anime,
+comic art, 3D or game-engine renders, digital paintings, illustrations,
+cel-shaded or flat-shaded art, and any image with outlines, posterised
+shading or simplified faces. A stylised colour grade on a real photograph is
+still photoreal; a drawing of a person is not, however detailed."""
 
 
 class Verdict:
@@ -109,6 +119,11 @@ def review_keyframe(path: Path, subject: str, client) -> Verdict:
     if data.get("is_single_frame") is False:
         # A collage cannot be animated — the clip inherits the panel layout.
         hard.append("not a single frame: collage or split screen")
+    if data.get("is_photoreal") is False:
+        # The clip inherits the still's medium, so one cartoon keyframe makes
+        # one cartoon scene inside an otherwise photoreal video.
+        medium = str(data.get("medium") or "stylised").strip()[:24]
+        hard.append(f"not photoreal: rendered as {medium}")
     if _present(data.get("severe_defects")):
         hard.append(f"severe defect: {str(data['severe_defects'])[:70]}")
 

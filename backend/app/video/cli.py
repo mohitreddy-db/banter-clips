@@ -17,8 +17,52 @@ import sys
 import tempfile
 from pathlib import Path
 
-from . import defaults, planner, prompts, providers
+from . import defaults, enhancer, planner, prompts, providers
 from .runner import generate_video
+
+
+def _ask_questions(brief, interactive: bool) -> dict:
+    """Put the enhancer's questions to the user. Enter accepts the default."""
+    if not brief.questions:
+        return {}
+    print("\n  A few things would improve the result:\n")
+    answers: dict = {}
+    for question in brief.questions:
+        print(f"  {question.prompt}")
+        print(f"    why: {question.why}")
+        for index, option in enumerate(question.options, 1):
+            mark = "*" if option.value == question.default else " "
+            detail = f" — {option.detail}" if option.detail else ""
+            print(f"   {mark}{index}. {option.label}{detail}")
+        if not interactive:
+            print(f"    [using default: {question.default or 'as written'}]\n")
+            continue
+        try:
+            reply = input(f"    > [{question.default or 'skip'}] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not reply:
+            print()
+            continue
+        if question.options and reply.isdigit() and 1 <= int(reply) <= len(question.options):
+            answers[question.id] = question.options[int(reply) - 1].value
+        else:
+            answers[question.id] = reply
+        print()
+    return answers
+
+
+def _print_brief(brief) -> None:
+    print(f"\n  take    {brief.take}")
+    if brief.original_take and brief.original_take != brief.take:
+        print(f"  was     {brief.original_take}")
+    print(f"  setup   {brief.sport} · {brief.tone} · {brief.seconds}s · "
+          f"{enhancer.STYLE_PRESETS[brief.style_id]['label']}")
+    if brief.cast_ids or brief.team_ids:
+        print(f"  subject {', '.join(brief.cast_ids + brief.team_ids)}")
+    if brief.unknown_names:
+        print(f"  unknown {', '.join(brief.unknown_names)}  (no reference stills)")
 
 
 def _print_plan(plan) -> None:
@@ -44,6 +88,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default=None, help="output mp4 path")
     parser.add_argument("--work", default=None, help="working directory to keep")
     parser.add_argument("--plan-only", action="store_true", help="print the script and stop")
+    parser.add_argument("--brief-only", action="store_true",
+                        help="enhance the take, show the questions, and stop")
+    parser.add_argument("-i", "--interactive", action="store_true",
+                        help="answer the enhancer's questions at the prompt")
+    parser.add_argument("--answers", default=None,
+                        help='pre-supplied answers as JSON, e.g. \'{"style":"gritty"}\'')
+    parser.add_argument("--raw", action="store_true",
+                        help="skip enhancement entirely and use the take as written")
+    parser.add_argument("--full-prompts", action="store_true",
+                        help="print prompts untruncated")
     parser.add_argument("--no-watermark", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -53,16 +107,43 @@ def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s %(name)s: %(message)s",
     )
 
-    resolved = defaults.resolve(args.take, args.sport, args.tone, args.seconds)
-    print(f"resolved input: {json.dumps(resolved.to_dict())}")
+    try:
+        preset = json.loads(args.answers) if args.answers else {}
+    except json.JSONDecodeError:
+        print("could not parse --answers as JSON; ignoring")
+        preset = {}
+
+    brief = None
+    if not args.raw:
+        brief = enhancer.enhance(
+            args.take, args.sport, args.tone, args.seconds,
+            answers=preset, client=providers.text_client(),
+        )
+        _print_brief(brief)
+        replies = _ask_questions(brief, args.interactive)
+        if replies:
+            brief = enhancer.apply_answers(brief, {**preset, **replies})
+            _print_brief(brief)
+        resolved = enhancer.resolved_from(brief)
+    else:
+        resolved = defaults.resolve(args.take, args.sport, args.tone, args.seconds)
+
+    if args.brief_only:
+        print(f"\n{json.dumps(brief.to_dict() if brief else resolved.to_dict(), indent=2)}")
+        return 0
+
+    print(f"\nresolved input: {json.dumps(resolved.to_dict())}")
 
     if args.plan_only:
         plan = planner.build_plan(resolved, providers.text_client())
+        if brief and brief.style:
+            plan.style = brief.style
         _print_plan(plan)
+        cut = None if args.full_prompts else 600
         print("image prompt for scene 1:\n")
-        print("  " + prompts.build_image_prompt(plan, plan.scenes[0])[:600] + "\n")
+        print("  " + prompts.build_image_prompt(plan, plan.scenes[0])[:cut] + "\n")
         print("motion prompt for scene 1:\n")
-        print("  " + prompts.build_motion_prompt(plan, plan.scenes[0])[:600] + "\n")
+        print("  " + prompts.build_motion_prompt(plan, plan.scenes[0])[:cut] + "\n")
         return 0
 
     work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="banter_"))
@@ -73,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         work_dir=work, out_path=out,
         watermark=None if args.no_watermark else "BanterClips",
         on_stage=lambda name: print(f"  → {name}"),
+        brief=brief,
     )
 
     if result.plan:

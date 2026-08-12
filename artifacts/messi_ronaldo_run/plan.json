@@ -1,0 +1,54 @@
+{
+  "title": "GOATs Too Busy Debating to Retire",
+  "take": "Messi and Ronaldo have been arguing about the GOAT debate so long they both forgot how to retire.",
+  "sport": "Soccer",
+  "tone": "Funny",
+  "disclosure": "AI-generated parody",
+  "style": "warm sunset tones, slightly exaggerated contrast, soft-focus background, playful mood",
+  "focus": "player",
+  "team_ids": [
+    "inter-miami",
+    "al-nassr"
+  ],
+  "cast": [
+    {
+      "id": "messi",
+      "name": "Lionel Messi",
+      "look": "a short left-footed Argentine forward with a full short beard, dark hair and calm knowing eyes",
+      "wardrobe": "a plain solid pink soccer jersey with black trim, no logos, no numbers, no lettering",
+      "voice": "quiet, Spanish-accented, deadpan"
+    },
+    {
+      "id": "ronaldo",
+      "name": "Cristiano Ronaldo",
+      "look": "an athletic muscular forward with short dark hair with faded sides, sharp jawline, intense focused eyes, light stubble, Portuguese features",
+      "wardrobe": "a plain solid yellow soccer jersey with blue trim, no logos, no numbers, no lettering",
+      "voice": "confident, slightly accented, declarative and intense"
+    }
+  ],
+  "scenes": [
+    {
+      "index": 0,
+      "beat": "hook",
+      "venue": "a palm-lined Florida soccer stadium at sunset, pink and black seats, blurred crowd",
+      "action": "Messi stands at the halfway line, pink kit on, holding a pair of gold retirement slippers, confused, surrounded by confetti cannons from last season\u2019s retirement party still littering the grass.",
+      "camera": "low-angle medium shot",
+      "speaker_id": "messi",
+      "line": "Wait, was I supposed to leave? We kept talking about it, not doing it.",
+      "delivery": "gentle bewilderment, glancing toward the tunnel",
+      "seconds": 7.5
+    },
+    {
+      "index": 1,
+      "beat": "payoff",
+      "venue": "a floodlit football stadium pitch at night, blurred crowd behind",
+      "action": "Ronaldo sits cross-legged in the center circle, yellow kit, scrolling through endless GOAT polls on a giant tablet, surrounded by a mountain of printed debate articles.",
+      "camera": "wide shot from above, spotlight focused on Ronaldo",
+      "speaker_id": "ronaldo",
+      "line": "I\u2019ll retire when the voting\u2019s over. The voting\u2026never ends.",
+      "delivery": "dramatic anguish, looks up to the heavens, raising the tablet",
+      "seconds": 7.5
+    }
+  ],
+  "source": "llm"
+}

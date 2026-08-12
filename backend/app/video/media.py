@@ -10,6 +10,7 @@ import json
 import logging
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 log = logging.getLogger("banter.video.media")
@@ -144,20 +145,41 @@ CAPTION_MAX_LINES = 2
 CAPTION_BASE_Y = HEIGHT - 520
 
 
-def caption_filters(captions: list[tuple[float, float, str]], font: str) -> list[str]:
+def _text_source(text: str, scratch: Path, name: str) -> str:
+    """Write drawtext's text to a file and return the `textfile=` argument.
+
+    Caption text is written by a language model, so it can contain quotes,
+    colons, commas, percent signs and backslashes — every one of which means
+    something inside a filtergraph. Escaping them correctly is possible but
+    unforgiving: an ASCII apostrophe once terminated the quoted string early,
+    which turned the commas in `enable=between(t,a,b)` into filter separators
+    and ffmpeg reported `No such filter: '7.75'`. A file has no escaping rules
+    at all, so nothing in the text can break the graph.
+    """
+    path = scratch / f"{name}.txt"
+    path.write_text(text, encoding="utf-8")   # no trailing newline: it renders
+    return f"textfile={path}"
+
+
+def caption_filters(
+    captions: list[tuple[float, float, str]], font: str, scratch: Path | None = None,
+) -> list[str]:
     """drawtext filters for timed captions.
 
     Each caption is (start, end, text). Text is wrapped to short centred lines
     and every line becomes its own drawtext — newlines inside one drawtext
     render literally as "n" (measured), so multi-line means multi-filter.
     """
+    scratch = Path(scratch) if scratch else Path(tempfile.mkdtemp(prefix="banter_text_"))
+    scratch.mkdir(parents=True, exist_ok=True)
     filters = []
-    for start, end, text in captions:
+    for index, (start, end, text) in enumerate(captions):
         lines = _wrap(text, CAPTION_WRAP_CHARS)[:CAPTION_MAX_LINES]
         for row, line in enumerate(lines):
             y = CAPTION_BASE_Y + row * int(CAPTION_FONT_SIZE * 1.3)
+            source = _text_source(line, scratch, f"cap{index}_{row}")
             filters.append(
-                f"drawtext=fontfile={font}:text='{_esc(line)}':fontcolor=white"
+                f"drawtext=fontfile={font}:{source}:fontcolor=white"
                 f":fontsize={CAPTION_FONT_SIZE}:borderw=4:bordercolor=black@0.85"
                 f":x=(w-text_w)/2:y={y}"
                 f":enable='between(t,{start:.2f},{end:.2f})'"
@@ -189,17 +211,20 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
     """
     font = font_path()
     filters = []
+    scratch = Path(tempfile.mkdtemp(prefix="banter_text_"))
     if font:
         if captions:
-            filters.extend(caption_filters(captions, font))
+            filters.extend(caption_filters(captions, font, scratch))
         if disclosure:
+            source = _text_source(disclosure, scratch, "disclosure")
             filters.append(
-                f"drawtext=fontfile={font}:text='{_esc(disclosure)}':fontcolor=white@0.82"
+                f"drawtext=fontfile={font}:{source}:fontcolor=white@0.82"
                 f":fontsize=32:borderw=3:bordercolor=black@0.75:x=(w-text_w)/2:y=95"
             )
         if watermark:
+            source = _text_source(watermark, scratch, "watermark")
             filters.append(
-                f"drawtext=fontfile={font}:text='{_esc(watermark)}':fontcolor=white@0.88"
+                f"drawtext=fontfile={font}:{source}:fontcolor=white@0.88"
                 f":fontsize=38:borderw=3:bordercolor=black@0.75:x=w-text_w-48:y=h-160"
             )
     else:
@@ -210,7 +235,10 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
         args += ["-vf", ",".join(filters)]
     args += ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
              "-movflags", "+faststart", "-c:a", "copy", str(out)]
-    _run(args, "brand")
+    try:
+        _run(args, "brand")
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
     return Path(out)
 
 

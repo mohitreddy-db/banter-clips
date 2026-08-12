@@ -23,7 +23,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..config import settings
-from . import catalog, defaults, media, planner, prompts, providers, research, review
+from . import (
+    catalog, defaults, enhancer, media, planner, prompts, providers, research, review,
+)
 from .types import SceneAsset, VideoPlan
 
 log = logging.getLogger("banter.video.runner")
@@ -37,7 +39,10 @@ STAGE_ANIMATE = "animating_scenes"
 STAGE_ASSEMBLE = "assembling_video"
 STAGE_VALIDATE = "validating"
 
-MAX_KEYFRAME_ATTEMPTS = 2
+# Three, not two: the gate now hard-fails five distinct defects, and each
+# retry is escalated with a correction targeting what actually failed. Two
+# attempts left a rejected frame shipping into the final cut.
+MAX_KEYFRAME_ATTEMPTS = 3
 
 
 @dataclass
@@ -67,8 +72,14 @@ def generate_video(
     out_path: Path,
     watermark: str | None = "BanterClips",
     on_stage=None,
+    brief: "enhancer.Brief | None" = None,
 ) -> Result:
-    """Run the whole pipeline. Never raises."""
+    """Run the whole pipeline. Never raises.
+
+    `brief` is an already-enhanced brief (see `enhancer.enhance`), carrying a
+    sharpened take, a fixed style preset and any choices the user made. Passing
+    one skips re-enhancement; omitting it runs the raw inputs as before.
+    """
     result = Result()
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -87,14 +98,23 @@ def generate_video(
 
     # ---------------------------------------------------------- 1. plan
     stage(STAGE_PLANNING)
-    resolved = defaults.resolve(take, sport, tone, seconds)
     text = providers.text_client()
+    if brief is None:
+        resolved = defaults.resolve(take, sport, tone, seconds)
+    else:
+        resolved = enhancer.resolved_from(brief)
     plan = planner.build_plan(resolved, text)
+    if brief is not None and brief.style:
+        # A fixed preset beats a per-job invented style: it is the same look in
+        # every scene, which is what keeps a multi-scene video consistent.
+        plan.style = brief.style
     result.plan = plan
     if plan.source != "llm":
         result.warn(f"story plan came from the {plan.source} path")
     _write(work_dir / "plan.json", plan.to_dict())
     _write(work_dir / "input.json", resolved.to_dict())
+    if brief is not None:
+        _write(work_dir / "brief.json", brief.to_dict())
 
     # ------------------------------------------------- 2. voices / cast
     stage(STAGE_VOICE)
@@ -126,11 +146,15 @@ def generate_video(
     images = providers.image_provider()
     reviewer = providers.review_client()
     reviewer = reviewer if getattr(reviewer, "available", False) else None
+    if isinstance(images, providers.StubImageProvider):
+        # Placeholder gradients are not photographs and never will be. Judging
+        # them wastes a review call and all three attempts on every scene.
+        reviewer = None
     assets: list[SceneAsset] = []
 
     for scene in plan.scenes:
         asset = SceneAsset(index=scene.index)
-        prompt = prompts.build_image_prompt(plan, scene)
+        base_prompt = prompts.build_image_prompt(plan, scene)
         speaker = plan.speaker_for(scene)
         subject = (speaker or plan.cast[0]).name if plan.cast else "the subject"
         # Reference stills anchor the speaker's identity (§5.7): face for
@@ -138,12 +162,18 @@ def generate_video(
         refs = catalog.select_references(
             references.get(speaker.id) if speaker else None, scene.camera
         )
+        best_path, best_hard = None, None
 
         for attempt in range(1, MAX_KEYFRAME_ATTEMPTS + 1):
             asset.attempts = attempt
             if result.cost_usd >= budget:
                 asset.note("budget reached; skipped keyframe generation")
                 break
+            # Retries carry a correction aimed at what the gate rejected;
+            # resending the identical prompt mostly reproduces the defect.
+            prompt = base_prompt if best_hard is None else prompts.escalate(
+                base_prompt, best_hard
+            )
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
             path, cost = images.generate(prompt, target, references=refs)
             result.cost_usd += cost
@@ -154,14 +184,21 @@ def generate_video(
 
             verdict = review.review_keyframe(path, subject, reviewer)
             asset.review = verdict.to_dict()
-            asset.keyframe_path = str(path)
             if verdict:
+                asset.keyframe_path = str(path)
                 for soft in verdict.soft:
                     asset.note(soft)
                 break
             asset.note(f"attempt {attempt} rejected: {verdict.reason}")
-            if attempt == MAX_KEYFRAME_ATTEMPTS:
-                asset.note("keeping last keyframe despite review")
+            # Keep the least-bad frame: fewer hard failures wins, so exhausting
+            # the budget still ships the closest attempt rather than the last.
+            if best_hard is None or len(verdict.hard) < len(best_hard):
+                best_path, best_hard = path, verdict.hard
+
+        if not asset.keyframe_path and best_path is not None:
+            asset.keyframe_path = str(best_path)
+            asset.note(f"no attempt passed review; kept the closest ({'; '.join(best_hard)})")
+            result.warn(f"scene {scene.index}: shipped a frame that failed review")
 
         if not asset.keyframe_path:
             # Still no frame: synthesise one so the scene can still exist.
