@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import ReviewStep from "../components/ReviewStep.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
@@ -36,7 +37,10 @@ const EXAMPLES_BY_SPORT = {
 export default function Studio() {
   const nav = useNavigate();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
-  const [phase, setPhase] = useState("input"); // input | generating | result | failed
+  // input → review (enhancer questions) → generating → result | failed
+  const [phase, setPhase] = useState("input");
+  const [brief, setBrief] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [take, setTake] = useState("");
   const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
   const [tone, setTone] = useState("Funny");
@@ -86,17 +90,58 @@ export default function Studio() {
     [refreshClips, refreshUsage, stopTimers]
   );
 
-  const generate = async () => {
+  // Step 1: sharpen the take and find out what still needs asking. Cheap and
+  // read-only — nothing is generated and no allowance is used yet.
+  const review = async () => {
     if (!valid) return;
     setError("");
+    setBusy(true);
     try {
-      const c = await api.createClip(take.trim(), sport, tone, duration);
+      const b = await api.enhanceTake(take.trim(), sport, tone, duration);
+      setBrief(b);
+      setPhase("review");
+    } catch (e) {
+      // Enhancement is a nicety; never let it block a user from generating.
+      setError(`Could not prepare your take (${e.message}) — generating as written.`);
+      await generate({});
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Re-run enhancement with answers so far, so resolved questions disappear.
+  const reask = async (answers) => {
+    setBusy(true);
+    try {
+      setBrief(await api.enhanceTake(take.trim(), sport, tone, duration, answers));
+    } catch {
+      /* keep the brief we already have */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Step 2: commit. This is the call that spends an allowance.
+  const generate = async (answers = {}) => {
+    setError("");
+    setBusy(true);
+    try {
+      const finalTake = (brief?.take || take).trim();
+      const c = await api.createClip(
+        answers.take?.trim() || finalTake,
+        sport,
+        answers.tone || brief?.tone || tone,
+        Number(answers.seconds) || duration
+      );
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id);
     } catch (e) {
       if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
+      setPhase("review");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -124,6 +169,7 @@ export default function Studio() {
     setPhase("input");
     setTake("");
     setClip(null);
+    setBrief(null);
     setError("");
   };
 
@@ -256,8 +302,8 @@ export default function Studio() {
           )}
 
           {/* generate */}
-          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid} onClick={generate}>
-            🪄 Generate BanterClip
+          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid || busy} onClick={review}>
+            {busy ? "Reading your take…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
             Hot Take format · three cinematic scenes · 12–15s vertical MP4 · 1080 × 1920 · AI-parody labeled
@@ -287,6 +333,31 @@ export default function Studio() {
               </div>
             </div>
           )}
+        </>
+      )}
+
+      {phase === "review" && brief && (
+        <>
+          <div style={{ textAlign: "center", paddingTop: 18 }}>
+            <h1 style={{ fontSize: 34, fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>
+              Before we roll…
+            </h1>
+            <div style={{ fontSize: 15, color: "var(--app-muted)" }}>
+              Nothing has been generated yet — this uses none of your allowance.
+            </div>
+          </div>
+          {error && (
+            <div style={{ fontSize: 13.5, color: "var(--app-error)", background: "rgba(240,84,108,.1)", borderRadius: 12, padding: "12px 16px" }}>
+              {error}
+            </div>
+          )}
+          <ReviewStep
+            brief={brief}
+            busy={busy}
+            onBack={() => setPhase("input")}
+            onReask={reask}
+            onNext={generate}
+          />
         </>
       )}
 
@@ -327,6 +398,35 @@ export default function Studio() {
                   );
                 })}
               </div>
+
+              {/* What the pipeline is actually doing right now. The stage rows
+                  above change every minute or two; these change constantly. */}
+              {clip.progress?.length > 0 && (
+                <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)", paddingBottom: 8 }}>
+                    LIVE
+                  </span>
+                  <div style={{ display: "flex", flexDirection: "column-reverse", gap: 7, maxHeight: 190, overflowY: "auto" }}>
+                    {clip.progress.slice(-14).map((line, i, all) => {
+                      const latest = i === all.length - 1;
+                      const colour =
+                        line.kind === "ok" ? "var(--app-green)"
+                        : line.kind === "warn" ? "#f0b054"
+                        : line.kind === "error" ? "var(--app-error)"
+                        : latest ? "var(--app-cyan)" : "var(--app-muted2)";
+                      return (
+                        <div key={`${line.at}-${i}`} style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 13, color: colour, opacity: latest ? 1 : 0.75 }}>
+                          <span style={{ flexShrink: 0, fontSize: 11 }}>
+                            {line.kind === "ok" ? "✓" : line.kind === "warn" ? "↻" : line.kind === "error" ? "✕" : "›"}
+                          </span>
+                          <span style={{ fontWeight: latest ? 600 : 400 }}>{line.text}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 12, background: "rgba(34,211,238,.07)", fontSize: 13, color: "var(--app-muted)" }}>
                 ℹ️ You can leave this page — your video keeps rendering and will be waiting in My Clips.
               </div>

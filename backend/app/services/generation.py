@@ -70,15 +70,26 @@ def _run_job(clip_id: uuid.UUID) -> None:
 def start_generation(clip_id: uuid.UUID) -> None:
     """Kick off generation for a clip.
 
-    PIPELINE_MODE picks the implementation: "dummy" walks the stages and
-    attaches the demo clip; "real" runs the workflow in app/video. The job
-    state machine, allowance accounting and API shape are identical either
-    way, so switching is a config change and rolling back is instant.
+    PIPELINE_MODE picks the implementation:
+
+      dummy  walk the stages on a timer, attach the demo clip (default)
+      mock   walk the REAL step sequence with real pacing, generate nothing
+      real   run the workflow in app/video, spending real money
+
+    The job state machine, allowance accounting and API shape are identical
+    in all three, so switching is a config change and rollback is instant.
     """
-    if str(getattr(settings, "PIPELINE_MODE", "dummy")).lower() == "real":
+    mode = str(getattr(settings, "PIPELINE_MODE", "dummy")).lower()
+    if mode == "real":
         from ..video import run_clip_job
 
         target = run_clip_job
+    elif mode == "mock":
+        # Same stages, same progress lines, same pacing — nothing generated.
+        # Lets the whole flow be reviewed without spending on every iteration.
+        from .mock_pipeline import run_mock_job
+
+        target = run_mock_job
     else:
         target = _run_job
     threading.Thread(target=target, args=(clip_id,), daemon=True).start()

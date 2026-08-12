@@ -80,6 +80,58 @@ class ClipCreate(BaseModel):
     duration: Literal[10, 15, 30] = 15
 
 
+# ---------- prompt enhancement ----------
+class EnhanceRequest(BaseModel):
+    """Anything the user has typed so far. Every field is optional except the
+    take, because the point of enhancement is to work out what is missing."""
+
+    take: str = Field(max_length=280, default="")
+    sport: Sport | None = None
+    tone: Tone | None = None
+    duration: int | None = None
+    # question id -> chosen value, from a previous round of answers.
+    answers: dict[str, str] = Field(default_factory=dict)
+
+
+class EnhanceOptionOut(BaseModel):
+    value: str
+    label: str
+    detail: str = ""
+
+
+class EnhanceQuestionOut(BaseModel):
+    id: str
+    prompt: str
+    why: str
+    kind: str = "choice"
+    default: str = ""
+    required: bool = False
+    options: list[EnhanceOptionOut] = []
+
+
+class EnhanceOut(BaseModel):
+    """The sharpened brief plus whatever is still worth asking."""
+
+    take: str
+    original_take: str = ""
+    sport: str
+    tone: str
+    seconds: int
+    style_id: str
+    style: str
+    cast_ids: list[str] = []
+    team_ids: list[str] = []
+    unknown_names: list[str] = []
+    questions: list[EnhanceQuestionOut] = []
+    source: str = "fallback"
+
+
+class ProgressLine(BaseModel):
+    at: float
+    text: str
+    kind: str = "step"
+
+
 class PublishOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,6 +166,9 @@ class ClipOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     publishes: list[PublishOut] = []
+    # Live lines from the running pipeline. Empty for finished or queued
+    # clips, and after a restart — `status` remains the source of truth.
+    progress: list[ProgressLine] = []
 
 
 # ---------- socials ----------

@@ -141,8 +141,11 @@ def concat(clips: list[Path], out: str | Path, work: Path) -> Path:
 CAPTION_FONT_SIZE = 46
 CAPTION_WRAP_CHARS = 24
 CAPTION_MAX_LINES = 2
-# Lower third, but above the watermark and clear of the very bottom UI chrome.
-CAPTION_BASE_Y = HEIGHT - 520
+# Low in the frame, over the ground plane rather than over people's knees, and
+# still clear of the ~250px of Instagram UI chrome along the bottom. The old
+# value (HEIGHT - 520 = 73% down) sat right where a standing figure's legs are
+# and left 400px of unused frame beneath it.
+CAPTION_BASE_Y = HEIGHT - 360
 
 
 def _text_source(text: str, scratch: Path, name: str) -> str:

@@ -381,8 +381,11 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
     from ..db import SessionLocal
     from ..models import Clip, GENERATION_STAGES
 
+    from ..services import progress
+
     db = SessionLocal()
     started = time.time()
+    progress.start(clip_id)
     try:
         clip = db.get(Clip, clip_id)
         if clip is None:
@@ -394,6 +397,15 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
                 clip.stage_index = GENERATION_STAGES.index(name)
             db.commit()
 
+        def on_progress(message: str) -> None:
+            kind = "step"
+            lowered = message.lower()
+            if "rejected" in lowered or "failed" in lowered:
+                kind = "warn"
+            elif "approved" in lowered or "animated" in lowered:
+                kind = "ok"
+            progress.push(clip_id, message, kind)
+
         work = Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
         out = Path(settings.MEDIA_DIR) / f"{clip_id}.mp4"
         result = generate_video(
@@ -401,6 +413,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             work_dir=work, out_path=out,
             watermark="BanterClips" if clip.watermarked else None,
             on_stage=on_stage,
+            on_progress=on_progress,
         )
 
         if result.ok:

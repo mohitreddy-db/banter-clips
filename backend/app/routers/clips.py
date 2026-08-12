@@ -9,7 +9,10 @@ from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event, usage_for
 from ..models import Clip, Publish, SocialAccount, User
-from ..schemas import ClipCreate, ClipOut, PublishCreate, PublishOut
+from ..schemas import (
+    ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
+)
+from ..services import progress
 from ..services.generation import start_generation
 from ..services.publishing import start_publish
 
@@ -31,6 +34,9 @@ def _serialize(clip: Clip) -> ClipOut:
     for pub_out, pub in zip(out.publishes, clip.publishes):
         pub_out.platform = pub.account.platform if pub.account else None
         pub_out.handle = pub.account.handle if pub.account else None
+    # Live pipeline lines, only while the job is actually running.
+    if clip.status not in ("ready", "failed"):
+        out.progress = progress.get(clip.id)
     return out
 
 
@@ -43,6 +49,32 @@ def list_clips(user: User = Depends(get_current_user), db: Session = Depends(get
         .order_by(Clip.created_at.desc())
     ).all()
     return [_serialize(c) for c in clips]
+
+
+@router.post("/enhance", response_model=EnhanceOut)
+def enhance_take(
+    body: EnhanceRequest,
+    user: User = Depends(get_current_user),
+):
+    """Sharpen a take and report what is still worth asking the user.
+
+    Read-only and cheap (one small text call, no image or video work), so the
+    client may call it on every edit of an answer. Answers from a previous
+    round come back in `answers`; the questions they resolved disappear.
+
+    Never fails: with no key or a broken model the brief falls back to the
+    take as written, and generation would still run.
+    """
+    from ..video import enhancer, providers
+
+    # enhance() already folds in `answers` and drops the questions they
+    # resolved. Calling apply_answers() on top would seed every remaining
+    # question with its own default and silently answer all of them.
+    brief = enhancer.enhance(
+        body.take, body.sport, body.tone, body.duration,
+        answers=body.answers, client=providers.text_client(),
+    )
+    return EnhanceOut(**brief.to_dict())
 
 
 @router.post("", response_model=ClipOut, status_code=201)

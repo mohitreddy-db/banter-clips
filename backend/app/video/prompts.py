@@ -47,6 +47,18 @@ NEGATIVES = (
     "Nothing in the scene may carry writing of any kind"
 )
 
+# Framing. This replaced "keep the lower quarter of the frame visually calm",
+# which was written to give burned-in captions a clean background but had an
+# expensive side effect: the model honoured it by ENDING THE SUBJECT above the
+# lower quarter. Measured — bodies terminated at ~78% of frame height, legs cut
+# at mid-thigh, dead floor below. Constrain the clutter, not the subject.
+FULL_FIGURE = (
+    "Frame the people fully: heads and feet inside the frame, nobody cropped "
+    "at the knees or thighs, a little headroom above. Only the plain ground "
+    "plane — floor, grass or turf — occupies the very bottom strip of the "
+    "frame, free of clutter."
+)
+
 # Stills only. A camera direction like "wide shot, then a close-up" describes a
 # sequence, and an image model renders a sequence as stacked panels — which is
 # exactly how a keyframe came back as a three-panel collage. Say "one frame".
@@ -174,7 +186,7 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
         f"Action: {scene.action}. "
         f"Framing: {first_shot(scene.camera)}. "
         f"{blanking}"
-        f"Keep the lower quarter of the frame visually calm. "
+        f"{FULL_FIGURE} "
         f"{NEGATIVES}. "
         f"Remember: a real photograph of real people, never an illustration."
     )
@@ -269,9 +281,14 @@ Hard rules:
   board" view, or any composition that reads as artwork rather than a photo.
 - Never invent a factual result, score, or quote presented as real news.
 - `camera` describes ONE camera position only — a single framing such as
-  "low-angle medium shot" or "slow push-in on his face". Never a shot list:
-  no "then", no "cut to", no "wide shot followed by a close-up". A scene is
-  one continuous take.
+  "low-angle wide shot" or "slow push-in". Never a shot list: no "then", no
+  "cut to", no "wide shot followed by a close-up". A scene is one continuous
+  take.
+- Prefer FULL-FIGURE framings — "full shot", "wide shot", "low-angle wide" —
+  so heads and feet stay in frame. This is a tall 9:16 frame and physical
+  comedy needs whole bodies. Avoid "medium shot" and "mid shot": they crop
+  people at the waist and waste the height. A close-up is allowed only when
+  the joke is genuinely a facial reaction.
 - `style` adds ONLY grade, lighting and mood on top of the house look —
   a few words such as "warm golden-hour grade, soft haze". It is never a
   replacement for the house style, never camera movement or editing, and it

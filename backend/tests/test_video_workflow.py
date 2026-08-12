@@ -356,6 +356,30 @@ def test_planner_is_told_to_avoid_text_props():
     assert "LIVE ACTION" in prompts.PLANNER_SYSTEM
 
 
+# ---------------------------------------------------------------- framing
+
+def test_image_prompt_asks_for_whole_bodies_not_a_calm_lower_quarter():
+    """"Keep the lower quarter calm" made the model cut legs at mid-thigh."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    image = prompts.build_image_prompt(plan, plan.scenes[0])
+    assert "heads and feet inside the frame" in image
+    assert "lower quarter" not in image
+    assert "cropped at the knees" in image
+
+
+def test_planner_prefers_full_figure_framings():
+    assert "FULL-FIGURE" in prompts.PLANNER_SYSTEM
+    assert "medium shot" in prompts.PLANNER_SYSTEM      # named as the thing to avoid
+
+
+def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
+    last_line = media.CAPTION_BASE_Y + media.CAPTION_MAX_LINES * int(
+        media.CAPTION_FONT_SIZE * 1.3
+    )
+    assert media.CAPTION_BASE_Y > media.HEIGHT * 0.78      # clear of standing legs
+    assert last_line < media.HEIGHT - 150                  # clear of the IG UI strip
+
+
 def test_retry_escalation_targets_the_actual_failure():
     base = "a prompt"
     assert "REAL PHOTOGRAPH" in prompts.escalate(base, ["not photoreal: cartoon"])

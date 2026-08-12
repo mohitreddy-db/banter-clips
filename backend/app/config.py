@@ -40,9 +40,14 @@ class Settings(BaseSettings):
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
     # ── Video generation ────────────────────────────────────────────────
-    # "dummy" keeps the pre-rendered demo clip (instant, free). "real" runs
-    # the pipeline in app/video. Flip back to "dummy" to roll back instantly.
+    # "dummy" keeps the pre-rendered demo clip (instant, free). "mock" walks
+    # the real step sequence at real pacing without generating anything —
+    # for reviewing the flow. "real" runs the pipeline in app/video and
+    # spends money. Flip back to "dummy" to roll back instantly.
     PIPELINE_MODE: str = "dummy"
+    # How much faster than real time the mock runs. 1.0 = true timings
+    # (~4.5 min for a 15s clip); 12 = a review pass in about 20 seconds.
+    MOCK_SPEED: float = 12.0
 
     # Planning and keyframe review (text in / text out). Without a key the
     # planner falls back to a deterministic template and review is skipped —
