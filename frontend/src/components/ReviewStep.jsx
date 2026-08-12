@@ -34,15 +34,59 @@ function Chip({ selected, onClick, children, title }) {
   );
 }
 
+function TakeCard({ selected, onClick, label, text, badge }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "flex", flexDirection: "column", gap: 7, width: "100%",
+        padding: "14px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
+        background: selected ? "rgba(34,211,238,.10)" : "transparent",
+        border: `1px solid ${selected ? "var(--app-cyan)" : "var(--app-border)"}`,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            width: 15, height: 15, borderRadius: "50%", flexShrink: 0,
+            border: `2px solid ${selected ? "var(--app-cyan)" : "var(--app-border)"}`,
+            background: selected
+              ? "radial-gradient(circle, var(--app-cyan) 0 42%, transparent 43%)"
+              : "transparent",
+          }}
+        />
+        <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.8, color: selected ? "var(--app-cyan)" : "var(--app-muted)" }}>
+          {label}
+        </span>
+        {badge && (
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: "var(--app-muted2)", border: "1px solid var(--app-border)", borderRadius: 999, padding: "2px 7px" }}>
+            {badge}
+          </span>
+        )}
+      </span>
+      <span style={{ fontSize: 15.5, fontWeight: selected ? 600 : 500, color: selected ? "var(--app-text)" : "var(--app-muted)", lineHeight: 1.45 }}>
+        “{text}”
+      </span>
+    </button>
+  );
+}
+
 export default function ReviewStep({ brief, busy, onBack, onNext }) {
   // question id -> chosen value; seeded from each question's default.
   const [answers, setAnswers] = useState({});
   const [customFor, setCustomFor] = useState({}); // question id -> free text
+  // Their words win by default. Sharpening is an offer, not a correction.
+  const [useOriginal, setUseOriginal] = useState(true);
+
+  const hasSuggestion =
+    Boolean(brief.original_take) && brief.original_take.trim() !== brief.take.trim();
 
   useEffect(() => {
     const seeded = {};
     for (const q of brief.questions || []) if (q.default) seeded[q.id] = q.default;
     setAnswers(seeded);
+    setUseOriginal(true);
   }, [brief]);
 
   const pick = (qid, value) => {
@@ -56,6 +100,12 @@ export default function ReviewStep({ brief, busy, onBack, onNext }) {
       const text = value === CUSTOM ? (customFor[qid] || "").trim() : value;
       if (text) out[qid] = text;
     }
+    // Take precedence, most explicit first: something the user actually typed
+    // into the "say more" box, then their card choice, then the suggestion.
+    // The box is seeded with the suggestion, so only a real edit counts.
+    const typed = (out.take || "").trim();
+    if (typed && typed !== brief.take.trim()) out.take = typed;
+    else out.take = hasSuggestion && useOriginal ? brief.original_take : brief.take;
     return out;
   };
 
@@ -63,14 +113,31 @@ export default function ReviewStep({ brief, busy, onBack, onNext }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      {/* what we understood */}
-      <div className="card" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 19, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.45 }}>
-          “{brief.take}”
-        </div>
-        {brief.original_take && brief.original_take !== brief.take && (
-          <div style={{ fontSize: 12.5, color: "var(--app-muted2)" }}>
-            from “{brief.original_take}”
+      {/* The take. When we have a sharpened version it is OFFERED, never
+          imposed — the user's own words stay selected unless they switch. */}
+      <div className="card" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {hasSuggestion ? (
+          <>
+            <div style={{ fontSize: 13.5, color: "var(--app-muted)" }}>Which wording should we run with?</div>
+            <div style={{ display: "grid", gap: 10 }}>
+              <TakeCard
+                selected={useOriginal}
+                onClick={() => setUseOriginal(true)}
+                label="Your take"
+                text={brief.original_take}
+              />
+              <TakeCard
+                selected={!useOriginal}
+                onClick={() => setUseOriginal(false)}
+                label="✨ Sharpened"
+                badge="suggested"
+                text={brief.take}
+              />
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 19, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.45 }}>
+            “{brief.take}”
           </div>
         )}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 2 }}>
