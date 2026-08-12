@@ -18,7 +18,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services import markers, storage  # noqa: E402
+from app.config import settings  # noqa: E402
+from app.services import markers, spend, storage  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
 
 
@@ -151,6 +152,64 @@ def test_public_cache_window_is_short_enough_for_deletion_to_matter():
     """Supabase has no purge API, so the TTL is how long a deleted video
     stays fetchable at the CDN edge."""
     assert storage.PUBLIC_CACHE_SECONDS <= 600
+
+
+# ------------------------------------------------------------ spend ceiling
+
+def test_a_ceiling_of_zero_disables_the_check():
+    original = settings.MAX_DAILY_SPEND_USD
+    try:
+        settings.MAX_DAILY_SPEND_USD = 0
+        assert spend.ceiling() == 0
+    finally:
+        settings.MAX_DAILY_SPEND_USD = original
+
+
+def test_the_ceiling_is_low_enough_to_matter_at_real_prices():
+    """A clip costs ~$2.40; a ceiling of hundreds would protect nothing."""
+    assert 0 < spend.ceiling() <= 100
+
+
+def test_over_budget_tells_the_user_their_allowance_is_intact():
+    assert "allowance was not used" in spend.OVER_BUDGET_MESSAGE.lower()
+
+
+# ----------------------------------------------------------- sample delivery
+
+def test_the_simulated_run_serves_a_real_video_file():
+    """[mock] should exercise upload and serving, not shortcut past them."""
+    sample = Path(settings.SAMPLE_CLIP_PATH)
+    if not sample.exists():
+        return  # not staged in this checkout; deploy copies it in
+    assert sample.stat().st_size > 100_000, "sample looks like a placeholder"
+
+
+def test_sample_is_delivered_under_the_clips_own_key():
+    """A demo clip must live at its own key, so delete and download behave
+    exactly as they do for a real clip."""
+    import types
+    import uuid as _uuid
+
+    store, root = _local()
+    try:
+        original_backend = storage._backend
+        storage._backend = store
+        sample = Path(settings.SAMPLE_CLIP_PATH)
+        if not sample.exists():
+            return
+        from app.services import mock_pipeline
+
+        clip = types.SimpleNamespace(id=_uuid.uuid4(), user_id=_uuid.uuid4(),
+                                     duration_target=15)
+        out = mock_pipeline._deliver_sample(clip)
+        assert out.get("video_key", "").endswith("final.mp4")
+        assert str(clip.id) in out["video_key"] and str(clip.user_id) in out["video_key"]
+        assert store.open(out["video_key"]) == sample.read_bytes()
+        # Deleting the clip's prefix removes it, same as a real clip.
+        assert store.delete_prefix(storage.clip_prefix(clip.user_id, clip.id)) >= 1
+    finally:
+        storage._backend = original_backend
+        shutil.rmtree(root, ignore_errors=True)
 
 
 # ------------------------------------------------------------- housekeeping

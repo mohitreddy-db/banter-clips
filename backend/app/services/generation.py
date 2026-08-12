@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from ..config import settings
 from ..db import SessionLocal
 from ..models import GENERATION_STAGES, Clip
-from . import jobs
+from . import jobs, spend
 
 log = logging.getLogger("banter.generation")
 
@@ -108,6 +108,25 @@ def run_for_clip(clip_id: uuid.UUID) -> None:
 
     mode = str(getattr(settings, "PIPELINE_MODE", "dummy")).lower()
     if mode == "real":
+        # Check the day's spend before starting, not halfway through: a run
+        # that dies mid-way still cost us everything spent up to that point,
+        # and costs the user nothing because failures are free.
+        db = SessionLocal()
+        try:
+            may_spend, so_far, limit = spend.allowed(db)
+            if not may_spend:
+                log.error("daily spend ceiling reached ($%.2f of $%.2f); refusing clip %s",
+                          so_far, limit, clip_id)
+                clip = db.get(Clip, clip_id)
+                if clip is not None:
+                    clip.status = "failed"
+                    clip.error = spend.OVER_BUDGET_MESSAGE
+                    clip.current_step = None
+                    db.commit()
+                return
+        finally:
+            db.close()
+
         from ..video import run_clip_job
 
         run_clip_job(clip_id)

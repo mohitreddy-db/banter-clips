@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     # How much faster than real time the mock runs. 1.0 = true timings
     # (~4.5 min for a 15s clip); 12 = a review pass in about 20 seconds.
     MOCK_SPEED: float = 12.0
+    # The video a simulated run delivers. It is uploaded per clip through the
+    # normal storage path and served from its own key, so a demo exercises
+    # everything except generation — upload, public URL, download, deletion.
+    # A real previously-generated clip, so demos look like the product.
+    SAMPLE_CLIP_PATH: Path = BASE_DIR / "data" / "media" / "sample.mp4"
 
     # Planning and keyframe review (text in / text out). Without a key the
     # planner falls back to a deterministic template and review is skipped —
@@ -97,6 +102,12 @@ class Settings(BaseSettings):
     # Hard ceiling per job. Cost scales with duration, so a runaway plan is
     # expensive; the pipeline degrades to stills rather than exceeding this.
     MAX_JOB_COST_USD: float = 8.0
+    # Ceiling across ALL jobs in a rolling 24 hours. The per-job limit stops
+    # one runaway clip; this stops a normal day from emptying the account,
+    # which at ~$2.40 a clip takes very few users. Past it, generation is
+    # refused with an honest message instead of failing halfway through and
+    # leaving half-paid-for clips. 0 disables the check.
+    MAX_DAILY_SPEND_USD: float = 25.0
 
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}

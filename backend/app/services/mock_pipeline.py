@@ -21,9 +21,12 @@ from __future__ import annotations
 
 import logging
 import random
+import shutil
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ..config import settings
 from ..db import SessionLocal
@@ -133,14 +136,19 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
         say("Final checks")
         _sleep(REAL_TIMINGS["validate"])
 
-        target = clip.duration_target or 15
+        stored = _deliver_sample(clip)
+
         clip.status = "ready"
-        # Demo output: the sample video, not this user's take. The flag
-        # is what stops it being published to a real account.
+        # Demo output: a real previously-generated video, but not made from
+        # THIS take. The flag is what stops it being published to a real
+        # account under the user's name.
         clip.is_simulated = True
         clip.error = None
-        clip.duration_seconds = float(target)
-        clip.video_url = f"{settings.API_BASE_URL}/media/demo.mp4"
+        clip.duration_seconds = stored.get("duration") or float(clip.duration_target or 15)
+        clip.video_key = stored.get("video_key")
+        clip.poster_key = stored.get("poster_key")
+        clip.video_url = stored.get("video_url") or f"{settings.API_BASE_URL}/media/demo.mp4"
+        clip.cost_usd = 0.0
         clip.thumb_gradient = random.choice(GRADIENTS)
         clip.completed_at = datetime.now(timezone.utc)
         db.commit()
@@ -157,6 +165,56 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
             log.exception("could not record failure for %s", clip_id)
     finally:
         db.close()
+
+
+def _deliver_sample(clip: Clip) -> dict:
+    """Put the sample video where a real one would go, under this clip's key.
+
+    The point of a demo is to exercise everything except generation. Pointing
+    at a shared /media/demo.mp4 skipped the parts most likely to be broken in
+    production — upload, per-clip keys, the public URL Instagram fetches,
+    authenticated download, and deletion removing the bytes. Copying the
+    sample through the normal storage path exercises all of it, and a demo
+    clip then behaves exactly like a real one everywhere downstream.
+
+    Never raises: a storage problem degrades to the shared demo URL rather
+    than failing a run that generated nothing anyway.
+    """
+    from . import storage
+
+    out: dict = {}
+    sample = Path(getattr(settings, "SAMPLE_CLIP_PATH", ""))
+    if not sample.exists():
+        log.warning("sample clip missing at %s; serving the shared demo", sample)
+        return out
+
+    scratch = None
+    try:
+        store = storage.get()
+        prefix = storage.clip_prefix(clip.user_id, clip.id)
+
+        obj = store.put(f"{prefix}/final.mp4", sample, "video/mp4")
+        out["video_key"], out["video_url"] = obj.key, obj.url
+
+        # Real duration from the file, not the requested tier: what is served
+        # should describe itself honestly.
+        from ..video import media as ffmpeg
+
+        info = ffmpeg.probe(sample)
+        if info.get("duration"):
+            out["duration"] = round(float(info["duration"]), 1)
+
+        scratch = Path(tempfile.mkdtemp(prefix="banter_mock_"))
+        poster = ffmpeg.poster(sample, scratch / "poster.jpg",
+                               at=min(1.0, (out.get("duration") or 2) / 2))
+        if poster and poster.exists():
+            out["poster_key"] = store.put(f"{prefix}/poster.jpg", poster, "image/jpeg").key
+    except Exception:  # noqa: BLE001 — a demo must not fail on storage
+        log.exception("could not deliver the sample clip for %s", clip.id)
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
+    return out
 
 
 def _free_plan(clip: Clip):
