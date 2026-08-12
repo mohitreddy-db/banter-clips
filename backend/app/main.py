@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import db_migrate
 from .config import settings
 from .db import Base, engine
 from .routers import auth, billing, clips, events, me, socials
@@ -14,6 +15,9 @@ async def lifespan(app: FastAPI):
     # MVP: create_all keeps the schema in sync with app/models.py.
     # Production/Supabase: apply schema.sql (see DATABASE.md).
     Base.metadata.create_all(bind=engine)
+    # create_all adds missing tables but never alters existing ones, so new
+    # columns need this. Additive and idempotent; see db_migrate.
+    db_migrate.apply()
     settings.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     yield
 

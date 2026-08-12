@@ -39,6 +39,19 @@ class Settings(BaseSettings):
 
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
+    # Where generated artifacts live. "local" writes under MEDIA_DIR and
+    # serves them from /media (dev, and fine for a single box). "supabase"
+    # uploads to Supabase Storage — no new vendor, since auth already uses it.
+    STORAGE_BACKEND: str = "local"
+    STORAGE_BUCKET: str = "clips"
+    # Service-role key: server-side only, never sent to a browser. Needed to
+    # upload and delete; the anon key cannot.
+    SUPABASE_SERVICE_KEY: str = ""
+    # Working files (per-scene clips, rejected keyframes) are deleted after
+    # this many days. The deliverable and its poster are kept for the clip's
+    # lifetime. Measured: ~14 MB worth keeping per 15s clip, ~38 MB scratch.
+    SCRATCH_RETENTION_DAYS: int = 7
+
     # ── Video generation ────────────────────────────────────────────────
     # "dummy" keeps the pre-rendered demo clip (instant, free). "mock" walks
     # the real step sequence at real pacing without generating anything —

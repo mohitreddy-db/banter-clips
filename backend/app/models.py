@@ -115,6 +115,27 @@ class Clip(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # What the pipeline is doing right now, in the user's language ("Designing
+    # scene 1 of 2"). On the row rather than in process memory because the API
+    # runs multiple workers: a poll can land on a worker that is not running
+    # the job, and in-memory state would read as empty half the time.
+    current_step: Mapped[str | None] = mapped_column(Text)
+
+    # Storage keys for the artifacts we keep. video_url is derived from
+    # video_key and stays for the client and for Instagram's fetcher.
+    video_key: Mapped[str | None] = mapped_column(Text)
+    poster_key: Mapped[str | None] = mapped_column(Text)
+
+    # What it cost us, and how it was made: the brief, the plan, per-scene
+    # review verdicts and model versions. Small, and the only way to answer
+    # "why did this clip come out like that" after the scratch files expire.
+    cost_usd: Mapped[float | None] = mapped_column(Numeric(7, 3))
+    provenance: Mapped[dict | None] = mapped_column(JSONB)
+
+    # Simulated clips ([mock] in the take, or dummy mode) never reach a real
+    # audience: publishing is refused and no allowance is consumed.
+    is_simulated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
     publishes: Mapped[list["Publish"]] = relationship(
         back_populates="clip", cascade="all, delete-orphan", order_by="Publish.created_at.desc()"
     )

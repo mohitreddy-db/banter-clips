@@ -1,6 +1,7 @@
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -12,9 +13,11 @@ from ..models import Clip, Publish, SocialAccount, User
 from ..schemas import (
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
 )
-from ..services import progress
+from ..services import markers, storage
 from ..services.generation import start_generation
 from ..services.publishing import start_publish
+
+log = logging.getLogger("banter.clips")
 
 router = APIRouter(prefix="/clips", tags=["clips"])
 
@@ -34,9 +37,6 @@ def _serialize(clip: Clip) -> ClipOut:
     for pub_out, pub in zip(out.publishes, clip.publishes):
         pub_out.platform = pub.account.platform if pub.account else None
         pub_out.handle = pub.account.handle if pub.account else None
-    # Live pipeline lines, only while the job is actually running.
-    if clip.status not in ("ready", "failed"):
-        out.progress = progress.get(clip.id)
     return out
 
 
@@ -79,8 +79,12 @@ def enhance_take(
 
 @router.post("", response_model=ClipOut, status_code=201)
 def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # A demo run costs nothing and produces nothing publishable, so it must
+    # not be charged against the monthly allowance or gated by it.
+    simulated = markers.is_simulated(body.take)
+
     usage = usage_for(db, user)
-    if usage["left"] <= 0:
+    if not simulated and usage["left"] <= 0:
         # BR-09: at the limit → upgrade prompt, never a silent failure.
         raise HTTPException(
             402,
@@ -103,7 +107,10 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
 
     clip = Clip(
         user_id=user.id,
-        take=body.take.strip(),
+        # Markers are stripped so they can never surface in the video, the
+        # captions, or a published Instagram caption.
+        take=markers.strip(body.take),
+        is_simulated=simulated,
         sport=body.sport,
         tone=body.tone,
         duration_target=body.duration,
@@ -144,6 +151,12 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
 @router.delete("/{clip_id}", status_code=204)
 def delete_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     clip = _own_clip(clip_id, user, db)
+    # Delete the bytes too. Dropping only the row leaves the video publicly
+    # fetchable at its URL forever — a deletion that does not delete.
+    try:
+        storage.get().delete_prefix(storage.clip_prefix(clip.user_id, clip.id))
+    except Exception:  # noqa: BLE001 — never block a deletion on storage
+        log.exception("could not remove artifacts for clip %s", clip.id)
     db.delete(clip)
     db.commit()
 
@@ -163,11 +176,34 @@ def download_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db
             },
         )
     record_event(db, "video_downloaded", user, clip_id=str(clip.id))
-    return FileResponse(
-        settings.MEDIA_DIR / "demo.mp4",
-        media_type="video/mp4",
-        filename=f"banterclips-{clip.sport.lower()}-{str(clip.id)[:8]}.mp4",
-    )
+    filename = f"banterclips-{clip.sport.lower()}-{str(clip.id)[:8]}.mp4"
+
+    # Serve THIS clip. An earlier version returned the demo file unconditionally,
+    # which meant a paying customer downloaded somebody else's video with their
+    # own filename on it — silent, and wrong in the worst direction.
+    store = storage.get()
+    if clip.video_key:
+        path = store.local_path(clip.video_key)
+        if path:
+            return FileResponse(path, media_type="video/mp4", filename=filename)
+        payload = store.open(clip.video_key)
+        if payload:
+            return Response(
+                payload,
+                media_type="video/mp4",
+                headers={"content-disposition": f'attachment; filename="{filename}"'},
+            )
+
+    # Pre-storage clips (and simulated ones) kept only a URL. Fall back to the
+    # legacy path rather than failing a download the user has paid for.
+    legacy = settings.MEDIA_DIR / f"{clip.id}.mp4"
+    if legacy.exists():
+        return FileResponse(legacy, media_type="video/mp4", filename=filename)
+    if clip.is_simulated:
+        demo = settings.MEDIA_DIR / "demo.mp4"
+        if demo.exists():
+            return FileResponse(demo, media_type="video/mp4", filename=filename)
+    raise HTTPException(410, "This clip's file is no longer available.")
 
 
 @router.post("/{clip_id}/publish", response_model=PublishOut, status_code=201)
@@ -180,6 +216,17 @@ def publish_clip(
     clip = _own_clip(clip_id, user, db)
     if clip.status != "ready":
         raise HTTPException(409, "Only completed clips can be published.")
+    if clip.is_simulated:
+        # A demo clip holds the sample video, not this user's take. Publishing
+        # it would put the wrong content on a real account under their name.
+        raise HTTPException(
+            409,
+            detail={
+                "code": "simulated_clip",
+                "message": "This was a demo run, so there's no real video to publish. "
+                           "Generate it for real first.",
+            },
+        )
 
     account = db.get(SocialAccount, body.social_account_id)
     if account is None or account.user_id != user.id or account.status != "connected":

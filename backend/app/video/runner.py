@@ -389,6 +389,77 @@ def _write(path: Path, payload: object) -> None:
         log.exception("could not write %s", path)
 
 
+# ------------------------------------------------------ storage + provenance
+
+def _provenance(result: Result) -> dict:
+    """How this clip was made — small enough for a column, big enough to debug.
+
+    Kept in Postgres rather than as files because the questions worth asking
+    are queries ("which takes retry most", "what did scene 3 cost"), and
+    because the working files expire while this does not.
+    """
+    plan = result.plan
+    return {
+        "plan_source": getattr(plan, "source", "unknown"),
+        "title": getattr(plan, "title", ""),
+        "focus": getattr(plan, "focus", "generic"),
+        "teams": list(getattr(plan, "team_ids", []) or []),
+        "cast": [m.id for m in getattr(plan, "cast", [])],
+        "style": getattr(plan, "style", ""),
+        "warnings": result.warnings,
+        "cost_usd": round(result.cost_usd, 4),
+        "models": {
+            "plan": getattr(settings, "OPENAI_PLAN_MODEL", ""),
+            "review": getattr(settings, "OPENAI_REVIEW_MODEL", ""),
+            "image": getattr(settings, "IMAGE_MODEL", ""),
+            "video": getattr(settings, "VIDEO_MODEL", ""),
+            "resolution": getattr(settings, "VIDEO_RESOLUTION", ""),
+        },
+        "scenes": [
+            {
+                "index": a.index,
+                "attempts": a.attempts,
+                "cost_usd": round(a.cost_usd, 4),
+                "hard": (a.review or {}).get("hard", []),
+                "soft": (a.review or {}).get("soft", []),
+                "notes": a.notes,
+            }
+            for a in result.assets
+        ],
+    }
+
+
+def _store_artifacts(clip, work: Path, result: Result) -> dict:
+    """Upload what is worth keeping. Never raises — a storage failure must not
+    turn a finished video into a failed job."""
+    from ..services import storage
+
+    out: dict = {}
+    try:
+        store = storage.get()
+        prefix = storage.clip_prefix(clip.user_id, clip.id)
+
+        if result.video_path and Path(result.video_path).exists():
+            obj = store.put(f"{prefix}/final.mp4", Path(result.video_path), "video/mp4")
+            out["video_key"], out["video_url"] = obj.key, obj.url
+        if result.poster_path and Path(result.poster_path).exists():
+            obj = store.put(f"{prefix}/poster.jpg", Path(result.poster_path), "image/jpeg")
+            out["poster_key"] = obj.key
+
+        # The keyframe that survived review, per scene: the cheapest useful
+        # evidence for "why does this scene look like that", and the starting
+        # point if we ever re-animate a single scene.
+        for asset in result.assets:
+            if asset.ok and asset.keyframe_path and Path(asset.keyframe_path).exists():
+                store.put(
+                    f"{prefix}/scene{asset.index}_keyframe.jpg",
+                    Path(asset.keyframe_path), "image/jpeg",
+                )
+    except Exception:  # noqa: BLE001 — the video is already made
+        log.exception("storing artifacts failed for clip %s", clip.id)
+    return out
+
+
 # --------------------------------------------------------------- DB wrapper
 
 def run_clip_job(clip_id: uuid.UUID) -> None:
@@ -396,11 +467,8 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
     from ..db import SessionLocal
     from ..models import Clip, GENERATION_STAGES
 
-    from ..services import progress
-
     db = SessionLocal()
     started = time.time()
-    progress.start(clip_id)
     try:
         clip = db.get(Clip, clip_id)
         if clip is None:
@@ -413,18 +481,15 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             db.commit()
 
         def on_progress(detail: str, public: str) -> None:
-            # Only the public register reaches the product. `detail` stays in
-            # the log, where costs and retry counts belong.
-            kind = "step"
-            lowered = detail.lower()
-            if "rejected" in lowered or "failed" in lowered:
-                kind = "warn"
-            elif "approved" in lowered or "animated" in lowered:
-                kind = "ok"
-            progress.push(clip_id, public, kind)
+            # Only the public register reaches the product; `detail` stays in
+            # the log, where costs and retry counts belong. Written to the row
+            # because the API runs several workers and a poll may land on one
+            # that is not running this job.
+            clip.current_step = public
+            db.commit()
 
         work = Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
-        out = Path(settings.MEDIA_DIR) / f"{clip_id}.mp4"
+        out = work / "final.mp4"
         result = generate_video(
             clip.take, clip.sport, clip.tone, clip.duration_target,
             work_dir=work, out_path=out,
@@ -433,16 +498,24 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             on_progress=on_progress,
         )
 
+        clip.cost_usd = round(result.cost_usd, 3)
+        clip.provenance = _provenance(result)
+
         if result.ok:
+            stored = _store_artifacts(clip, work, result)
             clip.status = "ready"
             clip.error = None
             clip.duration_seconds = result.duration
-            clip.video_url = f"{settings.API_BASE_URL}/media/{clip_id}.mp4"
+            clip.video_key = stored.get("video_key")
+            clip.poster_key = stored.get("poster_key")
+            clip.video_url = stored.get("video_url") or clip.video_url
             from datetime import datetime, timezone
             clip.completed_at = datetime.now(timezone.utc)
+            clip.current_step = None
         else:
             clip.status = "failed"
             clip.error = (result.error or "generation failed")[:500]
+            clip.current_step = None
         db.commit()
         log.info("clip %s finished in %.1fs ok=%s cost=$%.3f warnings=%d",
                  clip_id, time.time() - started, result.ok, result.cost_usd,

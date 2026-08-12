@@ -163,7 +163,7 @@ export default function Studio() {
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const stageIdx = clip ? clip.stage_index : 0;
-  const latestStep = clip?.progress?.length ? clip.progress[clip.progress.length - 1] : null;
+  const latestStep = clip?.current_step || null;
   const examples = EXAMPLES_BY_SPORT[sport] || EXAMPLES_BY_SPORT.NBA;
 
   return (
@@ -409,13 +409,13 @@ export default function Studio() {
                   />
                   {/* keyed on the text so React remounts and replays the slide */}
                   <span
-                    key={latestStep.text}
+                    key={latestStep}
                     style={{
                       fontSize: 14.5, fontWeight: 600, color: "var(--app-text)",
                       animation: "stepIn .45s cubic-bezier(.2,.8,.2,1)",
                     }}
                   >
-                    {latestStep.text}
+                    {latestStep}
                   </span>
                 </div>
               )}

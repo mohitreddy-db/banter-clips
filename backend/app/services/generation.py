@@ -56,6 +56,9 @@ def _run_job(clip_id: uuid.UUID) -> None:
                 return
 
         clip.status = "ready"
+        # Demo output: the sample video, not this user's take. The flag
+        # is what stops it being published to a real account.
+        clip.is_simulated = True
         clip.error = None
         target = clip.duration_target or 15
         clip.duration_seconds = round(random.uniform(max(target - 3, 8), target), 1)
@@ -63,6 +66,18 @@ def _run_job(clip_id: uuid.UUID) -> None:
         clip.thumb_gradient = random.choice(GRADIENTS)
         clip.completed_at = datetime.now(timezone.utc)
         db.commit()
+    finally:
+        db.close()
+
+
+def _is_simulated(clip_id: uuid.UUID) -> bool:
+    """Read the flag set at creation. A lookup failure means 'not simulated'."""
+    db = SessionLocal()
+    try:
+        clip = db.get(Clip, clip_id)
+        return bool(clip is not None and clip.is_simulated)
+    except Exception:  # noqa: BLE001
+        return False
     finally:
         db.close()
 
@@ -80,6 +95,15 @@ def start_generation(clip_id: uuid.UUID) -> None:
     in all three, so switching is a config change and rollback is instant.
     """
     mode = str(getattr(settings, "PIPELINE_MODE", "dummy")).lower()
+
+    # A [mock] take is simulated whatever the deployment is set to, so the
+    # flow can be demonstrated on production without spending anything.
+    if _is_simulated(clip_id):
+        from .mock_pipeline import run_mock_job
+
+        threading.Thread(target=run_mock_job, args=(clip_id,), daemon=True).start()
+        return
+
     if mode == "real":
         from ..video import run_clip_job
 

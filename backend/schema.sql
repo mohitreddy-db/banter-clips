@@ -55,7 +55,13 @@ CREATE TABLE clips (
     thumb_gradient    text,
     watermarked       boolean NOT NULL DEFAULT true,     -- frozen at completion
     created_at        timestamptz NOT NULL DEFAULT now(),
-    completed_at      timestamptz
+    completed_at      timestamptz,
+    current_step      text,                              -- live step, in the user's words
+    video_key         text,                              -- storage key: users/{uid}/clips/{cid}/final.mp4
+    poster_key        text,
+    cost_usd          numeric(7,3),                      -- what generation cost us
+    provenance        jsonb,                             -- brief, plan, review verdicts, model versions
+    is_simulated      boolean NOT NULL DEFAULT false     -- demo run: never publishable
 );
 CREATE INDEX clips_owner_month ON clips (user_id, status, completed_at);
 

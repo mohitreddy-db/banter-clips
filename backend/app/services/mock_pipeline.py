@@ -28,7 +28,6 @@ from datetime import datetime, timezone
 from ..config import settings
 from ..db import SessionLocal
 from ..models import GENERATION_STAGES, Clip
-from . import progress
 
 log = logging.getLogger("banter.mock")
 
@@ -63,7 +62,6 @@ def _sleep(seconds: float) -> None:
 def run_mock_job(clip_id: uuid.UUID) -> None:
     """Drive one Clip row through a simulated run. Never raises."""
     db = SessionLocal()
-    progress.start(clip_id)
     try:
         clip = db.get(Clip, clip_id)
         if clip is None:
@@ -77,7 +75,10 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
             db.commit()
 
         def say(text: str, kind: str = "step") -> None:
-            progress.push(clip_id, text, kind)
+            # The row is the only place progress can live: the API runs
+            # several workers and a poll may land on any of them.
+            clip.current_step = text
+            db.commit()
 
         # 1. planning ---------------------------------------------------
         stage("planning_story")
@@ -134,6 +135,9 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
 
         target = clip.duration_target or 15
         clip.status = "ready"
+        # Demo output: the sample video, not this user's take. The flag
+        # is what stops it being published to a real account.
+        clip.is_simulated = True
         clip.error = None
         clip.duration_seconds = float(target)
         clip.video_url = f"{settings.API_BASE_URL}/media/demo.mp4"

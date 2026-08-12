@@ -129,10 +129,6 @@ class EnhanceOut(BaseModel):
     source: str = "fallback"
 
 
-class ProgressLine(BaseModel):
-    at: float
-    text: str
-    kind: str = "step"
 
 
 class PublishOut(BaseModel):
@@ -169,9 +165,10 @@ class ClipOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     publishes: list[PublishOut] = []
-    # Live lines from the running pipeline. Empty for finished or queued
-    # clips, and after a restart — `status` remains the source of truth.
-    progress: list[ProgressLine] = []
+    # What the pipeline is doing right now, in the user's language. Read from
+    # the row, so it is correct whichever worker serves the poll.
+    current_step: str | None = None
+    is_simulated: bool = False
 
 
 # ---------- socials ----------
