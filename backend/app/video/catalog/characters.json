@@ -1,48 +1,79 @@
 {
-  "_comment": "Curated character catalog. Schema per VIDEO-GENERATION-PLAN.md §5.3. Real players carry real likenesses (AI/parody disclosure is burned into every video). Wardrobe strings always end with the no-lettering rule — that is what keeps garbled text off the kit. reference_images are AI-generated stills produced by `python -m app.video.catalog_build` with the SAME image model used for scene keyframes; empty means none generated yet and the prompt falls back to pure text description.",
+  "_comment": "Curated character catalog. Schema per VIDEO-GENERATION-PLAN.md \u00a75.3. Real players carry real likenesses (AI/parody disclosure is burned into every video). Wardrobe strings always end with the no-lettering rule \u2014 that is what keeps garbled text off the kit. reference_images are AI-generated stills produced by `python -m app.video.catalog_build` with the SAME image model used for scene keyframes; empty means none generated yet and the prompt falls back to pure text description.",
   "characters": [
     {
       "id": "wembanyama",
       "name": "Victor Wembanyama",
       "sport": "NBA",
-      "teams": ["spurs"],
-      "aliases": ["wemby", "the alien", "victor"],
+      "teams": [
+        "spurs"
+      ],
+      "aliases": [
+        "wemby",
+        "the alien",
+        "victor"
+      ],
       "look": "an extremely tall, very slim 7-foot-4 French basketball player with very long limbs, short dark hair and sharp youthful features, towering over everyone around him",
       "default_wardrobe": "a plain solid black and silver basketball jersey with no numbers, no logos, no lettering; matching shorts",
       "voice_style": "calm, French-accented, understated",
-      "reference_images": [],
+      "reference_images": [
+        "references/wembanyama_face_01.jpg",
+        "references/wembanyama_full_01.jpg"
+      ],
       "active": true
     },
     {
       "id": "brunson",
       "name": "Jalen Brunson",
       "sport": "NBA",
-      "teams": ["knicks"],
-      "aliases": ["jb", "captain clutch"],
-      "look": "a short, stocky 6-foot-2 point guard with a thick dark beard, a low centre of gravity and an unbothered expression",
+      "teams": [
+        "knicks"
+      ],
+      "aliases": [
+        "jb",
+        "captain clutch"
+      ],
+      "look": "a compact, powerfully built 6-foot-2 professional basketball point guard with an athletic muscular physique, a thick dark beard, short dark hair and an unbothered expression",
       "default_wardrobe": "a plain solid blue and orange basketball jersey with no numbers, no logos, no lettering; matching shorts",
       "voice_style": "warm, confident, quick",
-      "reference_images": [],
+      "reference_images": [
+        "references/brunson_face_01.jpg",
+        "references/brunson_full_01.jpg"
+      ],
       "active": true
     },
     {
       "id": "lebron",
       "name": "LeBron James",
       "sport": "NBA",
-      "teams": ["lakers"],
-      "aliases": ["lebron james", "king james", "the king"],
+      "teams": [
+        "lakers"
+      ],
+      "aliases": [
+        "lebron james",
+        "king james",
+        "the king"
+      ],
       "look": "a powerfully built veteran basketball forward with a trimmed greying beard, receding hairline and a commanding, weary presence",
       "default_wardrobe": "a plain solid purple and gold basketball jersey with no numbers, no logos, no lettering; matching shorts",
       "voice_style": "deep, deliberate, elder-statesman",
-      "reference_images": [],
+      "reference_images": [
+        "references/lebron_face_01.jpg",
+        "references/lebron_full_01.jpg"
+      ],
       "active": true
     },
     {
       "id": "curry",
       "name": "Stephen Curry",
       "sport": "NBA",
-      "teams": ["warriors"],
-      "aliases": ["steph", "chef curry"],
+      "teams": [
+        "warriors"
+      ],
+      "aliases": [
+        "steph",
+        "chef curry"
+      ],
       "look": "a lean 6-foot-2 guard with light brown skin, a neat short beard, short dark hair and a boyish grin, chewing his mouthguard",
       "default_wardrobe": "a plain solid royal blue and gold basketball jersey with no numbers, no logos, no lettering; matching shorts",
       "voice_style": "light, playful, teasing",
@@ -53,8 +84,13 @@
       "id": "jokic",
       "name": "Nikola Jokic",
       "sport": "NBA",
-      "teams": ["nuggets"],
-      "aliases": ["the joker", "big honey"],
+      "teams": [
+        "nuggets"
+      ],
+      "aliases": [
+        "the joker",
+        "big honey"
+      ],
       "look": "a huge soft-featured Serbian centre with short dark hair, pale skin, heavy-lidded eyes and a deceptively casual slouch",
       "default_wardrobe": "a plain solid navy and gold basketball jersey with no numbers, no logos, no lettering; matching shorts",
       "voice_style": "flat, Serbian-accented, completely unimpressed",
@@ -66,7 +102,11 @@
       "name": "a weary head coach",
       "sport": "NBA",
       "teams": [],
-      "aliases": ["coach", "the coach", "gaffer"],
+      "aliases": [
+        "coach",
+        "the coach",
+        "gaffer"
+      ],
       "look": "a tired middle-aged basketball head coach holding a clipboard, sleeves rolled up, thousand-yard stare",
       "default_wardrobe": "a plain grey polo shirt and dark trousers with no lettering",
       "voice_style": "flat, exhausted, deadpan",
@@ -78,7 +118,11 @@
       "name": "a courtside reporter",
       "sport": "NBA",
       "teams": [],
-      "aliases": ["reporter", "the reporter", "sideline reporter"],
+      "aliases": [
+        "reporter",
+        "the reporter",
+        "sideline reporter"
+      ],
       "look": "a neatly dressed courtside television reporter holding a plain microphone, professionally composed",
       "default_wardrobe": "a plain dark blazer with no lettering or station badge",
       "voice_style": "bright, professional, barely containing disbelief",
@@ -89,32 +133,56 @@
       "id": "messi",
       "name": "Lionel Messi",
       "sport": "Soccer",
-      "teams": ["inter-miami", "argentina"],
-      "aliases": ["leo", "la pulga", "the goat"],
+      "teams": [
+        "inter-miami",
+        "argentina"
+      ],
+      "aliases": [
+        "leo",
+        "la pulga",
+        "the goat"
+      ],
       "look": "a short left-footed Argentine forward with a full short beard, dark hair and calm knowing eyes",
       "default_wardrobe": "a plain solid pink soccer jersey with no numbers, no logos, no lettering; matching shorts; cleats",
       "voice_style": "quiet, Spanish-accented, deadpan",
-      "reference_images": [],
+      "reference_images": [
+        "references/messi_face_01.jpg",
+        "references/messi_full_01.jpg"
+      ],
       "active": true
     },
     {
       "id": "ronaldo",
       "name": "Cristiano Ronaldo",
       "sport": "Soccer",
-      "teams": ["al-nassr", "portugal"],
-      "aliases": ["cr7", "cristiano"],
+      "teams": [
+        "al-nassr",
+        "portugal"
+      ],
+      "aliases": [
+        "cr7",
+        "cristiano"
+      ],
       "look": "an athletic muscular forward with short dark hair with faded sides, sharp jawline, intense focused eyes, light stubble, Portuguese features",
       "default_wardrobe": "a plain solid yellow and blue soccer jersey with no numbers, no logos, no lettering; matching shorts; cleats",
       "voice_style": "confident, slightly accented, declarative and intense",
-      "reference_images": [],
+      "reference_images": [
+        "references/ronaldo_face_01.jpg",
+        "references/ronaldo_full_01.jpg"
+      ],
       "active": true
     },
     {
       "id": "mbappe",
       "name": "Kylian Mbappe",
       "sport": "Soccer",
-      "teams": ["real-madrid", "france"],
-      "aliases": ["kylian"],
+      "teams": [
+        "real-madrid",
+        "france"
+      ],
+      "aliases": [
+        "kylian"
+      ],
       "look": "a fast, compact French forward with very short cropped hair, smooth dark skin and a wide mischievous grin",
       "default_wardrobe": "a plain solid white soccer jersey with no numbers, no logos, no lettering; matching shorts; cleats",
       "voice_style": "quick, cheerful, French-accented",
@@ -125,8 +193,13 @@
       "id": "yamal",
       "name": "Lamine Yamal",
       "sport": "Soccer",
-      "teams": ["barcelona", "spain"],
-      "aliases": ["lamine"],
+      "teams": [
+        "barcelona",
+        "spain"
+      ],
+      "aliases": [
+        "lamine"
+      ],
       "look": "a teenage Spanish winger with short curly dark hair, a slight frame and effortless swagger",
       "default_wardrobe": "a plain solid deep blue and garnet soccer jersey with no numbers, no logos, no lettering; matching shorts; cleats",
       "voice_style": "young, cocky, amused",
@@ -138,7 +211,10 @@
       "name": "a match referee",
       "sport": "Soccer",
       "teams": [],
-      "aliases": ["ref", "the ref"],
+      "aliases": [
+        "ref",
+        "the ref"
+      ],
       "look": "a stern middle-aged referee holding red and yellow cards, whistle on a lanyard",
       "default_wardrobe": "a plain solid black referee kit with no badges, no numbers, no lettering",
       "voice_style": "clipped, authoritative",
@@ -150,7 +226,11 @@
       "name": "a senior football official",
       "sport": "Soccer",
       "teams": [],
-      "aliases": ["suit", "the official", "administrator"],
+      "aliases": [
+        "suit",
+        "the official",
+        "administrator"
+      ],
       "look": "a bald self-satisfied football administrator in a dark suit, laminated badge tucked away out of sight",
       "default_wardrobe": "a plain dark navy suit and tie with no pin, no badge, no lettering",
       "voice_style": "smug, self-important",
@@ -161,8 +241,13 @@
       "id": "mahomes",
       "name": "Patrick Mahomes",
       "sport": "NFL",
-      "teams": ["chiefs"],
-      "aliases": ["patrick", "showtime"],
+      "teams": [
+        "chiefs"
+      ],
+      "aliases": [
+        "patrick",
+        "showtime"
+      ],
       "look": "an athletic quarterback with curly dark hair pushed back by a thin headband, scruffy beard and restless eyes",
       "default_wardrobe": "a plain solid red football jersey with no numbers, no logos, no lettering; white football pants",
       "voice_style": "raspy, animated, competitive",
@@ -173,8 +258,12 @@
       "id": "hurts",
       "name": "Jalen Hurts",
       "sport": "NFL",
-      "teams": ["eagles"],
-      "aliases": ["hurts so good"],
+      "teams": [
+        "eagles"
+      ],
+      "aliases": [
+        "hurts so good"
+      ],
       "look": "a compact, heavily muscled quarterback with a short beard, calm stoic expression and slow deliberate movements",
       "default_wardrobe": "a plain solid midnight green football jersey with no numbers, no logos, no lettering; white football pants",
       "voice_style": "low, measured, unshakeable",
@@ -186,7 +275,10 @@
       "name": "an enormous offensive lineman",
       "sport": "NFL",
       "teams": [],
-      "aliases": ["big man", "the lineman"],
+      "aliases": [
+        "big man",
+        "the lineman"
+      ],
       "look": "an extremely large and wide offensive lineman, gentle face, helmet under one arm",
       "default_wardrobe": "a plain solid dark football uniform with no numbers, no logos, no lettering",
       "voice_style": "booming, cheerful",
@@ -198,7 +290,10 @@
       "name": "a weary head coach",
       "sport": "NFL",
       "teams": [],
-      "aliases": ["coach", "the coach"],
+      "aliases": [
+        "coach",
+        "the coach"
+      ],
       "look": "a tired football head coach in a plain team-coloured cap with a headset around his neck",
       "default_wardrobe": "a plain team-coloured pullover with no lettering",
       "voice_style": "flat, exhausted, deadpan",
@@ -209,8 +304,13 @@
       "id": "ohtani",
       "name": "Shohei Ohtani",
       "sport": "MLB",
-      "teams": ["dodgers"],
-      "aliases": ["shohei", "shotime"],
+      "teams": [
+        "dodgers"
+      ],
+      "aliases": [
+        "shohei",
+        "shotime"
+      ],
       "look": "a tall broad-shouldered Japanese two-way baseball star with neat black hair and a polite, faintly amused smile",
       "default_wardrobe": "a plain solid white baseball uniform with royal blue trim, no numbers, no logos, no lettering",
       "voice_style": "polite, soft-spoken, Japanese-accented",
@@ -221,8 +321,13 @@
       "id": "judge",
       "name": "Aaron Judge",
       "sport": "MLB",
-      "teams": ["yankees"],
-      "aliases": ["the judge", "all rise"],
+      "teams": [
+        "yankees"
+      ],
+      "aliases": [
+        "the judge",
+        "all rise"
+      ],
       "look": "a gigantic 6-foot-7 outfielder with short dark hair, a wide easy grin and shoulders that fill a doorway",
       "default_wardrobe": "a plain solid navy pinstriped baseball uniform with no numbers, no logos, no lettering",
       "voice_style": "easygoing, rumbling, midwestern",
@@ -234,7 +339,11 @@
       "name": "a home plate umpire",
       "sport": "MLB",
       "teams": [],
-      "aliases": ["ump", "the umpire", "blue"],
+      "aliases": [
+        "ump",
+        "the umpire",
+        "blue"
+      ],
       "look": "a stocky home-plate umpire in a chest protector and mask pushed up on his forehead",
       "default_wardrobe": "plain dark umpire gear with no lettering",
       "voice_style": "bellowing, theatrical",

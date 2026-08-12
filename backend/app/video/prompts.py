@@ -173,7 +173,8 @@ def planner_user_message(
 REFERENCE_STILL_PROMPT = (
     "Professional studio reference photograph, neutral soft lighting, plain "
     "seamless light-grey background, vertical 9:16 composition. "
-    "Subject: {name}, {look}, wearing {wardrobe}. "
+    "Subject: {name}, {look}, wearing {wardrobe}, with plain unbranded "
+    "single-colour shoes. "
     "{framing}. Neutral relaxed expression, arms at sides. "
     "Extremely high facial and body detail. " + SINGLE_FRAME + ". " + NEGATIVES + "."
 )
