@@ -109,19 +109,7 @@ export default function Studio() {
     }
   };
 
-  // Re-run enhancement with answers so far, so resolved questions disappear.
-  const reask = async (answers) => {
-    setBusy(true);
-    try {
-      setBrief(await api.enhanceTake(take.trim(), sport, tone, duration, answers));
-    } catch {
-      /* keep the brief we already have */
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Step 2: commit. This is the call that spends an allowance.
+  // Step 2: commit. This is the call that starts real work.
   const generate = async (answers = {}) => {
     setError("");
     setBusy(true);
@@ -175,6 +163,7 @@ export default function Studio() {
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const stageIdx = clip ? clip.stage_index : 0;
+  const latestStep = clip?.progress?.length ? clip.progress[clip.progress.length - 1] : null;
   const examples = EXAMPLES_BY_SPORT[sport] || EXAMPLES_BY_SPORT.NBA;
 
   return (
@@ -340,10 +329,10 @@ export default function Studio() {
         <>
           <div style={{ textAlign: "center", paddingTop: 18 }}>
             <h1 style={{ fontSize: 34, fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>
-              Before we roll…
+              Here's the plan
             </h1>
             <div style={{ fontSize: 15, color: "var(--app-muted)" }}>
-              Nothing has been generated yet — this uses none of your allowance.
+              Tweak anything, or hit go.
             </div>
           </div>
           {error && (
@@ -355,7 +344,6 @@ export default function Studio() {
             brief={brief}
             busy={busy}
             onBack={() => setPhase("input")}
-            onReask={reask}
             onNext={generate}
           />
         </>
@@ -399,31 +387,36 @@ export default function Studio() {
                 })}
               </div>
 
-              {/* What the pipeline is actually doing right now. The stage rows
-                  above change every minute or two; these change constantly. */}
-              {clip.progress?.length > 0 && (
-                <div className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)", paddingBottom: 8 }}>
-                    LIVE
+              {/* One line, always the current one. The stage rows above move
+                  every minute or two; this moves every few seconds, which is
+                  what makes a four-minute wait feel alive. */}
+              {latestStep && (
+                <div
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12, minHeight: 26,
+                    padding: "16px 20px", borderRadius: 14,
+                    background: "rgba(34,211,238,.06)",
+                    border: "1px solid rgba(34,211,238,.18)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 16, height: 16, flexShrink: 0, borderRadius: "50%",
+                      border: "2px solid rgba(34,211,238,.25)", borderTopColor: "var(--app-cyan)",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  {/* keyed on the text so React remounts and replays the slide */}
+                  <span
+                    key={latestStep.text}
+                    style={{
+                      fontSize: 14.5, fontWeight: 600, color: "var(--app-text)",
+                      animation: "stepIn .45s cubic-bezier(.2,.8,.2,1)",
+                    }}
+                  >
+                    {latestStep.text}
                   </span>
-                  <div style={{ display: "flex", flexDirection: "column-reverse", gap: 7, maxHeight: 190, overflowY: "auto" }}>
-                    {clip.progress.slice(-14).map((line, i, all) => {
-                      const latest = i === all.length - 1;
-                      const colour =
-                        line.kind === "ok" ? "var(--app-green)"
-                        : line.kind === "warn" ? "#f0b054"
-                        : line.kind === "error" ? "var(--app-error)"
-                        : latest ? "var(--app-cyan)" : "var(--app-muted2)";
-                      return (
-                        <div key={`${line.at}-${i}`} style={{ display: "flex", gap: 10, alignItems: "baseline", fontSize: 13, color: colour, opacity: latest ? 1 : 0.75 }}>
-                          <span style={{ flexShrink: 0, fontSize: 11 }}>
-                            {line.kind === "ok" ? "✓" : line.kind === "warn" ? "↻" : line.kind === "error" ? "✕" : "›"}
-                          </span>
-                          <span style={{ fontWeight: latest ? 600 : 400 }}>{line.text}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
 

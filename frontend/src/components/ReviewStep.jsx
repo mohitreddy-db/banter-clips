@@ -34,7 +34,7 @@ function Chip({ selected, onClick, children, title }) {
   );
 }
 
-export default function ReviewStep({ brief, busy, onBack, onNext, onReask }) {
+export default function ReviewStep({ brief, busy, onBack, onNext }) {
   // question id -> chosen value; seeded from each question's default.
   const [answers, setAnswers] = useState({});
   const [customFor, setCustomFor] = useState({}); // question id -> free text
@@ -65,50 +65,42 @@ export default function ReviewStep({ brief, busy, onBack, onNext, onReask }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {/* what we understood */}
       <div className="card" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 12 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>
-          YOUR TAKE, SHARPENED
-        </span>
-        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.45 }}>
+        <div style={{ fontSize: 19, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.45 }}>
           “{brief.take}”
         </div>
         {brief.original_take && brief.original_take !== brief.take && (
-          <div style={{ fontSize: 13, color: "var(--app-muted2)" }}>
-            you wrote: “{brief.original_take}”
+          <div style={{ fontSize: 12.5, color: "var(--app-muted2)" }}>
+            from “{brief.original_take}”
           </div>
         )}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 4 }}>
-          {[brief.sport, brief.tone, `${brief.seconds}s`, brief.style_id].map((tag) => (
-            <span
-              key={tag}
-              style={{
-                padding: "5px 11px", borderRadius: 999, fontSize: 12, fontWeight: 600,
-                color: "var(--app-muted)", border: "1px solid var(--app-border)",
-              }}
-            >
-              {tag}
-            </span>
-          ))}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingTop: 2 }}>
+          {[brief.sport, brief.tone, `${brief.seconds}s`, brief.style_label || brief.style_id]
+            .filter(Boolean)
+            .map((tag) => (
+              <span
+                key={tag}
+                style={{
+                  padding: "5px 11px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+                  color: "var(--app-muted)", border: "1px solid var(--app-border)",
+                }}
+              >
+                {tag}
+              </span>
+            ))}
         </div>
-        {brief.cast_ids?.length > 0 && (
-          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
-            Casting <b style={{ color: "var(--app-text)" }}>{brief.cast_ids.join(", ")}</b>
-            {brief.team_ids?.length > 0 && <> · {brief.team_ids.join(", ")} colours and venues</>}
+        {(brief.cast_names?.length > 0 || brief.team_names?.length > 0) && (
+          <div style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
+            Starring{" "}
+            <b style={{ color: "var(--app-text)" }}>
+              {(brief.cast_names?.length ? brief.cast_names : brief.team_names).join(" and ")}
+            </b>
           </div>
         )}
       </div>
 
       {/* the gaps */}
       {questions.length > 0 && (
-        <div className="card" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
-          <div>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>
-              A FEW CHOICES
-            </span>
-            <div style={{ fontSize: 13, color: "var(--app-muted2)", paddingTop: 6 }}>
-              Defaults are already selected — change anything you care about, or just hit Next.
-            </div>
-          </div>
-
+        <div className="card" style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 26 }}>
           {questions.map((q) => {
             const chosen = answers[q.id];
             return (
@@ -167,19 +159,6 @@ export default function ReviewStep({ brief, busy, onBack, onNext, onReask }) {
             );
           })}
 
-          {onReask && (
-            <button
-              type="button"
-              onClick={() => onReask(resolved())}
-              disabled={busy}
-              style={{
-                alignSelf: "flex-start", background: "none", border: "none",
-                color: "var(--app-cyan)", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0,
-              }}
-            >
-              ↻ Re-check with these answers
-            </button>
-          )}
         </div>
       )}
 
@@ -201,7 +180,7 @@ export default function ReviewStep({ brief, busy, onBack, onNext, onReask }) {
           disabled={busy}
           onClick={() => onNext(resolved())}
         >
-          {busy ? "Starting…" : "Next → Generate"}
+          {busy ? "Starting…" : "🪄 Make it"}
         </button>
       </div>
     </div>

@@ -79,41 +79,32 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
         def say(text: str, kind: str = "step") -> None:
             progress.push(clip_id, text, kind)
 
-        cost = 0.0
-
         # 1. planning ---------------------------------------------------
         stage("planning_story")
-        say(f"writing the script — {clip.sport}, {clip.tone}, "
-            f"{clip.duration_target}s in {scene_count} scenes")
+        say("Writing your script")
         _sleep(REAL_TIMINGS["plan"])
         cast = ", ".join(m.name for m in plan.cast) if plan else "the cast"
-        title = plan.title if plan else clip.take[:48]
-        say(f'script ready: "{title}"; cast {cast}')
+        say(f"Casting {cast}")
 
         # 2-3. voices and characters ------------------------------------
         stage("creating_voice")
-        say("assigning voices — consecutive scenes never share a speaker")
+        say("Finding their voices")
         _sleep(REAL_TIMINGS["cast"])
 
         stage("designing_characters")
-        say(f"resolving {cast} from the character catalog")
+        say("Designing the characters")
         _sleep(REAL_TIMINGS["cast"])
-        say("attaching reference stills for identity")
+        say("Locking in how they look")
 
         # 4. keyframes ---------------------------------------------------
         stage("generating_scenes")
-        speakers = _speakers(plan, scene_count)
         for index in range(scene_count):
-            who = speakers[index]
             attempts = 2 if random.random() < RETRY_CHANCE else 1
             for attempt in range(1, attempts + 1):
-                say(f"scene {index + 1}/{scene_count}: keyframe attempt {attempt}/3 "
-                    f"for {who} with reference stills")
+                say(f"Designing scene {index + 1} of {scene_count}")
                 _sleep(REAL_TIMINGS["keyframe"])
-                cost += 0.05
                 if attempt < attempts:
-                    say(f"scene {index + 1}: rejected — text visible on kit or "
-                        f"signage; regenerating", kind="warn")
+                    say(f"Polishing scene {index + 1}", kind="warn")
             if force_fail and index == 0:
                 clip.status = "failed"
                 clip.error = (
@@ -121,33 +112,24 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
                     "retry. Your allowance was not used — retry for free."
                 )
                 db.commit()
-                say("generation failed after bounded retries", kind="error")
+                say("Couldn't finish this one", kind="error")
                 return
-            say(f"scene {index + 1}: keyframe approved (${cost:.2f} spent so far)",
-                kind="ok")
+            say(f"Scene {index + 1} looks good", kind="ok")
 
         # 5. animation ---------------------------------------------------
         stage("animating_scenes")
-        per_scene = round((clip.duration_target or 15) / max(1, scene_count))
         for index in range(scene_count):
-            say(f"scene {index + 1}/{scene_count}: animating {per_scene}s at "
-                f"{getattr(settings, 'VIDEO_RESOLUTION', '720p')} — this is the "
-                f"slow one, ~1-2 min")
-            started = time.time()
+            say(f"Bringing scene {index + 1} to life")
             _sleep(REAL_TIMINGS["animate"])
-            cost += 1.12
-            took = REAL_TIMINGS["animate"] if time.time() - started >= 0 else 0
-            say(f"scene {index + 1}: animated in {took:.0f}s "
-                f"(${cost:.2f} spent so far)", kind="ok")
+            say(f"Scene {index + 1} is alive", kind="ok")
 
         # 6-7. assemble and validate -------------------------------------
         stage("assembling_video")
-        say(f"joining {scene_count} clips, matching loudness, burning "
-            f"{scene_count} captions and the disclosure")
+        say("Cutting it together and adding captions")
         _sleep(REAL_TIMINGS["assemble"])
 
         stage("validating")
-        say("checking duration, dimensions, codecs and audio")
+        say("Final checks")
         _sleep(REAL_TIMINGS["validate"])
 
         target = clip.duration_target or 15
@@ -158,7 +140,7 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
         clip.thumb_gradient = random.choice(GRADIENTS)
         clip.completed_at = datetime.now(timezone.utc)
         db.commit()
-        say(f"done — {target}s, 1080x1920, ${cost:.2f} (simulated)", kind="ok")
+        say("Your clip is ready", kind="ok")
     except Exception as exc:  # noqa: BLE001 — job boundary
         log.exception("mock job %s crashed", clip_id)
         try:
@@ -190,12 +172,3 @@ def _free_plan(clip: Clip):
         return None, 2
 
 
-def _speakers(plan, scene_count: int) -> list[str]:
-    if plan and plan.cast:
-        names = []
-        for scene in plan.scenes[:scene_count]:
-            member = plan.speaker_for(scene)
-            names.append(member.name if member else plan.cast[0].name)
-        if len(names) >= scene_count:
-            return names
-    return ["the subject"] * scene_count

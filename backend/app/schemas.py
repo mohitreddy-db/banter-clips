@@ -119,8 +119,11 @@ class EnhanceOut(BaseModel):
     seconds: int
     style_id: str
     style: str
+    style_label: str = ""
     cast_ids: list[str] = []
     team_ids: list[str] = []
+    cast_names: list[str] = []
+    team_names: list[str] = []
     unknown_names: list[str] = []
     questions: list[EnhanceQuestionOut] = []
     source: str = "fallback"

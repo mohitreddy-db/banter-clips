@@ -159,8 +159,9 @@ def main(argv: list[str] | None = None) -> int:
     def show_stage(name: str) -> None:
         print(f"\n[{elapsed()}] ── {name.replace('_', ' ')}", flush=True)
 
-    def show_progress(message: str) -> None:
-        print(f"[{elapsed()}]    {message}", flush=True)
+    def show_progress(detail: str, _public: str = "") -> None:
+        # The CLI is a developer tool: show the detailed register.
+        print(f"[{elapsed()}]    {detail}", flush=True)
 
     print(f"\nworking in {work}")
     result = generate_video(

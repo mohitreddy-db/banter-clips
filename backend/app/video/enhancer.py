@@ -38,17 +38,17 @@ log = logging.getLogger("banter.video.enhancer")
 STYLE_PRESETS: dict[str, dict[str, str]] = {
     "broadcast": {
         "label": "Broadcast real",
-        "detail": "Bright, clean live-sport television look. The safe default.",
+        "detail": "Bright and clean, like a live broadcast.",
         "style": "crisp broadcast lighting, neutral colour grade, deep clarity",
     },
     "cinematic": {
         "label": "Golden-hour cinematic",
-        "detail": "Warm, film-like, flattering. Best for hype and celebration.",
+        "detail": "Warm and filmic. Great for big moments.",
         "style": "warm golden-hour light, soft haze, rich filmic grade, long lens",
     },
     "gritty": {
         "label": "Gritty documentary",
-        "detail": "Hand-held, tungsten, unglamorous. Best for savage takes.",
+        "detail": "Raw and hand-held. Suits a brutal take.",
         "style": "hand-held documentary framing, hard tungsten light, "
                  "desaturated grade, visible grain",
     },
@@ -96,6 +96,11 @@ class Brief:
     style: str = ""
     cast_ids: list[str] = field(default_factory=list)
     team_ids: list[str] = field(default_factory=list)
+    # Display names for the ids above. Nothing user-facing should ever render
+    # an id — "wembanyama" and "inter-miami" are our vocabulary, not theirs.
+    cast_names: list[str] = field(default_factory=list)
+    team_names: list[str] = field(default_factory=list)
+    style_label: str = ""
     unknown_names: list[str] = field(default_factory=list)
     questions: list[Question] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -195,6 +200,16 @@ def enhance(
     style_id = answers.get("style") if answers.get("style") in STYLE_PRESETS else None
     brief.style_id = style_id or _style_for_tone(brief.tone)
     brief.style = STYLE_PRESETS[brief.style_id]["style"]
+    brief.style_label = STYLE_PRESETS[brief.style_id]["label"]
+
+    brief.cast_names = [
+        (catalog.get_character(cid).name if catalog.get_character(cid) else cid)
+        for cid in brief.cast_ids
+    ]
+    brief.team_names = [
+        (catalog.get_team(tid).name if catalog.get_team(tid) else tid)
+        for tid in brief.team_ids
+    ]
 
     brief.unknown_names = _unknown_names(raw, brief)
     brief.questions = _questions(brief, raw, resolved, answers,
@@ -262,9 +277,8 @@ def _questions(
         questions.append(Question(
             id="take",
             kind="text",
-            prompt="What is the take, in a sentence? What happened, and who looks bad?",
-            why="A thin take produces generic scenes — this is the single biggest "
-                "quality lever in the whole pipeline.",
+            prompt="Say a bit more — what happened, and who looks bad?",
+            why="The more specific you are, the funnier it lands.",
             default=brief.take,
             required=True,
         ))
@@ -276,7 +290,7 @@ def _questions(
             id="clarify",
             kind="text",
             prompt=f"Quick check: {ambiguity}",
-            why="Getting this wrong sends the whole video to the wrong subject.",
+            why="So we point the joke at the right person.",
             default="",
         ))
 
@@ -285,18 +299,17 @@ def _questions(
         names = ", ".join(brief.unknown_names[:3])
         options = [
             Option("proceed", "Use them anyway",
-                   "Rendered from a text description — likeness will be approximate."),
+                   "We'll do our best — the resemblance may be loose."),
             Option("research", "Look them up first",
-                   "One web search for appearance before generating. Slightly slower."),
+                   "Takes a moment longer, usually looks better."),
         ]
         for member in _catalog_suggestions(brief.sport):
             options.append(Option(f"swap:{member.id}", f"Use {member.name} instead",
-                                  "In our catalog with reference stills — best likeness."))
+                                  "We nail this one every time."))
         questions.append(Question(
             id="cast",
-            prompt=f"{names} — not in our character catalog. How should we handle it?",
-            why="Catalogued players have reference stills and render as themselves; "
-                "everyone else renders as a lookalike.",
+            prompt=f"We don't know {names} well yet. How do you want to play it?",
+            why="Some faces we get spot on; others come out as a lookalike.",
             options=options[:4],
             default="proceed",
         ))
@@ -308,14 +321,14 @@ def _questions(
             team = catalog.get_team(team_id)
             if team:
                 options.append(Option(team.id, team.name,
-                                      f"{team.palette()} kit, {team.name} venues"))
+                                      f"{team.palette()} kit, on their turf"))
         options.append(Option("both", "Both, evenly",
-                              "Split between the two, kept visually distinct."))
+                              "Share the screen time."))
         if len(options) > 1:
             questions.append(Question(
                 id="team",
-                prompt="Which side should the video be shot around?",
-                why="Sets the colour palette and the locations for every scene.",
+                prompt="Whose side are we on?",
+                why="Sets the kit colours and where it's filmed.",
                 options=options,
                 default="both",
             ))
@@ -325,29 +338,28 @@ def _questions(
     if not _clean(explicit_tone) and "tone" not in asked:
         questions.append(Question(
             id="tone",
-            prompt=f"Tone — we picked {brief.tone}. Keep it?",
-            why="Drives the dialogue register and the lighting.",
+            prompt="How should it hit?",
+            why="Changes how the characters talk.",
             options=[Option(t, t, d) for t, d in _TONE_BLURBS.items()],
             default=brief.tone,
         ))
     if "style" not in asked:
         questions.append(Question(
             id="style",
-            prompt=f"Look — we picked {STYLE_PRESETS[brief.style_id]['label']}. Keep it?",
-            why="Fixes the grade and lighting for every scene, so the video stays "
-                "visually consistent end to end.",
+            prompt="What should it look like?",
+            why="Sets the mood and lighting throughout.",
             options=[Option(k, v["label"], v["detail"]) for k, v in STYLE_PRESETS.items()],
             default=brief.style_id,
         ))
     if not _clean(explicit_seconds) and "seconds" not in asked:
         questions.append(Question(
             id="seconds",
-            prompt=f"Length — {brief.seconds}s?",
-            why="Longer means more scenes and proportionally more cost.",
+            prompt="How long?",
+            why="Longer gives the joke more room to build.",
             options=[
-                Option("15", "15 seconds", "2 scenes, about $2.40"),
-                Option("30", "30 seconds", "4 scenes, about $4.80"),
-                Option("60", "60 seconds", "8 scenes, about $9.60"),
+                Option("15", "15 seconds", "Quick hit, 2 scenes"),
+                Option("30", "30 seconds", "Room to build, 4 scenes"),
+                Option("60", "60 seconds", "Full sketch, 8 scenes"),
             ],
             default=str(brief.seconds),
         ))

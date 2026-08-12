@@ -93,13 +93,18 @@ def generate_video(
             except Exception:  # noqa: BLE001 — reporting must not break the run
                 log.exception("stage callback failed")
 
-    def say(message: str) -> None:
-        """Fine-grained progress. The two expensive stages are long and silent
-        otherwise: a 15s video spends minutes inside two loops."""
-        log.info("%s", message)
+    def say(detail: str, public: str = "") -> None:
+        """Fine-grained progress, in two registers.
+
+        `detail` is for us — attempt counts, resolutions, running spend. It
+        goes to the log and the CLI. `public` is what a customer should read:
+        no costs, no retry counts, no internal vocabulary. The API only ever
+        forwards `public`, so operational detail cannot leak into the product.
+        """
+        log.info("%s", detail)
         if on_progress:
             try:
-                on_progress(message)
+                on_progress(detail, public or detail)
             except Exception:  # noqa: BLE001 — reporting must not break the run
                 log.exception("progress callback failed")
 
@@ -115,10 +120,12 @@ def generate_video(
     else:
         resolved = enhancer.resolved_from(brief)
     say(f"writing the script — {resolved.sport}, {resolved.tone}, "
-        f"{resolved.seconds}s in {resolved.scene_count} scenes")
+        f"{resolved.seconds}s in {resolved.scene_count} scenes",
+        "Writing your script")
     plan = planner.build_plan(resolved, text)
     say(f"script ready: \"{plan.title}\" ({plan.source}); "
-        f"cast {', '.join(m.name for m in plan.cast)}")
+        f"cast {', '.join(m.name for m in plan.cast)}",
+        f"Casting {', '.join(m.name for m in plan.cast[:2])}")
     if brief is not None and brief.style:
         # A fixed preset beats a per-job invented style: it is the same look in
         # every scene, which is what keeps a multi-scene video consistent.
@@ -192,13 +199,15 @@ def generate_video(
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
             say(f"scene {scene.index + 1}/{len(plan.scenes)}: keyframe attempt "
                 f"{attempt}/{MAX_KEYFRAME_ATTEMPTS} for {subject}"
-                f"{' with reference stills' if refs else ''}")
+                f"{' with reference stills' if refs else ''}",
+                f"Designing scene {scene.index + 1} of {len(plan.scenes)}")
             path, cost = images.generate(prompt, target, references=refs)
             result.cost_usd += cost
             asset.cost_usd += cost
             if not path:
                 asset.note(f"attempt {attempt}: image generation returned nothing")
-                say(f"scene {scene.index + 1}: image generation returned nothing")
+                say(f"scene {scene.index + 1}: image generation returned nothing",
+                    f"Retrying scene {scene.index + 1}")
                 continue
 
             verdict = review.review_keyframe(path, subject, reviewer)
@@ -208,10 +217,12 @@ def generate_video(
                 for soft in verdict.soft:
                     asset.note(soft)
                 say(f"scene {scene.index + 1}: keyframe approved "
-                    f"(${result.cost_usd:.2f} spent so far)")
+                    f"(${result.cost_usd:.2f} spent so far)",
+                    f"Scene {scene.index + 1} looks good")
                 break
             asset.note(f"attempt {attempt} rejected: {verdict.reason}")
-            say(f"scene {scene.index + 1}: rejected — {verdict.reason}; regenerating")
+            say(f"scene {scene.index + 1}: rejected — {verdict.reason}; regenerating",
+                f"Polishing scene {scene.index + 1}")
             # Keep the least-bad frame: fewer hard failures wins, so exhausting
             # the budget still ships the closest attempt rather than the last.
             if best_hard is None or len(verdict.hard) < len(best_hard):
@@ -253,18 +264,21 @@ def generate_video(
             say(f"scene {scene.index + 1}/{len(plan.scenes)}: animating "
                 f"{scene.seconds:.0f}s at {getattr(settings, 'VIDEO_RESOLUTION', '720p')}"
                 f"{'' if not using_stub else ' (local push-in, free)'}"
-                f" — this is the slow one, ~1-2 min")
+                f" — this is the slow one, ~1-2 min",
+                f"Bringing scene {scene.index + 1} to life")
             started = time.time()
             path, cost = video.animate(motion, scene.seconds, target, first_frame=keyframe)
             result.cost_usd += cost
             asset.cost_usd += cost
             say(f"scene {scene.index + 1}: {'animated' if path else 'animation failed'}"
                 f" in {time.time() - started:.0f}s"
-                f" (${result.cost_usd:.2f} spent so far)")
+                f" (${result.cost_usd:.2f} spent so far)",
+                f"Scene {scene.index + 1} is alive")
         else:
             path = None
             asset.note("budget reached; skipped animation")
-            say(f"scene {scene.index + 1}: budget ceiling reached; using a still instead")
+            say(f"scene {scene.index + 1}: budget ceiling reached; using a still instead",
+                f"Finishing scene {scene.index + 1}")
 
         if not path and not using_stub:
             # Documented fallback: a still with a slow push-in beats no scene.
@@ -320,7 +334,8 @@ def generate_video(
         return result
 
     say(f"joining {len(normalised)} clips, matching loudness, "
-        f"burning {len(captions)} captions and the disclosure")
+        f"burning {len(captions)} captions and the disclosure",
+        "Cutting it together and adding captions")
     try:
         joined = media.concat(normalised, work_dir / "joined.mp4", work_dir)
     except media.MediaError as exc:
@@ -397,14 +412,16 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
                 clip.stage_index = GENERATION_STAGES.index(name)
             db.commit()
 
-        def on_progress(message: str) -> None:
+        def on_progress(detail: str, public: str) -> None:
+            # Only the public register reaches the product. `detail` stays in
+            # the log, where costs and retry counts belong.
             kind = "step"
-            lowered = message.lower()
+            lowered = detail.lower()
             if "rejected" in lowered or "failed" in lowered:
                 kind = "warn"
             elif "approved" in lowered or "animated" in lowered:
                 kind = "ok"
-            progress.push(clip_id, message, kind)
+            progress.push(clip_id, public, kind)
 
         work = Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
         out = Path(settings.MEDIA_DIR) / f"{clip_id}.mp4"
