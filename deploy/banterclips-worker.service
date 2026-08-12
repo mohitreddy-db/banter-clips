@@ -3,6 +3,10 @@ Description=BanterClips generation worker
 After=network.target
 # Not a hard dependency: the worker retries a database that is not up yet.
 Wants=postgresql.service
+# Rate-limit restarts. These belong in [Unit] — systemd ignores them in
+# [Service] with "Unknown key name", which is silent unless you read the log.
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 User=banterclips
@@ -23,11 +27,6 @@ TimeoutStopSec=180
 
 # One render pins a core for minutes; keep it from starving the API.
 Nice=5
-
-# Restart if it wedges: systemd will not restart a process that is alive but
-# stuck, so pair this with the /health/ready queue depth alert.
-StartLimitIntervalSec=300
-StartLimitBurst=10
 
 [Install]
 WantedBy=multi-user.target
