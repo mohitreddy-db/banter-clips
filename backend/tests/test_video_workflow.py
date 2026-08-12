@@ -53,7 +53,7 @@ def test_resolve_replaces_a_too_short_take():
 def test_resolve_clamps_duration_and_scales_scenes():
     assert defaults.resolve("x" * 20, seconds=-5).seconds == defaults.DEFAULT_SECONDS
     assert defaults.resolve("x" * 20, seconds=9999).scene_count <= defaults.MAX_SCENES
-    assert defaults.resolve("x" * 20, seconds=60).scene_count > \
+    assert defaults.resolve("x" * 20, seconds=30).scene_count > \
            defaults.resolve("x" * 20, seconds=15).scene_count
 
 
@@ -92,8 +92,9 @@ def test_plan_without_a_model_is_still_complete():
 
 
 def test_scene_count_follows_duration():
+    assert len(_plan(take="x" * 20, seconds=10).scenes) == 2
     assert len(_plan(take="x" * 20, seconds=15).scenes) == 2
-    assert len(_plan(take="x" * 20, seconds=60).scenes) == 8
+    assert len(_plan(take="x" * 20, seconds=30).scenes) == 4
 
 
 def test_beats_are_hook_then_escalation_then_payoff():
@@ -252,9 +253,20 @@ def test_catalog_mention_settles_the_sport():
 # -------------------------------------------------------------------- duration
 
 def test_seconds_snap_to_product_tiers():
-    for raw, expect in ((15, 15), (30, 30), (60, 60), (90, 90),
-                        (20, 15), (25, 30), (48, 60), (9999, 90)):
+    """The tiers must match the UI and ClipCreate, or a user gets a length
+    they did not pick."""
+    for raw, expect in ((10, 10), (15, 15), (30, 30),
+                        (11, 10), (20, 15), (26, 30), (9999, 30)):
         assert defaults.resolve("x" * 20, seconds=raw).seconds == expect, raw
+
+
+def test_every_tier_yields_speakable_scenes():
+    for tier in defaults.DURATIONS:
+        plan = _plan(take="The Lakers are frauds and everyone knows it", seconds=tier)
+        assert abs(plan.total_seconds - tier) < 0.5, tier
+        for scene in plan.scenes:
+            assert scene.seconds >= 2, (tier, scene.seconds)
+            assert scene.fits_line(), (tier, scene.line)
 
 
 # -------------------------------------------------------------------- captions

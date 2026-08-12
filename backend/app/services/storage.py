@@ -236,9 +236,14 @@ class SupabaseStorage(Storage):
         return len(keys)
 
     def purge_scratch(self, older_than_days: int = RETENTION_DAYS["scratch"]) -> int:
-        # Object stores do this properly with a bucket lifecycle rule, which is
-        # configured once in the dashboard rather than run from the app.
-        log.info("purge_scratch is a no-op on Supabase; configure a lifecycle rule")
+        """Nothing to do: scratch is never uploaded.
+
+        `_store_artifacts` only sends deliverables and approved keyframes; the
+        per-scene clips and rejected frames stay in the local working directory
+        and housekeeping deletes them there. Evidence expiry is handled by
+        `purge_evidence`, which is driven from the database — Supabase Storage
+        has no lifecycle rules, so age has to come from the clip row.
+        """
         return 0
 
 

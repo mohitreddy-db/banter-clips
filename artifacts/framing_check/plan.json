@@ -1,0 +1,53 @@
+{
+  "title": "Wemby\u2019s Timeout? Just Pass Him the Roof",
+  "take": "Wemby is so tall the Spurs stopped calling timeouts and just pass him the roof.",
+  "sport": "NBA",
+  "tone": "Funny",
+  "disclosure": "AI-generated parody",
+  "style": "clean sharp grade, cool arena lighting, playful mood",
+  "focus": "player",
+  "team_ids": [
+    "spurs"
+  ],
+  "cast": [
+    {
+      "id": "wembanyama",
+      "name": "Victor Wembanyama",
+      "look": "an extremely tall, very slim 7-foot-4 French basketball player with very long limbs, short dark hair and sharp youthful features, towering over everyone around him",
+      "wardrobe": "a plain solid black or silver basketball jersey with no logos, no numbers, no lettering",
+      "voice": "calm, French-accented, understated"
+    },
+    {
+      "id": "coach_nba",
+      "name": "a weary head coach",
+      "look": "a tired middle-aged basketball head coach holding a clipboard, sleeves rolled up, thousand-yard stare",
+      "wardrobe": "a plain grey polo shirt and dark trousers with no lettering",
+      "voice": "flat, exhausted, deadpan"
+    }
+  ],
+  "scenes": [
+    {
+      "index": 0,
+      "beat": "hook",
+      "venue": "the courtside team bench of a packed basketball arena",
+      "action": "Coach NBA sits, literally looking up at Wembanyama who is standing with his head almost in the arena rafters. The other players nearby have to lean way back just to see his face.",
+      "camera": "low-angle wide shot, full-figure, capturing Wembanyama towering over the entire bench squad and coach",
+      "speaker_id": "coach_nba",
+      "line": "Timeout? Son, just grab the roof and come back when you\u2019re ready.",
+      "delivery": "dry, clearly exasperated but almost impressed, slightly shaking his head",
+      "seconds": 7.5
+    },
+    {
+      "index": 1,
+      "beat": "payoff",
+      "venue": "a packed basketball arena at night, bright broadcast lighting, blurred crowd",
+      "action": "Wembanyama leaps, arms fully extended, gently rips a loose ceiling tile down and studies it like a clipboard. Everyone stares, mouths open.",
+      "camera": "full-figure wide shot, letting Wembanyama\u2019s reach and the audience\u2019s shocked reactions fill the vertical frame",
+      "speaker_id": "wembanyama",
+      "line": "Coach, I\u2019m drawing up the play up here. Whole court\u2019s my whiteboard now.",
+      "delivery": "deadpan, with total sincerity, towering well above everyone in shot",
+      "seconds": 7.5
+    }
+  ],
+  "source": "llm"
+}

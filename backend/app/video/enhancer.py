@@ -357,9 +357,9 @@ def _questions(
             prompt="How long?",
             why="Longer gives the joke more room to build.",
             options=[
-                Option("15", "15 seconds", "Quick hit, 2 scenes"),
-                Option("30", "30 seconds", "Room to build, 4 scenes"),
-                Option("60", "60 seconds", "Full sketch, 8 scenes"),
+                Option("10", "10 seconds", "Punchy, straight to the joke"),
+                Option("15", "15 seconds", "Quick hit, room for a setup"),
+                Option("30", "30 seconds", "Room to build, four scenes"),
             ],
             default=str(brief.seconds),
         ))

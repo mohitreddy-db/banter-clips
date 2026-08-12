@@ -95,11 +95,49 @@ def purge_scratch(days: int | None = None) -> int:
     return removed
 
 
+def purge_evidence(days: int | None = None) -> int:
+    """Delete keyframes for clips older than the evidence window.
+
+    Driven from the clips table rather than from object mtimes, because
+    Supabase Storage has no lifecycle rules and no cheap "list everything
+    older than X". The deliverable and its poster are untouched — only the
+    per-scene keyframes, which exist to explain a render, not to serve one.
+    """
+    days = days or storage.RETENTION_DAYS["evidence"]
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    removed = 0
+    db = SessionLocal()
+    try:
+        store = storage.get()
+        stale = db.scalars(
+            select(Clip).where(
+                Clip.completed_at.is_not(None),
+                Clip.completed_at < cutoff,
+            )
+        ).all()
+        for clip in stale:
+            prefix = storage.clip_prefix(clip.user_id, clip.id)
+            provenance = clip.provenance or {}
+            for scene in provenance.get("scenes", []):
+                try:
+                    store.delete(f"{prefix}/scene{scene.get('index')}_keyframe.jpg")
+                    removed += 1
+                except Exception:  # noqa: BLE001 — best effort per object
+                    pass
+    except Exception:  # noqa: BLE001
+        log.exception("purging evidence failed")
+    finally:
+        db.close()
+    return removed
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     released = release_stuck_clips()
     removed = purge_scratch()
-    print(f"released {released} stuck clip(s); removed {removed} expired item(s)")
+    evidence = purge_evidence()
+    print(f"released {released} stuck clip(s); removed {removed} expired item(s); "
+          f"purged {evidence} keyframe(s)")
     return 0
 
 

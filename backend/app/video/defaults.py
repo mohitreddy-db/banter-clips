@@ -15,8 +15,10 @@ from .types import _clean
 
 SPORTS = ("NBA", "NFL", "Soccer", "MLB")
 TONES = ("Funny", "Savage", "Hype", "Bold")
-# The product's duration tiers (plan §2). Anything else snaps to the nearest.
-DURATIONS = (15, 30, 60, 90)
+# The product's duration tiers. These must match the options the UI offers and
+# the Literal on ClipCreate — a mismatch means a user picks a length and
+# silently gets a different one. Free tops out at 15s; 30s is Creator-only.
+DURATIONS = (10, 15, 30)
 
 DEFAULT_SPORT = "NBA"
 DEFAULT_TONE = "Bold"
