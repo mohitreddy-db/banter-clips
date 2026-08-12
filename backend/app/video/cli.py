@@ -15,6 +15,7 @@ import json
 import logging
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from . import defaults, enhancer, planner, prompts, providers
@@ -149,11 +150,25 @@ def main(argv: list[str] | None = None) -> int:
     work = Path(args.work) if args.work else Path(tempfile.mkdtemp(prefix="banter_"))
     out = Path(args.out) if args.out else work / "out.mp4"
 
+    started = time.time()
+
+    def elapsed() -> str:
+        seconds = int(time.time() - started)
+        return f"{seconds // 60}:{seconds % 60:02d}"
+
+    def show_stage(name: str) -> None:
+        print(f"\n[{elapsed()}] ── {name.replace('_', ' ')}", flush=True)
+
+    def show_progress(message: str) -> None:
+        print(f"[{elapsed()}]    {message}", flush=True)
+
+    print(f"\nworking in {work}")
     result = generate_video(
         args.take, args.sport, args.tone, args.seconds,
         work_dir=work, out_path=out,
         watermark=None if args.no_watermark else "BanterClips",
-        on_stage=lambda name: print(f"  → {name}"),
+        on_stage=show_stage,
+        on_progress=show_progress,
         brief=brief,
     )
 

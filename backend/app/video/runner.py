@@ -72,6 +72,7 @@ def generate_video(
     out_path: Path,
     watermark: str | None = "BanterClips",
     on_stage=None,
+    on_progress=None,
     brief: "enhancer.Brief | None" = None,
 ) -> Result:
     """Run the whole pipeline. Never raises.
@@ -92,6 +93,16 @@ def generate_video(
             except Exception:  # noqa: BLE001 — reporting must not break the run
                 log.exception("stage callback failed")
 
+    def say(message: str) -> None:
+        """Fine-grained progress. The two expensive stages are long and silent
+        otherwise: a 15s video spends minutes inside two loops."""
+        log.info("%s", message)
+        if on_progress:
+            try:
+                on_progress(message)
+            except Exception:  # noqa: BLE001 — reporting must not break the run
+                log.exception("progress callback failed")
+
     if not media.available():
         result.error = "ffmpeg and ffprobe are required but were not found on PATH"
         return result
@@ -103,7 +114,11 @@ def generate_video(
         resolved = defaults.resolve(take, sport, tone, seconds)
     else:
         resolved = enhancer.resolved_from(brief)
+    say(f"writing the script — {resolved.sport}, {resolved.tone}, "
+        f"{resolved.seconds}s in {resolved.scene_count} scenes")
     plan = planner.build_plan(resolved, text)
+    say(f"script ready: \"{plan.title}\" ({plan.source}); "
+        f"cast {', '.join(m.name for m in plan.cast)}")
     if brief is not None and brief.style:
         # A fixed preset beats a per-job invented style: it is the same look in
         # every scene, which is what keeps a multi-scene video consistent.
@@ -175,11 +190,15 @@ def generate_video(
                 base_prompt, best_hard
             )
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
+            say(f"scene {scene.index + 1}/{len(plan.scenes)}: keyframe attempt "
+                f"{attempt}/{MAX_KEYFRAME_ATTEMPTS} for {subject}"
+                f"{' with reference stills' if refs else ''}")
             path, cost = images.generate(prompt, target, references=refs)
             result.cost_usd += cost
             asset.cost_usd += cost
             if not path:
                 asset.note(f"attempt {attempt}: image generation returned nothing")
+                say(f"scene {scene.index + 1}: image generation returned nothing")
                 continue
 
             verdict = review.review_keyframe(path, subject, reviewer)
@@ -188,8 +207,11 @@ def generate_video(
                 asset.keyframe_path = str(path)
                 for soft in verdict.soft:
                     asset.note(soft)
+                say(f"scene {scene.index + 1}: keyframe approved "
+                    f"(${result.cost_usd:.2f} spent so far)")
                 break
             asset.note(f"attempt {attempt} rejected: {verdict.reason}")
+            say(f"scene {scene.index + 1}: rejected — {verdict.reason}; regenerating")
             # Keep the least-bad frame: fewer hard failures wins, so exhausting
             # the budget still ships the closest attempt rather than the last.
             if best_hard is None or len(verdict.hard) < len(best_hard):
@@ -228,12 +250,21 @@ def generate_video(
         motion = prompts.build_motion_prompt(plan, scene)
 
         if result.cost_usd < budget:
+            say(f"scene {scene.index + 1}/{len(plan.scenes)}: animating "
+                f"{scene.seconds:.0f}s at {getattr(settings, 'VIDEO_RESOLUTION', '720p')}"
+                f"{'' if not using_stub else ' (local push-in, free)'}"
+                f" — this is the slow one, ~1-2 min")
+            started = time.time()
             path, cost = video.animate(motion, scene.seconds, target, first_frame=keyframe)
             result.cost_usd += cost
             asset.cost_usd += cost
+            say(f"scene {scene.index + 1}: {'animated' if path else 'animation failed'}"
+                f" in {time.time() - started:.0f}s"
+                f" (${result.cost_usd:.2f} spent so far)")
         else:
             path = None
             asset.note("budget reached; skipped animation")
+            say(f"scene {scene.index + 1}: budget ceiling reached; using a still instead")
 
         if not path and not using_stub:
             # Documented fallback: a still with a slow push-in beats no scene.
@@ -288,6 +319,8 @@ def generate_video(
         result.error = "every scene failed to normalise"
         return result
 
+    say(f"joining {len(normalised)} clips, matching loudness, "
+        f"burning {len(captions)} captions and the disclosure")
     try:
         joined = media.concat(normalised, work_dir / "joined.mp4", work_dir)
     except media.MediaError as exc:
