@@ -68,4 +68,17 @@ def _run_job(clip_id: uuid.UUID) -> None:
 
 
 def start_generation(clip_id: uuid.UUID) -> None:
-    threading.Thread(target=_run_job, args=(clip_id,), daemon=True).start()
+    """Kick off generation for a clip.
+
+    PIPELINE_MODE picks the implementation: "dummy" walks the stages and
+    attaches the demo clip; "real" runs the workflow in app/video. The job
+    state machine, allowance accounting and API shape are identical either
+    way, so switching is a config change and rolling back is instant.
+    """
+    if str(getattr(settings, "PIPELINE_MODE", "dummy")).lower() == "real":
+        from ..video import run_clip_job
+
+        target = run_clip_job
+    else:
+        target = _run_job
+    threading.Thread(target=target, args=(clip_id,), daemon=True).start()

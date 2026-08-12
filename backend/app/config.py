@@ -39,6 +39,39 @@ class Settings(BaseSettings):
 
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
+    # ── Video generation ────────────────────────────────────────────────
+    # "dummy" keeps the pre-rendered demo clip (instant, free). "real" runs
+    # the pipeline in app/video. Flip back to "dummy" to roll back instantly.
+    PIPELINE_MODE: str = "dummy"
+
+    # Planning and keyframe review (text in / text out). Without a key the
+    # planner falls back to a deterministic template and review is skipped —
+    # the job still produces a video. The plan model is where script quality
+    # comes from, so it gets a capable model; the reviewer only fills a
+    # yes/no rubric on an image, so it stays on a cheap vision model.
+    OPENAI_API_KEY: str = ""
+    OPENAI_PLAN_MODEL: str = "gpt-4.1"
+    OPENAI_REVIEW_MODEL: str = "gpt-4o-mini"
+
+    # Optional web research for off-catalog cast members ("off" | "openai").
+    # With "openai", an unknown name triggers one web-search call to write a
+    # real look description before any image spend. Never fatal.
+    WEB_RESEARCH: str = "off"
+    OPENAI_RESEARCH_MODEL: str = "gpt-4.1-mini"
+
+    # Images and video (OpenRouter). Both default to offline stubs so the
+    # pipeline runs end to end with no key and no spend.
+    OPENROUTER_API_KEY: str = ""
+    IMAGE_PROVIDER: str = "stub"        # "stub" | "openrouter"
+    IMAGE_MODEL: str = "x-ai/grok-imagine-image-quality"
+    VIDEO_PROVIDER: str = "stub"        # "stub" | "openrouter"
+    VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
+    VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
+
+    # Hard ceiling per job. Cost scales with duration, so a runaway plan is
+    # expensive; the pipeline degrades to stills rather than exceeding this.
+    MAX_JOB_COST_USD: float = 8.0
+
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
     CREATOR_PRICE: str = "$9.99/mo"

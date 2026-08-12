@@ -1,0 +1,229 @@
+{
+  "_comment": "Team catalog. Schema per VIDEO-GENERATION-PLAN.md §5.4. Team identity is expressed ONLY through solid colour palettes, associated players and contextual venues — never official logos, crests or readable text. jersey_description must always end with 'no logos, no numbers, no lettering'.",
+  "teams": [
+    {
+      "id": "spurs",
+      "name": "San Antonio Spurs",
+      "sport": "NBA",
+      "aliases": ["spurs", "san antonio"],
+      "primary_colors": ["black", "silver", "white"],
+      "secondary_colors": ["dark gray"],
+      "jersey_description": "a plain solid black or silver basketball jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a sleek modern basketball practice facility hallway in black and silver tones",
+        "a basketball arena player tunnel with black and silver banners, no readable text",
+        "a dim locker room with black and silver stalls"
+      ],
+      "associated_players": ["wembanyama"],
+      "active": true
+    },
+    {
+      "id": "knicks",
+      "name": "New York Knicks",
+      "sport": "NBA",
+      "aliases": ["knicks", "new york knicks", "ny knicks"],
+      "primary_colors": ["royal blue", "orange"],
+      "secondary_colors": ["white"],
+      "jersey_description": "a plain solid royal blue and orange basketball jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a legendary midtown Manhattan basketball arena at night, blue and orange lighting, blurred celebrity front row",
+        "a cramped historic arena tunnel with blue and orange padding",
+        "a locker room with blue and orange stalls"
+      ],
+      "associated_players": ["brunson"],
+      "active": true
+    },
+    {
+      "id": "lakers",
+      "name": "Los Angeles Lakers",
+      "sport": "NBA",
+      "aliases": ["lakers", "los angeles lakers", "la lakers"],
+      "primary_colors": ["purple", "gold"],
+      "secondary_colors": ["white", "black"],
+      "jersey_description": "a plain solid purple and gold basketball jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a glamorous Los Angeles basketball arena, purple and gold light wash, blurred celebrity courtside seats",
+        "a purple-lit arena tunnel lined with unlabelled championship banners",
+        "a lavish locker room with purple and gold accents"
+      ],
+      "associated_players": ["lebron"],
+      "active": true
+    },
+    {
+      "id": "warriors",
+      "name": "Golden State Warriors",
+      "sport": "NBA",
+      "aliases": ["warriors", "golden state", "dubs"],
+      "primary_colors": ["royal blue", "gold"],
+      "secondary_colors": ["white"],
+      "jersey_description": "a plain solid royal blue and gold basketball jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a gleaming waterfront basketball arena in blue and gold, San Francisco bay visible through glass",
+        "a bright modern practice gym with blue and gold court markings, no readable text",
+        "a high-tech locker room with blue and gold trim"
+      ],
+      "associated_players": ["curry"],
+      "active": true
+    },
+    {
+      "id": "nuggets",
+      "name": "Denver Nuggets",
+      "sport": "NBA",
+      "aliases": ["nuggets", "denver"],
+      "primary_colors": ["navy", "gold"],
+      "secondary_colors": ["maroon", "sky blue"],
+      "jersey_description": "a plain solid navy and gold basketball jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a mile-high basketball arena with navy and gold lighting, mountain skyline mural with no text",
+        "a navy-padded arena tunnel",
+        "a locker room with navy and gold stalls"
+      ],
+      "associated_players": ["jokic"],
+      "active": true
+    },
+    {
+      "id": "inter-miami",
+      "name": "Inter Miami",
+      "sport": "Soccer",
+      "aliases": ["inter miami", "miami"],
+      "primary_colors": ["pink", "black"],
+      "secondary_colors": ["white"],
+      "jersey_description": "a plain solid pink soccer jersey with black trim, no logos, no numbers, no lettering",
+      "venues": [
+        "a palm-lined Florida soccer stadium at sunset, pink and black seats, blurred crowd",
+        "a bright stadium tunnel with pink and black walls",
+        "a training pitch with palm trees behind the goal"
+      ],
+      "associated_players": ["messi"],
+      "active": true
+    },
+    {
+      "id": "al-nassr",
+      "name": "Al-Nassr",
+      "sport": "Soccer",
+      "aliases": ["al nassr", "alnassr"],
+      "primary_colors": ["yellow", "blue"],
+      "secondary_colors": ["white"],
+      "jersey_description": "a plain solid yellow soccer jersey with blue trim, no logos, no numbers, no lettering",
+      "venues": [
+        "a floodlit Riyadh soccer stadium at night, yellow and blue seats, blurred crowd",
+        "a marble stadium tunnel with yellow and blue lighting",
+        "a desert-edge training pitch at dusk"
+      ],
+      "associated_players": ["ronaldo"],
+      "active": true
+    },
+    {
+      "id": "real-madrid",
+      "name": "Real Madrid",
+      "sport": "Soccer",
+      "aliases": ["real madrid", "madrid", "los blancos"],
+      "primary_colors": ["white"],
+      "secondary_colors": ["gold", "navy"],
+      "jersey_description": "a plain solid all-white soccer jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a colossal modern Madrid stadium with a closed silver roof, white seats, blurred crowd",
+        "a pristine white stadium tunnel with gold accents",
+        "an immaculate training pitch under grey Madrid skies"
+      ],
+      "associated_players": ["mbappe"],
+      "active": true
+    },
+    {
+      "id": "barcelona",
+      "name": "FC Barcelona",
+      "sport": "Soccer",
+      "aliases": ["barcelona", "barca", "fc barcelona"],
+      "primary_colors": ["deep blue", "garnet"],
+      "secondary_colors": ["gold"],
+      "jersey_description": "a plain solid deep blue and garnet striped soccer jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a vast Catalan soccer stadium mid-renovation, blue and garnet seats, blurred crowd",
+        "a stadium tunnel with blue and garnet mosaic walls",
+        "a sunlit Mediterranean training pitch"
+      ],
+      "associated_players": ["yamal"],
+      "active": true
+    },
+    {
+      "id": "argentina",
+      "name": "Argentina national team",
+      "sport": "Soccer",
+      "aliases": ["argentina", "la albiceleste"],
+      "primary_colors": ["sky blue", "white"],
+      "secondary_colors": ["gold"],
+      "jersey_description": "a plain sky blue and white striped soccer jersey with no logos, no numbers, no lettering",
+      "venues": [
+        "a roaring South American soccer stadium wrapped in sky blue and white, confetti in the air",
+        "a tunnel draped in sky blue and white streamers",
+        "a pitch covered in sky blue confetti after a final"
+      ],
+      "associated_players": ["messi"],
+      "active": true
+    },
+    {
+      "id": "chiefs",
+      "name": "Kansas City Chiefs",
+      "sport": "NFL",
+      "aliases": ["chiefs", "kansas city"],
+      "primary_colors": ["red", "gold"],
+      "secondary_colors": ["white"],
+      "jersey_description": "a plain solid red football jersey with gold trim, no logos, no numbers, no lettering; white football pants",
+      "venues": [
+        "a deafening midwest football stadium, a sea of red-clad blurred fans",
+        "a red-padded stadium tunnel with steam in the air",
+        "a red and gold locker room"
+      ],
+      "associated_players": ["mahomes"],
+      "active": true
+    },
+    {
+      "id": "eagles",
+      "name": "Philadelphia Eagles",
+      "sport": "NFL",
+      "aliases": ["eagles", "philadelphia", "philly"],
+      "primary_colors": ["midnight green", "silver"],
+      "secondary_colors": ["black", "white"],
+      "jersey_description": "a plain solid midnight green football jersey with silver trim, no logos, no numbers, no lettering; white football pants",
+      "venues": [
+        "a hostile Philadelphia football stadium at night, midnight green everywhere, blurred rowdy crowd",
+        "a dark green stadium tunnel with breath fogging in cold air",
+        "a midnight green locker room"
+      ],
+      "associated_players": ["hurts"],
+      "active": true
+    },
+    {
+      "id": "dodgers",
+      "name": "Los Angeles Dodgers",
+      "sport": "MLB",
+      "aliases": ["dodgers", "la dodgers"],
+      "primary_colors": ["royal blue", "white"],
+      "secondary_colors": ["red"],
+      "jersey_description": "a plain solid white baseball uniform with royal blue trim, no logos, no numbers, no lettering",
+      "venues": [
+        "a golden-hour Los Angeles baseball stadium with palm trees beyond the outfield",
+        "a dugout with royal blue rails and bat racks",
+        "a bullpen at sunset with hills behind"
+      ],
+      "associated_players": ["ohtani"],
+      "active": true
+    },
+    {
+      "id": "yankees",
+      "name": "New York Yankees",
+      "sport": "MLB",
+      "aliases": ["yankees", "the bronx bombers", "ny yankees"],
+      "primary_colors": ["navy", "white"],
+      "secondary_colors": ["gray"],
+      "jersey_description": "a plain solid navy pinstriped baseball uniform with no logos, no numbers, no lettering",
+      "venues": [
+        "a cathedral-like Bronx baseball stadium at night, navy and white frieze along the roof",
+        "a navy dugout with a long bench and bat rack",
+        "a monument garden beyond the outfield wall, plaques left blank"
+      ],
+      "associated_players": ["judge"],
+      "active": true
+    }
+  ]
+}
