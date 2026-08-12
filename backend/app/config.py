@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     # for reviewing the flow. "real" runs the pipeline in app/video and
     # spends money. Flip back to "dummy" to roll back instantly.
     PIPELINE_MODE: str = "dummy"
+
+    # How generation is dispatched. "thread" runs it inside the API process —
+    # simple, and fine for development. "postgres" writes a job row that a
+    # separate worker (`python -m app.worker`) picks up, so a deploy cannot
+    # lose an in-flight render. Production should use postgres.
+    QUEUE_MODE: str = "thread"
     # How much faster than real time the mock runs. 1.0 = true timings
     # (~4.5 min for a 15s clip); 12 = a review pass in about 20 seconds.
     MOCK_SPEED: float = 12.0

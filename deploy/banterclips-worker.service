@@ -1,0 +1,33 @@
+[Unit]
+Description=BanterClips generation worker
+After=network.target
+# Not a hard dependency: the worker retries a database that is not up yet.
+Wants=postgresql.service
+
+[Service]
+User=banterclips
+Group=banterclips
+WorkingDirectory=/opt/banter-clips/backend
+Environment=PATH=/opt/banter-clips/backend/.venv/bin
+ExecStart=/opt/banter-clips/backend/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=5
+
+# The worker traps SIGTERM, stops claiming, and puts any in-flight job back on
+# the queue without counting an attempt. Give it room to do that: a single
+# scene can be mid-animation with no natural checkpoint. After this it is
+# killed and the job is reclaimed as stale instead — correct either way, just
+# slower for the user.
+KillSignal=SIGTERM
+TimeoutStopSec=180
+
+# One render pins a core for minutes; keep it from starving the API.
+Nice=5
+
+# Restart if it wedges: systemd will not restart a process that is alive but
+# stuck, so pair this with the /health/ready queue depth alert.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Install]
+WantedBy=multi-user.target

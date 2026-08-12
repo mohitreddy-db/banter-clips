@@ -9,6 +9,7 @@ are all real — swapping this file for the actual pipeline is the only change
 needed later (same statuses, same columns).
 """
 
+import logging
 import random
 import threading
 import time
@@ -18,6 +19,9 @@ from datetime import datetime, timezone
 from ..config import settings
 from ..db import SessionLocal
 from ..models import GENERATION_STAGES, Clip
+from . import jobs
+
+log = logging.getLogger("banter.generation")
 
 GRADIENTS = [
     "linear-gradient(160deg,#7b2ff7,#c13584)",
@@ -82,8 +86,8 @@ def _is_simulated(clip_id: uuid.UUID) -> bool:
         db.close()
 
 
-def start_generation(clip_id: uuid.UUID) -> None:
-    """Kick off generation for a clip.
+def run_for_clip(clip_id: uuid.UUID) -> None:
+    """Actually generate one clip, synchronously, in this process.
 
     PIPELINE_MODE picks the implementation:
 
@@ -94,26 +98,48 @@ def start_generation(clip_id: uuid.UUID) -> None:
     The job state machine, allowance accounting and API shape are identical
     in all three, so switching is a config change and rollback is instant.
     """
-    mode = str(getattr(settings, "PIPELINE_MODE", "dummy")).lower()
-
     # A [mock] take is simulated whatever the deployment is set to, so the
     # flow can be demonstrated on production without spending anything.
     if _is_simulated(clip_id):
         from .mock_pipeline import run_mock_job
 
-        threading.Thread(target=run_mock_job, args=(clip_id,), daemon=True).start()
+        run_mock_job(clip_id)
         return
 
+    mode = str(getattr(settings, "PIPELINE_MODE", "dummy")).lower()
     if mode == "real":
         from ..video import run_clip_job
 
-        target = run_clip_job
+        run_clip_job(clip_id)
     elif mode == "mock":
         # Same stages, same progress lines, same pacing — nothing generated.
-        # Lets the whole flow be reviewed without spending on every iteration.
         from .mock_pipeline import run_mock_job
 
-        target = run_mock_job
+        run_mock_job(clip_id)
     else:
-        target = _run_job
-    threading.Thread(target=target, args=(clip_id,), daemon=True).start()
+        _run_job(clip_id)
+
+
+def start_generation(clip_id: uuid.UUID) -> None:
+    """Get a clip rendered — durably in production, inline in development.
+
+    QUEUE_MODE=postgres (production) writes a row and returns; a separate
+    worker process picks it up. That is what makes a deploy safe: the API can
+    restart mid-render without losing the job, and the render does not compete
+    with request handling for CPU.
+
+    QUEUE_MODE=thread keeps the old in-process behaviour so `uvicorn` alone is
+    still a complete development environment with nothing else to run.
+    """
+    mode = str(getattr(settings, "QUEUE_MODE", "thread")).lower()
+
+    if mode == "postgres":
+        db = SessionLocal()
+        try:
+            if jobs.enqueue(db, clip_id) is not None:
+                return
+            log.error("could not queue clip %s; running it in-process instead", clip_id)
+        finally:
+            db.close()
+
+    threading.Thread(target=run_for_clip, args=(clip_id,), daemon=True).start()

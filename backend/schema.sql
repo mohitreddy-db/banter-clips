@@ -65,6 +65,26 @@ CREATE TABLE clips (
 );
 CREATE INDEX clips_owner_month ON clips (user_id, status, completed_at);
 
+-- Durable work queue. Generation used to run on a thread inside the API, so a
+-- deploy mid-render lost the work silently. A row survives both a deploy and a
+-- crash; a separate worker process claims jobs with FOR UPDATE SKIP LOCKED.
+CREATE TABLE jobs (
+    id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind              text NOT NULL,                     -- 'generate_clip'
+    clip_id           uuid REFERENCES clips(id) ON DELETE CASCADE,
+    status            text NOT NULL DEFAULT 'queued'
+                      CHECK (status IN ('queued', 'running', 'done', 'failed')),
+    attempts          integer NOT NULL DEFAULT 0,
+    max_attempts      integer NOT NULL DEFAULT 2,
+    run_after         timestamptz NOT NULL DEFAULT now(), -- retry backoff
+    locked_by         text,                               -- host:pid of the worker
+    locked_at         timestamptz,                        -- heartbeat; stale => reclaim
+    error             text,
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    finished_at       timestamptz
+);
+CREATE INDEX jobs_claimable ON jobs (status, run_after);
+
 CREATE TABLE social_accounts (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id       uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,

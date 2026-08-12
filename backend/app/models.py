@@ -93,6 +93,55 @@ class LoginToken(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+JOB_STATUSES = ("queued", "running", "done", "failed")
+
+
+class Job(Base):
+    """Durable work queue.
+
+    Generation used to run on a daemon thread inside the API process, so a
+    deploy or a crash mid-job lost the work silently: the clip stayed pinned
+    in a generating status and the user's minutes were gone. A row per job
+    survives both, and lets a separate worker process do the heavy lifting so
+    restarting the API never interrupts a render.
+
+    Postgres rather than Redis or SQS: the database is already here, already
+    backed up, and `SELECT ... FOR UPDATE SKIP LOCKED` is exactly the
+    primitive a queue needs. Adding a broker would be a second thing to
+    operate for no capability we lack.
+    """
+
+    __tablename__ = "jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    # The clip this job is for. Unique among live jobs, so a double-click or a
+    # retried request cannot render the same clip twice.
+    clip_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clips.id", ondelete="CASCADE")
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="2")
+    # Not before this time — used for retry backoff.
+    run_after: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Which worker holds it, and when it last said it was alive. A lock that
+    # goes stale (worker killed) is reclaimed rather than stranding the job.
+    locked_by: Mapped[str | None] = mapped_column(Text)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        CheckConstraint(f"status IN {JOB_STATUSES!r}", name="jobs_status_check"),
+        # The claim query orders by these; without it every poll is a seq scan.
+        Index("jobs_claimable", "status", "run_after"),
+    )
+
+
 class Clip(Base):
     __tablename__ = "clips"
 

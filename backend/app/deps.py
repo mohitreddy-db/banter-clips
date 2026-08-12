@@ -34,13 +34,19 @@ def month_start() -> datetime:
 
 
 def successful_clips_this_month(db: Session, user: User) -> int:
-    """BR-09: only successful videos count against the allowance."""
+    """BR-09: only successful videos count against the allowance.
+
+    Failures are free because they never reach "ready". Demo runs ([mock])
+    also reach "ready" but produce the sample video, so they are excluded
+    too — charging for a clip the user cannot publish would be indefensible.
+    """
     return db.scalar(
         select(func.count())
         .select_from(Clip)
         .where(
             Clip.user_id == user.id,
             Clip.status == "ready",
+            Clip.is_simulated.is_(False),
             Clip.completed_at >= month_start(),
         )
     )
