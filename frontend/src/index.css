@@ -251,6 +251,28 @@ textarea:focus {
   }
 }
 
+/* Grid and flex items default to min-width:auto, so they refuse to shrink
+   below their own content. One unbreakable run — a stage line like "Casting
+   Victor Wembanyama", a row of chips that will not wrap — then forces the
+   whole track wider than its container, and that section bursts out of
+   alignment while everything around it stays put. min-width:0 lets them
+   shrink, and is the fix for almost every mystery grid blowout. */
+.feat-grid,
+.step-grid,
+.testi-grid,
+.stat-grid,
+.plan-grid {
+  min-width: 0;
+}
+.feat-grid > *,
+.step-grid > *,
+.testi-grid > *,
+.stat-grid > *,
+.plan-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Landing responsive rules (from the client's page) */
 @media (max-width: 860px) {
   .hero-grid {
