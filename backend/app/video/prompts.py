@@ -148,8 +148,17 @@ def short_look(member) -> str:
     """
     if member is None:
         return ""
-    words = str(member.look or "").split()
-    return " ".join(words[:8]).rstrip(",;")
+    look = str(member.look or "").strip()
+    if not look:
+        return ""
+    # Cut at a clause boundary, not a word count. Truncating mid-phrase gave
+    # "an extremely tall, very slim 7-foot-4 French basketball" — a dangling
+    # adjective that describes nothing and reads as a mistake to the model.
+    head = re.split(r"[,;]", look)[0].strip()
+    words = head.split()
+    if len(words) > 12:
+        head = " ".join(words[:12])
+    return head.rstrip(" ,;.")
 
 
 def first_shot(camera: str) -> str:
@@ -247,25 +256,33 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     speaker = plan.speaker_for(scene)
     line = scene.trimmed_line()
 
-    parts = [
-        # Camera first, then subject, action, context, style — the ordering
-        # Google publishes for Veo and OpenAI uses in the Sora cookbook.
-        f"Camera: {_camera_block(scene)}.",
-        f"Subject: {cast_clause(plan, scene)}.",
-        f"Action: {scene.action}.",
-    ]
-    if scene.blocking:
-        parts.append(f"Blocking: {scene.blocking}.")
-    if scene.beats:
-        # Quantified beats are what turn a pose into a performance; Sora's
-        # guide is explicit that "walks four steps then pauses" outperforms
-        # "walks across the room".
-        parts.append(f"Timing: {scene.beats}.")
-    if scene.expression:
-        parts.append(f"Expression: {scene.expression}.")
-    parts.append(f"Setting: {scene.venue}.")
-    if scene.lighting:
-        parts.append(f"Lighting: {scene.lighting}.")
+    if scene.shot_prompt:
+        # A shot writer described the cinematography in prose. Use it as the
+        # body; the guardrails below are still appended, because the one time
+        # a model was trusted with them it dropped "photoreal" and a scene
+        # came back a cartoon.
+        parts = [scene.shot_prompt.rstrip(". ") + "."]
+    else:
+        parts = [
+            # Camera first, then subject, action, context, style — the ordering
+            # Google publishes for Veo and OpenAI uses in the Sora cookbook.
+            f"Camera: {_camera_block(scene)}.",
+            f"Subject: {cast_clause(plan, scene)}.",
+            f"Action: {scene.action}.",
+        ]
+    if not scene.shot_prompt:
+        if scene.blocking:
+            parts.append(f"Blocking: {scene.blocking}.")
+        if scene.beats:
+            # Quantified beats turn a pose into a performance; Sora's guide is
+            # explicit that "walks four steps then pauses" beats "walks across
+            # the room".
+            parts.append(f"Timing: {scene.beats}.")
+        if scene.expression:
+            parts.append(f"Expression: {scene.expression}.")
+        parts.append(f"Setting: {scene.venue}.")
+        if scene.lighting:
+            parts.append(f"Lighting: {scene.lighting}.")
 
     if line and speaker:
         # Attribute by name AND appearance: with several people in frame the
@@ -277,11 +294,14 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     elif line:
         parts.append(f'Dialogue: one voice says, "{line}".')
 
-    ambience = scene.sfx or "crowd murmur and shuffling feet"
-    parts.append(f"Ambient: {ambience}, under the dialogue. No music.")
-    parts.append(f"Style: {style_for(plan)}.")
+    if scene.shot_prompt:
+        parts.append("Audio is diegetic only, under the dialogue. No music.")
+    else:
+        ambience = scene.sfx or "crowd murmur and shuffling feet"
+        parts.append(f"Ambient: {ambience}, under the dialogue. No music.")
+        parts.append(f"Style: {style_for(plan)}.")
     parts.append(f"{PHOTOREAL}.")
-    if scene.transition:
+    if scene.transition and not scene.shot_prompt:
         parts.append(f"Ends on: {scene.transition}.")
     # Veo is documented to burn in its own subtitles when given dialogue; we
     # burn our own captions with ffmpeg, so a second set would collide.

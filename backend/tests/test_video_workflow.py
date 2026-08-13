@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.video import catalog, defaults, focus, library, media, planner, prompts  # noqa: E402
-from app.video import enhancer, prompt_registry, review  # noqa: E402
+from app.video import enhancer, prompt_registry, review, shotwriter  # noqa: E402
 from app.video.types import CastMember, Scene, VideoPlan  # noqa: E402
 
 
@@ -530,6 +530,83 @@ def test_enhancer_ignores_a_model_that_rewrites_the_take_into_an_essay():
 
     original = "The Lakers are frauds and everyone knows it"
     assert enhancer.enhance(original, client=Windbag()).take == original
+
+
+# ------------------------------------------------------------- shot writer
+
+def test_a_written_shot_still_gets_every_guardrail():
+    """The one time a model was trusted with the rules it dropped "photoreal"
+    and a scene rendered as a cartoon. It may describe; it may not delete."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    scene = plan.scenes[0]
+    scene.shot_prompt = "Wide shot, low angle. He stands very still."
+    text = prompts.build_motion_prompt(plan, scene)
+    assert scene.shot_prompt.rstrip(".") in text
+    assert "REAL PHOTOGRAPH" in text          # anchor survives
+    assert "No subtitles" in text             # ours, not the model's
+    assert "No music" in text
+    assert scene.line in text                 # dialogue is still appended
+    # The template's labelled blocks are NOT duplicated on top of the prose.
+    assert "Timing:" not in text and "Setting:" not in text
+
+
+def test_without_a_written_shot_the_template_still_runs():
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    scene = plan.scenes[0]
+    assert scene.shot_prompt == ""
+    text = prompts.build_motion_prompt(plan, scene)
+    assert "Camera:" in text and "Setting:" in text
+
+
+def test_shot_writer_degrades_to_the_template():
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    assert shotwriter.write(plan, client=None) == {}
+
+    class Broken:
+        available = True
+
+        def complete_json(self, *a, **k):
+            raise RuntimeError("boom")
+
+    assert shotwriter.write(plan, client=Broken()) == {}
+
+
+def test_shot_writer_ignores_shots_it_invented():
+    """A body for a scene index that does not exist must not be applied."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+
+    class Fake:
+        available = True
+
+        def complete_json(self, *a, **k):
+            return json.dumps({"shots": [
+                {"index": 0, "prompt": "A real shot."},
+                {"index": 99, "prompt": "A shot for a scene that does not exist."},
+            ]})
+
+    out = shotwriter.write(plan, client=Fake())
+    assert set(out) == {0}
+
+
+def test_written_bodies_are_capped():
+    class Windy:
+        available = True
+
+        def complete_json(self, *a, **k):
+            return json.dumps({"shots": [{"index": 0, "prompt": "word " * 900}]})
+
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    body = shotwriter.write(plan, client=Windy())[0]
+    assert len(body.split()) <= shotwriter.MAX_BODY_WORDS
+
+
+def test_speaker_attribution_cuts_at_a_clause_not_mid_phrase():
+    member = CastMember(
+        name="Victor Wembanyama",
+        look="an extremely tall, very slim 7-foot-4 French basketball player with long limbs")
+    short = prompts.short_look(member)
+    assert short == "an extremely tall"
+    assert not short.endswith(("basketball", ","))
 
 
 # ------------------------------------------------------------- prompt registry

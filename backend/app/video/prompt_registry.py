@@ -17,7 +17,8 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from . import captions, catalog_verify, enhancer, prompts, research, review, takes
+from . import (captions, catalog_verify, enhancer, prompts, research, review,
+               shotwriter, takes)
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,21 @@ REGISTRY: tuple[PromptSpec, ...] = (
             "no invented facts."
         ),
         text=prompts.PLANNER_SYSTEM,
+    ),
+    PromptSpec(
+        key="shot_writer",
+        kind="system",
+        stage="planning_story (one call per job)",
+        model="OPENAI_PLAN_MODEL",
+        purpose=(
+            "Writes the video prompt itself, as cinematography prose rather "
+            "than fields joined by labels. Sees every shot at once so wardrobe "
+            "and location phrasing stay identical across cuts. Writes the BODY "
+            "only — the photoreal anchor, negatives, dialogue and no-subtitles "
+            "rule are appended deterministically afterwards, because the one "
+            "time a model was trusted with a guardrail it deleted it."
+        ),
+        text=shotwriter.SHOT_WRITER_SYSTEM,
     ),
     PromptSpec(
         key="review",

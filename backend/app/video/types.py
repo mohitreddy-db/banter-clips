@@ -96,6 +96,12 @@ class Scene:
     delivery: str = "deadpan"
     seconds: float = 7.0
 
+    # Cinematography written by the shot writer, if it ran. Only the
+    # descriptive body — the photoreal anchor, negatives and dialogue are
+    # still appended deterministically, because a model that can delete a
+    # guardrail eventually does.
+    shot_prompt: str = ""
+
     # Kept for backwards compatibility with plans written before the camera
     # was split apart; `camera` still reads as one line for prompts and logs.
     @property

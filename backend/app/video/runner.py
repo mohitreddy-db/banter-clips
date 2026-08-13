@@ -24,7 +24,8 @@ from pathlib import Path
 
 from ..config import settings
 from . import (
-    catalog, defaults, enhancer, media, planner, prompts, providers, research, review,
+    catalog, defaults, enhancer, media, planner, prompts, providers, research,
+    review, shotwriter,
 )
 from .types import SceneAsset, VideoPlan
 
@@ -134,6 +135,17 @@ def generate_video(
     result.plan = plan
     if plan.source != "llm":
         result.warn(f"story plan came from the {plan.source} path")
+    if str(getattr(settings, "SHOT_WRITER", "off")).lower() == "openai":
+        say("directing the shots", "Framing the shots")
+        bodies = shotwriter.write(plan, text)
+        for scene in plan.scenes:
+            scene.shot_prompt = bodies.get(scene.index, "")
+        if bodies:
+            say(f"shot writer described {len(bodies)}/{len(plan.scenes)} shots",
+                "Framing the shots")
+        else:
+            result.warn("shot writer unavailable; using the assembled template")
+
     _write(work_dir / "plan.json", plan.to_dict())
     _write(work_dir / "input.json", resolved.to_dict())
     if brief is not None:

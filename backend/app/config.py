@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     OPENAI_PLAN_MODEL: str = "gpt-4.1"
     OPENAI_REVIEW_MODEL: str = "gpt-4o-mini"
 
+    # Who writes the video prompt. "openai" runs a shot-writer pass that
+    # describes the cinematography in prose — one call per job, a fraction of
+    # a cent — which reads better to a video model than fields joined by
+    # labels. "off" uses the deterministic template. The guardrails (photoreal
+    # anchor, negatives, no-subtitles) are appended either way.
+    SHOT_WRITER: str = "openai"
+
     # Optional web research for off-catalog cast members ("off" | "openai").
     # With "openai", an unknown name triggers one web-search call to write a
     # real look description before any image spend. Never fatal.
