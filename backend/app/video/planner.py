@@ -198,7 +198,13 @@ def _template(inp: ResolvedInput, roster, venues) -> VideoPlan:
             beat=beat,
             venue=venues[i % len(venues)],
             action=actions.get(beat, actions["escalation"]),
-            camera="slow push-in, low angle" if i % 2 == 0 else "slow orbit, eye level",
+            shot_size="full shot" if i % 2 == 0 else "wide shot",
+            camera_angle="low angle" if i % 2 == 0 else "eye level",
+            camera_move="slow push-in" if i % 2 == 0 else "locked-off static frame",
+            lens="35mm, shallow depth of field",
+            expression="deadpan, completely unbothered",
+            lighting="hard overhead arena floodlights",
+            sfx="crowd murmur and squeaking shoes",
             speaker_id=speaker.id,
             line=lines.get(beat, "Unbelievable."),
             delivery=speaker.voice,
@@ -255,7 +261,12 @@ def _repair(plan: VideoPlan, inp: ResolvedInput, roster, venues) -> VideoPlan:
         scene.beat = beats[i]
         scene.venue = scene.venue or venues[i % len(venues)]
         scene.action = scene.action or "the subject reacts to the camera"
-        scene.camera = scene.camera or "slow push-in, low angle"
+        # Every camera axis gets a usable value: a model that omits one must
+        # not leave the prompt with a dangling "Camera: , eye level, ,".
+        scene.shot_size = scene.shot_size or "full shot"
+        scene.camera_angle = scene.camera_angle or "eye level"
+        scene.camera_move = scene.camera_move or "slow push-in"
+        scene.lens = scene.lens or "35mm, shallow depth of field"
         scene.seconds = per_scene
 
         # Speaker must exist, and must differ from the previous scene so that

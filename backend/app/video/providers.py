@@ -28,6 +28,13 @@ log = logging.getLogger("banter.video.providers")
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 OPENROUTER = "https://openrouter.ai/api/v1"
 
+# Generous by default. A shot-by-shot plan for twelve scenes, each with camera,
+# blocking, expressions, dialogue, lighting and audio, is genuinely long — and
+# a response cut off mid-object is unparseable rather than merely brief, so the
+# job silently falls back to the deterministic template. Costing a little more
+# for headroom is far cheaper than losing the call.
+MAX_OUTPUT_TOKENS = 16000
+
 
 # --------------------------------------------------------------------- text
 
@@ -41,7 +48,18 @@ class TextClient:
     def available(self) -> bool:
         return bool(self.api_key)
 
-    def complete_json(self, system: str, user: str, image_b64: str | None = None) -> str | None:
+    def complete_json(
+        self, system: str, user: str, image_b64: str | None = None,
+        max_tokens: int = MAX_OUTPUT_TOKENS, temperature: float | None = None,
+    ) -> str | None:
+        """Structured completion. `max_tokens` is deliberately generous.
+
+        A truncated response is not a shorter answer, it is invalid JSON — the
+        parse fails and the whole call is wasted, which for the planner means
+        silently falling back to the template. Detailed shot descriptions run
+        long, so the ceiling is set well above what we expect rather than just
+        above it.
+        """
         if not self.available:
             return None
         content: object = user
@@ -56,7 +74,10 @@ class TextClient:
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": content}],
             "response_format": {"type": "json_object"},
+            "max_tokens": max_tokens,
         }
+        if temperature is not None:
+            body["temperature"] = temperature
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(

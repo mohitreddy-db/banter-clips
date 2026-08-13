@@ -175,6 +175,26 @@ class CaptionSuggestions(BaseModel):
     captions: list[str] = []
 
 
+class TakeEnhanceRequest(BaseModel):
+    take: str = Field(min_length=1, max_length=280)
+    sport: Sport | None = None
+    tone: Tone | None = None
+    # How many times the user has already asked. Only widens the search, so
+    # repeat clicks return genuinely different ideas rather than rephrasings.
+    round: int = 0
+
+
+class TakeVariation(BaseModel):
+    take: str
+    angle: str = ""
+    why: str = ""
+
+
+class TakeEnhanceResponse(BaseModel):
+    original: str
+    variations: list[TakeVariation] = []
+
+
 # ---------- socials ----------
 class SocialConnectRequest(BaseModel):
     platform: Platform

@@ -30,21 +30,22 @@ STYLE_BIBLE = (
 # taste (grade, lens, mood) and may be flavoured per job, but this states what
 # the output physically IS and is never overridable. One scene came back as an
 # isometric cartoon when this clause did not exist.
+# Compressed deliberately. Every guide measured (OpenAI's Sora cookbook,
+# Runway's Gen-4 notes) says over-long prompts restrict the model, so the
+# boilerplate has to earn its words — every one it takes is a word of
+# scene-specific direction it displaces. The load-bearing signal here is
+# "real photograph" plus a short, explicit list of the media it is not.
 PHOTOREAL = (
-    "This is a REAL PHOTOGRAPH captured on a real camera with real human beings: "
-    "photorealistic, live action, true-to-life skin texture, real fabric, real "
-    "lighting and real depth of field. "
-    "It is NOT an illustration, NOT a cartoon, NOT anime, NOT a 3D render, "
-    "NOT CGI, NOT a painting, NOT a digital drawing, NOT a comic, "
-    "NOT stylised or flat-shaded artwork"
+    "REAL PHOTOGRAPH on a real camera: live action, true skin texture, real "
+    "fabric, real optical depth of field. Not animation, illustration, cartoon, "
+    "anime, 3D render or painted art"
 )
 
 # Appended to every image and motion prompt.
 NEGATIVES = (
-    "Absolutely no on-screen captions, subtitles, watermarks, brand logos, "
-    "advertising boards, signage, scoreboards, crests, wordmarks, or readable text "
-    "anywhere in the frame. No team logos. No collages or multi-panel layouts. "
-    "Nothing in the scene may carry writing of any kind"
+    "No readable text anywhere: no captions, subtitles, watermarks, logos, "
+    "crests, signage, scoreboards or advertising boards. No split screen, "
+    "panels or collage"
 )
 
 # Framing. This replaced "keep the lower quarter of the frame visually calm",
@@ -53,19 +54,17 @@ NEGATIVES = (
 # lower quarter. Measured — bodies terminated at ~78% of frame height, legs cut
 # at mid-thigh, dead floor below. Constrain the clutter, not the subject.
 FULL_FIGURE = (
-    "Frame the people fully: heads and feet inside the frame, nobody cropped "
-    "at the knees or thighs, a little headroom above. Only the plain ground "
-    "plane — floor, grass or turf — occupies the very bottom strip of the "
-    "frame, free of clutter."
+    "Whole bodies in frame, heads and feet included, nobody cropped at the "
+    "knees, a little headroom above; plain uncluttered ground along the "
+    "bottom edge."
 )
 
 # Stills only. A camera direction like "wide shot, then a close-up" describes a
 # sequence, and an image model renders a sequence as stacked panels — which is
 # exactly how a keyframe came back as a three-panel collage. Say "one frame".
 SINGLE_FRAME = (
-    "This is ONE single continuous photograph from ONE camera position: "
-    "no split screen, no collage, no panels, no grid, no storyboard, "
-    "no before-and-after, no multiple shots in the same image"
+    "ONE continuous photograph from ONE camera position — a single frozen "
+    "instant, never two moments or two angles in the same image"
 )
 
 # A shot list joined by any of these is two shots, not one.
@@ -143,16 +142,36 @@ def style_for(plan: VideoPlan) -> str:
     return f"{STYLE_BIBLE}.{flavour} Tone: {tone}"
 
 
-def cast_clause(plan: VideoPlan, scene: Scene) -> str:
-    """Describe whoever should be visible, name first, wardrobe rule attached."""
+def cast_clause(plan: VideoPlan, scene: Scene, limit: int = 2) -> str:
+    """Describe whoever should be visible, name first, wardrobe rule attached.
+
+    Capped at two people. Three full descriptions ran to 127 words — more than
+    the entire rest of the direction — and every one of those words displaces
+    scene-specific detail the model would otherwise act on. Two is also what
+    almost every scene actually contains.
+    """
     speaker = plan.speaker_for(scene)
     members = [speaker] if speaker else []
     for member in plan.cast:
-        if member not in members and len(members) < 3:
+        if member not in members and len(members) < limit:
             members.append(member)
     if not members:
         return "a professional athlete in plain team-coloured kit with no lettering"
     return "; ".join(f"{m.name}, {m.look}, wearing {m.wardrobe}" for m in members if m)
+
+
+def short_look(member) -> str:
+    """A few words that pick this person out of a crowd.
+
+    Used to attribute dialogue. The guides recommend identifying the speaker
+    by appearance so the model lip-syncs the right face, but repeating the
+    full description costs forty words for something already stated in the
+    Subject block — the distinguishing clause alone does the same job.
+    """
+    if member is None:
+        return ""
+    words = str(member.look or "").split()
+    return " ".join(words[:8]).rstrip(",;")
 
 
 def first_shot(camera: str) -> str:
@@ -177,19 +196,28 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
         f"plain empty surfaces with absolutely no writing, print or symbols. "
         if props else ""
     )
-    return (
-        f"{PHOTOREAL}. "
-        f"{style_for(plan)}. "
-        f"{SINGLE_FRAME}. "
-        f"Setting: {scene.venue}. "
-        f"Subjects: {cast_clause(plan, scene)}. "
-        f"Action: {scene.action}. "
-        f"Framing: {first_shot(scene.camera)}. "
-        f"{blanking}"
-        f"{FULL_FIGURE} "
-        f"{NEGATIVES}. "
-        f"Remember: a real photograph of real people, never an illustration."
-    )
+    parts = [
+        f"{PHOTOREAL}.",
+        # A still is one frozen instant, so the camera never moves here.
+        f"Camera: {_camera_block(scene, single=True)}.",
+        f"Subject: {cast_clause(plan, scene)}.",
+        f"Action, frozen mid-moment: {scene.action}.",
+    ]
+    if scene.expression:
+        parts.append(f"Expression: {scene.expression}.")
+    if scene.blocking:
+        parts.append(f"Blocking: {scene.blocking}.")
+    parts.append(f"Setting: {scene.venue}.")
+    if scene.lighting:
+        parts.append(f"Lighting: {scene.lighting}.")
+    parts.append(f"Style: {style_for(plan)}.")
+    parts.append(SINGLE_FRAME + ".")
+    if blanking:
+        parts.append(blanking.strip())
+    parts.append(FULL_FIGURE)
+    parts.append(f"{NEGATIVES}.")
+    parts.append("Remember: a real photograph of real people, never an illustration.")
+    return " ".join(parts)
 
 
 # What to add to a retry, keyed by the phrase the review gate reports. Retrying
@@ -227,6 +255,24 @@ def escalate(prompt: str, reasons: list[str]) -> str:
     return f"{prompt} {' '.join(additions)}"
 
 
+def _camera_block(scene: Scene, single: bool = False) -> str:
+    """The four camera axes, labelled.
+
+    Veo, Sora and Kling all document camera as separate axes — shot size,
+    angle, movement, lens — and all three put camera FIRST. One free-text
+    field made the model guess which axis a phrase meant, and invited shot
+    lists, which render as split screens.
+    """
+    move = "locked-off static frame" if single else first_shot(scene.camera_move)
+    parts = [
+        first_shot(scene.shot_size) or "medium wide shot",
+        scene.camera_angle or "eye level",
+        move,
+        scene.lens or "35mm, shallow depth of field",
+    ]
+    return ", ".join(p for p in parts if p)
+
+
 def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     """The animation. Describes only what moves, plus the spoken line.
 
@@ -234,66 +280,128 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     goes in the prompt rather than through a separate speech step.
     """
     speaker = plan.speaker_for(scene)
-    parts = [
-        f"{PHOTOREAL}. ",
-        f"{style_for(plan)}. ",
-        f"Action: {scene.action}. ",
-        f"Camera: {scene.camera}. ",
-    ]
     line = scene.trimmed_line()
+
+    parts = [
+        # Camera first, then subject, action, context, style — the ordering
+        # Google publishes for Veo and OpenAI uses in the Sora cookbook.
+        f"Camera: {_camera_block(scene)}.",
+        f"Subject: {cast_clause(plan, scene)}.",
+        f"Action: {scene.action}.",
+    ]
+    if scene.blocking:
+        parts.append(f"Blocking: {scene.blocking}.")
+    if scene.beats:
+        # Quantified beats are what turn a pose into a performance; Sora's
+        # guide is explicit that "walks four steps then pauses" outperforms
+        # "walks across the room".
+        parts.append(f"Timing: {scene.beats}.")
+    if scene.expression:
+        parts.append(f"Expression: {scene.expression}.")
+    parts.append(f"Setting: {scene.venue}.")
+    if scene.lighting:
+        parts.append(f"Lighting: {scene.lighting}.")
+
     if line and speaker:
+        # Attribute by name AND appearance: with several people in frame the
+        # model otherwise guesses who is speaking and lip-syncs the wrong one.
         parts.append(
-            f'Dialogue: {speaker.name}, {scene.delivery or speaker.voice}, says "{line}". '
+            f'Dialogue: {speaker.name}, {short_look(speaker)}, says, "{line}" '
+            f"— {scene.delivery or speaker.voice}."
         )
     elif line:
-        parts.append(f'Dialogue: a voice says "{line}". ')
-    parts.append("Audio: ambient crowd noise under the dialogue. ")
-    parts.append(f"{NEGATIVES}.")
-    return "".join(parts)
+        parts.append(f'Dialogue: one voice says, "{line}".')
+
+    ambience = scene.sfx or "crowd murmur and shuffling feet"
+    parts.append(f"Ambient: {ambience}, under the dialogue. No music.")
+    parts.append(f"Style: {style_for(plan)}.")
+    parts.append(f"{PHOTOREAL}.")
+    if scene.transition:
+        parts.append(f"Ends on: {scene.transition}.")
+    # Veo is documented to burn in its own subtitles when given dialogue; we
+    # burn our own captions with ffmpeg, so a second set would collide.
+    parts.append(f"{NEGATIVES}. No subtitles, no burned-in dialogue text.")
+    return " ".join(parts)
 
 
 PLANNER_SYSTEM = """\
-You write short vertical sports-comedy videos. You turn one opinion into a
-scene-by-scene plan.
+You are an Instagram Sports Banter Reels specialist. You turn one fan's
+opinion into a shot-by-shot plan for a short vertical comedy video that gets
+watched to the end, screenshotted, and argued about in the replies.
 
-Hard rules:
-- Keep the user's stance. Sharpen it, exaggerate it, never reverse it.
-- Exactly {scene_count} scenes, structured hook -> escalation -> payoff.
-  Each escalation must RAISE the premise, never restate it.
-- Each scene has AT MOST ONE speaker, and consecutive scenes must use
-  DIFFERENT speakers. This is a hard technical constraint, not a style note.
+<what_makes_these_work>
+Reach on Reels comes from retention and shares, and both are decided in the
+first second. So: the funniest visual must be ON SCREEN immediately — no
+build-up, no establishing shot, no title card. Every scene after it must
+RAISE the premise rather than restate it, because a flat middle is where
+people scroll. The last line is the one that gets quoted, so it lands the
+joke rather than explaining it.
+
+Comedy comes from a specific absurd SITUATION the camera can see — a person
+doing something ridiculous with total commitment — never from wordplay,
+narration or captions. If the joke needs explaining, it is the wrong joke.
+Rivalry and mock-outrage travel further than praise: the reply guy is the
+distribution channel.
+</what_makes_these_work>
+
+<hard_rules>
+- Keep the user's stance. Sharpen and exaggerate it; never reverse or soften
+  it. If they say a team is bad, the video says it harder.
+- Exactly {scene_count} scenes: hook, then escalation, then payoff.
+- Each scene has AT MOST ONE speaker, and consecutive scenes MUST use
+  different speakers. This is a technical constraint, not a style note: the
+  generator gives a character a different voice in every clip, so alternating
+  speakers is what stops one character audibly changing voice mid-video.
 - A line must be speakable inside its scene: at most {max_words} words.
-- Cast only from the provided roster. Use their exact `id` values.
-- When the take targets a team, prefer players who belong to that team and
-  use the team's colour palette and venues. Still never invent logos,
-  crests, or any readable text on clothing or signage.
-- Comedy comes from a visual situation, not from wordplay. Describe what the
-  camera literally sees.
-- NEVER put a text-bearing prop in `action` or `venue`. Forbidden: newspapers,
-  magazines, phones, tablets, laptops, screens, monitors, scoreboards, signs,
-  banners, whiteboards, books, letters, documents, charts, polls, trophies with
-  plaques, or anything a camera would show writing on. The image model renders
-  lettering as garbled nonsense and the frame is rejected. Use physical,
-  wordless props instead: balls, boots, kit bags, medals, confetti, trophies
-  without plaques, furniture, food, weather.
-- Every scene is LIVE ACTION photographed with a real camera. Never describe a
-  cartoon, animation, illustration, diagram, isometric or bird's-eye "game
-  board" view, or any composition that reads as artwork rather than a photo.
-- Never invent a factual result, score, or quote presented as real news.
-- `camera` describes ONE camera position only — a single framing such as
-  "low-angle wide shot" or "slow push-in". Never a shot list: no "then", no
-  "cut to", no "wide shot followed by a close-up". A scene is one continuous
-  take.
-- Prefer FULL-FIGURE framings — "full shot", "wide shot", "low-angle wide" —
-  so heads and feet stay in frame. This is a tall 9:16 frame and physical
-  comedy needs whole bodies. Avoid "medium shot" and "mid shot": they crop
-  people at the waist and waste the height. A close-up is allowed only when
-  the joke is genuinely a facial reaction.
-- `style` adds ONLY grade, lighting and mood on top of the house look —
-  a few words such as "warm golden-hour grade, soft haze". It is never a
-  replacement for the house style, never camera movement or editing, and it
-  must never contradict live-action photography (no "animated", "cartoon",
-  "illustrated", "rendered", "stylised").
+- Cast only from the provided roster, using their exact `id` values.
+- When the take targets a team, cast that team's players and use their colour
+  palette and venues.
+- Describe ONE continuous take per scene: one camera setup, one action. Never
+  a shot list, never "then", never "cut to" — a second camera position inside
+  one scene makes the image model render a split screen.
+- Everything is LIVE ACTION photographed on a real camera. Never describe
+  animation, illustration, diagrams, isometric or board-game views.
+- NO text-bearing props anywhere: no newspapers, phones, tablets, screens,
+  scoreboards, signs, banners, whiteboards, documents or plaques. Image
+  models render lettering as garbled nonsense and the frame gets rejected.
+  Use wordless props: balls, boots, kit bags, confetti, food, furniture.
+- Never present an invented score, result, injury, transfer or quote as real.
+- Mock performance, decisions and situations. Never mock a person's
+  appearance, family, race or intelligence.
+</hard_rules>
+
+<how_to_fill_each_field>
+Write for a video model that has no memory between shots, so each scene must
+stand alone while matching the others.
+
+- `action`: what physically happens, in the order it happens. Concrete verbs
+  and specific objects. One sentence.
+- `beats`: the timing inside the clip, quantified. e.g. "first second he
+  stares; by three seconds the pile collapses; he never reacts". This is what
+  gives the model pacing instead of a static pose.
+- `shot_size`: wide shot / full shot / medium shot / medium close-up /
+  close-up. Prefer wide and full — this is a tall 9:16 frame and physical
+  comedy needs whole bodies.
+- `camera_angle`: eye level / low angle / high angle / over-the-shoulder.
+- `camera_move`: ONE move — slow push-in, slow pull-back, tracking left,
+  handheld follow, locked-off static.
+- `lens`: focal length and depth of field, e.g. "35mm, shallow depth of
+  field".
+- `expression`: the speaker's face and body language, precisely. "Completely
+  unbothered, eyebrows raised a millimetre" beats "looks smug".
+- `blocking`: where people are in the frame and how they move relative to
+  each other.
+- `lighting`: source, quality and direction, e.g. "hard overhead arena
+  floodlights, deep shadows under the eyes".
+- `sfx`: one or two DIEGETIC sounds that exist in the room. Never music.
+- `transition`: one clause on how this shot hands over to the next, so the
+  cut feels intentional.
+- `venue`: reuse the SAME wording for a location across scenes that share it.
+  Identical phrasing is what keeps the world continuous.
+
+Repeat character and wardrobe descriptions verbatim between scenes. Rewording
+them makes the model render a different-looking person.
+</how_to_fill_each_field>
 
 Return ONLY JSON:
 {{"title": "...",
@@ -302,7 +410,10 @@ Return ONLY JSON:
   "teams": ["team ids the video leans on, may be empty"],
   "cast": [{{"id": "...", "name": "...", "look": "...", "wardrobe": "...", "voice": "..."}}],
   "scenes": [{{"beat": "hook|escalation|payoff", "venue": "...", "action": "...",
-              "camera": "...", "speaker_id": "...", "line": "...",
+              "beats": "...", "shot_size": "...", "camera_angle": "...",
+              "camera_move": "...", "lens": "...", "expression": "...",
+              "blocking": "...", "lighting": "...", "sfx": "...",
+              "transition": "...", "speaker_id": "...", "line": "...",
               "delivery": "...", "seconds": {scene_seconds}}}]}}"""
 
 

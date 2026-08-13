@@ -83,6 +83,40 @@ textarea:focus {
     transform: rotate(360deg);
   }
 }
+/* Enhancement in progress: a light sweeps across the placeholder cards, so
+   waiting reads as the AI working rather than the page being stuck. */
+@keyframes shimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(34, 211, 238, 0.14) 45%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 420px 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.15s ease-in-out infinite;
+}
+/* The sparkle on the enhance button while it thinks. */
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.18);
+  }
+}
+
 /* The live status line: each new step slides up into place. */
 @keyframes stepIn {
   from {

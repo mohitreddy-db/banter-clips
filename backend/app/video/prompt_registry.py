@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from . import captions, enhancer, prompts, research, review
+from . import captions, enhancer, prompts, research, review, takes
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,20 @@ REGISTRY: tuple[PromptSpec, ...] = (
             "questions the user is asked before any money is spent."
         ),
         text=enhancer.ENHANCER_SYSTEM,
+    ),
+    PromptSpec(
+        key="take_enhancer",
+        kind="system",
+        stage="input page (on demand, repeatable)",
+        model="OPENAI_PLAN_MODEL",
+        purpose=(
+            "Rewrites a fan's take into two sharper versions in DIFFERENT "
+            "angles, for the Enhance button. Optimises for what actually "
+            "spreads on Reels — a front-loaded hook, a visual situation, and "
+            "enough disagreement to pull replies. Never reverses the stance; "
+            "the original is always kept as a choice."
+        ),
+        text=takes.TAKE_ENHANCER_SYSTEM,
     ),
     PromptSpec(
         key="captions",
@@ -89,16 +103,18 @@ REGISTRY: tuple[PromptSpec, ...] = (
         stage="generating_scenes",
         model="IMAGE_MODEL",
         purpose=(
-            "The keyframe still. Names the subject (holds the likeness), "
-            "states the no-lettering wardrobe (kills garbled text), pins ONE "
-            "camera position (kills collages). Assembled by "
-            "prompts.build_image_prompt."
+            "The keyframe still. Camera-first labelled blocks, per Google's "
+            "published Veo formula. Names the subject (holds the likeness), "
+            "states the no-lettering wardrobe (kills garbled text), freezes "
+            "the camera (kills collages). Built by build_image_prompt."
         ),
         text=(
-            "{style_for(plan)}. {SINGLE_FRAME}. Setting: {scene.venue}. "
-            "Subjects: {cast_clause(plan, scene)}. Action: {scene.action}. "
-            "Framing: {first_shot(scene.camera)}. "
-            "Keep the lower quarter of the frame visually calm. {NEGATIVES}."
+            "{PHOTOREAL}. Camera: {shot_size, angle, LOCKED-OFF, lens}. "
+            "Subject: {cast_clause}. Action, frozen mid-moment: {action}. "
+            "Expression: {expression}. Blocking: {blocking}. "
+            "Setting: {venue}. Lighting: {lighting}. Style: {style_for(plan)}. "
+            "{SINGLE_FRAME}. {blanking of any text-props}. {FULL_FIGURE}. "
+            "{NEGATIVES}."
         ),
     ),
     PromptSpec(
@@ -107,14 +123,20 @@ REGISTRY: tuple[PromptSpec, ...] = (
         stage="animating_scenes",
         model="VIDEO_MODEL",
         purpose=(
-            "The animation pass on an approved keyframe. Describes only motion "
-            "plus the spoken line — the video model performs and lip-syncs the "
-            "dialogue natively. Assembled by prompts.build_motion_prompt."
+            "The animation pass on an approved keyframe. Camera / subject / "
+            "action / context / style ordering as Veo and the Sora cookbook "
+            "specify, with quantified beats for pacing, the speaker "
+            "identified by appearance so the right face is lip-synced, and "
+            "diegetic-only audio. Built by build_motion_prompt."
         ),
         text=(
-            '{style_for(plan)}. Action: {scene.action}. Camera: {scene.camera}. '
-            'Dialogue: {speaker.name}, {delivery}, says "{line}". '
-            "Audio: ambient crowd noise under the dialogue. {NEGATIVES}."
+            "Camera: {shot_size, angle, move, lens}. Subject: {cast_clause}. "
+            "Action: {action}. Blocking: {blocking}. Timing: {beats}. "
+            "Expression: {expression}. Setting: {venue}. Lighting: {lighting}. "
+            'Dialogue: {name}, {short_look}, says, "{line}" — {delivery}. '
+            "Ambient: {sfx}, under the dialogue. No music. "
+            "Style: {style_for(plan)}. {PHOTOREAL}. Ends on: {transition}. "
+            "{NEGATIVES}. No subtitles, no burned-in dialogue text."
         ),
     ),
     PromptSpec(

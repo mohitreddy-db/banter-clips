@@ -13,6 +13,7 @@ from ..models import Clip, Publish, SocialAccount, User
 from ..schemas import (
     CaptionSuggestions,
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
+    TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation,
 )
 from ..services import markers, storage
 from ..services.generation import start_generation
@@ -76,6 +77,32 @@ def enhance_take(
         answers=body.answers, client=providers.text_client(),
     )
     return EnhanceOut(**brief.to_dict())
+
+
+@router.post("/enhance-take", response_model=TakeEnhanceResponse)
+def enhance_take_variations(
+    body: TakeEnhanceRequest,
+    user: User = Depends(get_current_user),
+):
+    """Two sharper versions of a take, for the input page.
+
+    Called on demand and repeatedly — every press returns two NEW variations,
+    and the original is echoed back so the client can always offer it as the
+    third choice. Nothing is generated and no allowance is touched.
+
+    An empty `variations` list is a valid answer: it means keep what you
+    wrote, which is never the wrong outcome.
+    """
+    from ..video import providers, takes
+
+    options = takes.variations(
+        body.take, body.sport or "NBA", body.tone or "Funny",
+        client=providers.text_client(), round_index=body.round,
+    )
+    return TakeEnhanceResponse(
+        original=body.take.strip(),
+        variations=[TakeVariation(**o) for o in options],
+    )
 
 
 @router.post("", response_model=ClipOut, status_code=201)

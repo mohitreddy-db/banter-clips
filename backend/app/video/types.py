@@ -62,28 +62,69 @@ class CastMember:
 
 @dataclass
 class Scene:
-    """One generated clip: a tableau with at most one speaker."""
+    """One generated clip: a tableau with at most one speaker.
+
+    The camera is split into four independent axes rather than one free-text
+    blob, because that is how every current video model's prompting guide
+    expects it (Veo, Sora, Kling all separate shot size / angle / movement /
+    lens). A single "camera" string forced the model to guess which axis we
+    meant, and produced shot *lists* — which is how a keyframe once came back
+    as a three-panel collage.
+    """
 
     index: int = 0
     beat: str = "hook"
     venue: str = "a packed stadium at night"
     action: str = "the subject reacts to the camera"
-    camera: str = "slow push-in, low angle"
+
+    # Camera, four axes. Kept separate so each can be defaulted independently.
+    shot_size: str = "medium wide shot"
+    camera_angle: str = "eye level"
+    camera_move: str = "slow push-in"
+    lens: str = "35mm, shallow depth of field"
+
+    # Performance and world.
+    expression: str = ""      # face and body language of the speaker
+    blocking: str = ""        # where people are and how they move in frame
+    lighting: str = ""
+    beats: str = ""           # quantified micro-timing inside the clip
+    sfx: str = ""             # one or two diegetic sounds
+    transition: str = ""      # how this shot hands over to the next
+
     speaker_id: str = ""
     line: str = ""
     delivery: str = "deadpan"
     seconds: float = 7.0
 
+    # Kept for backwards compatibility with plans written before the camera
+    # was split apart; `camera` still reads as one line for prompts and logs.
+    @property
+    def camera(self) -> str:
+        parts = [self.shot_size, self.camera_angle, self.camera_move]
+        return ", ".join(p for p in parts if p)
+
     @classmethod
     def from_raw(cls, raw: object, index: int, default_venue: str) -> Scene:
         if not isinstance(raw, dict):
             return cls(index=index, venue=default_venue)
+        # Older plans (and sloppy responses) put everything in one "camera"
+        # string; use it as the shot size so nothing is lost.
+        legacy = _clean(raw.get("camera"))
         return cls(
             index=index,
             beat=_clean(raw.get("beat"), "escalation"),
             venue=_clean(raw.get("venue") or raw.get("setting"), default_venue),
             action=_clean(raw.get("action"), cls.action),
-            camera=_clean(raw.get("camera"), cls.camera),
+            shot_size=_clean(raw.get("shot_size"), legacy or cls.shot_size),
+            camera_angle=_clean(raw.get("camera_angle"), cls.camera_angle),
+            camera_move=_clean(raw.get("camera_move"), cls.camera_move),
+            lens=_clean(raw.get("lens"), cls.lens),
+            expression=_clean(raw.get("expression")),
+            blocking=_clean(raw.get("blocking")),
+            lighting=_clean(raw.get("lighting")),
+            beats=_clean(raw.get("beats") or raw.get("timing")),
+            sfx=_clean(raw.get("sfx") or raw.get("sound")),
+            transition=_clean(raw.get("transition")),
             speaker_id=_clean(raw.get("speaker_id") or raw.get("speaker")),
             line=_clean(raw.get("line") or raw.get("dialogue")),
             delivery=_clean(raw.get("delivery"), cls.delivery),

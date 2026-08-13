@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
-import ReviewStep from "../components/ReviewStep.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
@@ -34,14 +33,58 @@ const EXAMPLES_BY_SPORT = {
   MLB: ["Yankees are cooked this season.", "Small ball is dead.", "The shift ban changed nothing."],
 };
 
+/** One selectable wording — the user's own, or a suggested variation. */
+function TakeOption({ selected, onClick, label, text, hint, badge }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "flex", flexDirection: "column", gap: 6, width: "100%",
+        padding: "13px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
+        background: selected ? "rgba(34,211,238,.10)" : "transparent",
+        border: `1px solid ${selected ? "var(--app-cyan)" : "var(--app-border)"}`,
+        animation: "stepIn .35s cubic-bezier(.2,.8,.2,1) both",
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span
+          style={{
+            width: 14, height: 14, borderRadius: "50%", flexShrink: 0,
+            border: `2px solid ${selected ? "var(--app-cyan)" : "var(--app-border)"}`,
+            background: selected
+              ? "radial-gradient(circle, var(--app-cyan) 0 42%, transparent 43%)"
+              : "transparent",
+          }}
+        />
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", color: selected ? "var(--app-cyan)" : "var(--app-muted)" }}>
+          {badge ? `${badge} ` : ""}{label}
+        </span>
+      </span>
+      <span style={{ fontSize: 15, fontWeight: selected ? 600 : 500, lineHeight: 1.45, color: selected ? "var(--app-text)" : "var(--app-muted)" }}>
+        “{text}”
+      </span>
+      {hint && (
+        <span style={{ fontSize: 11.5, color: "var(--app-muted2)", lineHeight: 1.4 }}>{hint}</span>
+      )}
+    </button>
+  );
+}
+
 export default function Studio() {
   const nav = useNavigate();
   const { search } = useLocation();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
-  // input → review (enhancer questions) → generating → result | failed
+  // input → generating → result | failed. Enhancement happens on the input
+  // page, before anything is generated.
   const [phase, setPhase] = useState("input");
-  const [brief, setBrief] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Enhancement. `take` stays exactly as the user typed it — a variation is
+  // only ever *selected*, never written back over their words.
+  const [variations, setVariations] = useState([]);
+  const [chosen, setChosen] = useState(-1); // -1 = the original
+  const [enhancing, setEnhancing] = useState(false);
+  const [round, setRound] = useState(0);
   const [take, setTake] = useState("");
   const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
   const [tone, setTone] = useState("Funny");
@@ -116,44 +159,44 @@ export default function Studio() {
     [refreshClips, refreshUsage, stopTimers]
   );
 
-  // Step 1: sharpen the take and find out what still needs asking. Cheap and
-  // read-only — nothing is generated and no allowance is used yet.
-  const review = async () => {
+  // Whatever wording will actually be generated: their words unless they
+  // picked one of ours.
+  const activeTake = chosen >= 0 && variations[chosen] ? variations[chosen].take : take.trim();
+
+  // Ask for two fresh variations. Repeatable — each press widens the search,
+  // so a second press gives new ideas rather than rephrasings of the first.
+  const enhance = async () => {
+    if (!valid || enhancing) return;
+    setError("");
+    setEnhancing(true);
+    try {
+      const res = await api.enhanceTakeVariations(take.trim(), sport, tone, round);
+      if (res.variations?.length) {
+        setVariations(res.variations);
+        setChosen(-1); // never auto-select: the user's own take stays chosen
+        setRound((r) => r + 1);
+      } else {
+        setError("Couldn't come up with a better angle — your take is good as is.");
+      }
+    } catch (e) {
+      setError(`Enhance is unavailable right now (${e.message}). Your take still works.`);
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  const generate = async () => {
     if (!valid) return;
     setError("");
     setBusy(true);
     try {
-      const b = await api.enhanceTake(take.trim(), sport, tone, duration);
-      setBrief(b);
-      setPhase("review");
-    } catch (e) {
-      // Enhancement is a nicety; never let it block a user from generating.
-      setError(`Could not prepare your take (${e.message}) — generating as written.`);
-      await generate({});
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Step 2: commit. This is the call that starts real work.
-  const generate = async (answers = {}) => {
-    setError("");
-    setBusy(true);
-    try {
-      const finalTake = (brief?.take || take).trim();
-      const c = await api.createClip(
-        answers.take?.trim() || finalTake,
-        sport,
-        answers.tone || brief?.tone || tone,
-        Number(answers.seconds) || duration
-      );
+      const c = await api.createClip(activeTake, sport, tone, duration);
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id);
     } catch (e) {
       if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
-      setPhase("review");
     } finally {
       setBusy(false);
     }
@@ -183,7 +226,9 @@ export default function Studio() {
     setPhase("input");
     setTake("");
     setClip(null);
-    setBrief(null);
+    setVariations([]);
+    setChosen(-1);
+    setRound(0);
     setError("");
   };
 
@@ -218,6 +263,68 @@ export default function Studio() {
             <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12, color: take.length > 280 ? "var(--app-error)" : "var(--app-muted2)" }}>
               {take.length} / 280
             </span>
+          </div>
+
+          {/* Enhance: offered, never imposed. The typed take above is
+              untouched; a variation is only ever selected. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <button
+              type="button"
+              onClick={enhance}
+              disabled={!valid || enhancing}
+              style={{
+                alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 9,
+                padding: "10px 18px", borderRadius: 999, fontSize: 14, fontWeight: 700,
+                cursor: valid && !enhancing ? "pointer" : "not-allowed",
+                color: valid ? "var(--app-cyan)" : "var(--app-muted2)",
+                background: "rgba(34,211,238,.08)",
+                border: `1px solid ${valid ? "rgba(34,211,238,.45)" : "var(--app-border)"}`,
+                opacity: valid ? 1 : 0.6,
+              }}
+            >
+              <span style={{ display: "inline-block", animation: enhancing ? "pulseGlow 1.1s ease-in-out infinite" : "none" }}>
+                ✨
+              </span>
+              {enhancing
+                ? "Finding sharper angles…"
+                : variations.length
+                  ? "Enhance again"
+                  : "Enhance take"}
+            </button>
+
+            {enhancing && (
+              <div style={{ display: "grid", gap: 10 }}>
+                {[0, 1].map((i) => (
+                  <div
+                    key={i}
+                    className="shimmer"
+                    style={{ height: 74, borderRadius: 14, border: "1px solid var(--app-border)" }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {!enhancing && variations.length > 0 && (
+              <div style={{ display: "grid", gap: 10 }}>
+                <TakeOption
+                  selected={chosen === -1}
+                  onClick={() => setChosen(-1)}
+                  label="Your take"
+                  text={take.trim()}
+                />
+                {variations.map((v, i) => (
+                  <TakeOption
+                    key={`${round}-${i}`}
+                    selected={chosen === i}
+                    onClick={() => setChosen(i)}
+                    label={v.angle || "Sharper"}
+                    badge="✨"
+                    text={v.take}
+                    hint={v.why}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* examples */}
@@ -317,8 +424,8 @@ export default function Studio() {
           )}
 
           {/* generate */}
-          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid || busy} onClick={review}>
-            {busy ? "Reading your take…" : "🪄 Generate BanterClip"}
+          <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid || busy} onClick={generate}>
+            {busy ? "Starting…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
             Hot Take format · three cinematic scenes · 12–15s vertical MP4 · 1080 × 1920 · AI-parody labeled
@@ -348,30 +455,6 @@ export default function Studio() {
               </div>
             </div>
           )}
-        </>
-      )}
-
-      {phase === "review" && brief && (
-        <>
-          <div style={{ textAlign: "center", paddingTop: 18 }}>
-            <h1 style={{ fontSize: 34, fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>
-              Here's the plan
-            </h1>
-            <div style={{ fontSize: 15, color: "var(--app-muted)" }}>
-              Tweak anything, or hit go.
-            </div>
-          </div>
-          {error && (
-            <div style={{ fontSize: 13.5, color: "var(--app-error)", background: "rgba(240,84,108,.1)", borderRadius: 12, padding: "12px 16px" }}>
-              {error}
-            </div>
-          )}
-          <ReviewStep
-            brief={brief}
-            busy={busy}
-            onBack={() => setPhase("input")}
-            onNext={generate}
-          />
         </>
       )}
 

@@ -66,6 +66,10 @@ export const api = {
   // read-only, so it is safe to call again after every answer.
   enhanceTake: (take, sport, tone, duration, answers = {}) =>
     request("/clips/enhance", { method: "POST", body: { take, sport, tone, duration, answers } }),
+  // Two fresh variations of a take, for the input page. Repeatable: `round`
+  // only widens the search so repeat presses give new ideas.
+  enhanceTakeVariations: (take, sport, tone, round = 0) =>
+    request("/clips/enhance-take", { method: "POST", body: { take, sport, tone, round } }),
   createClip: (take, sport, tone, duration = 15) =>
     request("/clips", { method: "POST", body: { take, sport, tone, duration } }),
   getClip: (id) => request(`/clips/${id}`),

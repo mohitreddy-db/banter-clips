@@ -325,7 +325,7 @@ def test_model_style_can_never_replace_the_photoreal_anchor():
     for text in (image, motion):
         assert "REAL PHOTOGRAPH" in text
         assert "photoreal" in text.lower()
-        assert "NOT a cartoon" in text
+        assert "Not animation, illustration, cartoon" in text
         assert "metallic silver-blue grade" in text   # flavour still survives
 
 
@@ -374,14 +374,56 @@ def test_image_prompt_asks_for_whole_bodies_not_a_calm_lower_quarter():
     """"Keep the lower quarter calm" made the model cut legs at mid-thigh."""
     plan = _plan(take="Wemby can't find Brunson", seconds=15)
     image = prompts.build_image_prompt(plan, plan.scenes[0])
-    assert "heads and feet inside the frame" in image
+    assert "heads and feet included" in image
     assert "lower quarter" not in image
-    assert "cropped at the knees" in image
+    assert "nobody cropped at the knees" in image
 
 
 def test_planner_prefers_full_figure_framings():
-    assert "FULL-FIGURE" in prompts.PLANNER_SYSTEM
-    assert "medium shot" in prompts.PLANNER_SYSTEM      # named as the thing to avoid
+    assert "Prefer wide and full" in prompts.PLANNER_SYSTEM
+    assert "9:16 frame and physical" in prompts.PLANNER_SYSTEM
+
+
+def test_camera_is_four_separate_axes():
+    """One free-text camera field made the model guess which axis we meant,
+    and invited shot lists — which render as split screens."""
+    scene = Scene(shot_size="wide shot", camera_angle="low angle",
+                  camera_move="slow push-in", lens="24mm")
+    block = prompts._camera_block(scene)
+    for axis in ("wide shot", "low angle", "slow push-in", "24mm"):
+        assert axis in block
+    # A still freezes the camera even when the scene specifies a move.
+    assert "push-in" not in prompts._camera_block(scene, single=True)
+    assert "locked-off" in prompts._camera_block(scene, single=True)
+
+
+def test_motion_prompt_covers_every_directed_field():
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    scene = plan.scenes[0]
+    scene.beats = "he freezes for a beat, then the pile topples"
+    scene.expression = "eyebrows raised a millimetre"
+    scene.blocking = "coach seated left, Wemby standing right"
+    scene.lighting = "hard overhead floodlights"
+    scene.sfx = "sneakers squeaking"
+    scene.transition = "he turns away from camera"
+    text = prompts.build_motion_prompt(plan, scene)
+    for label in ("Camera:", "Subject:", "Action:", "Blocking:", "Timing:",
+                  "Expression:", "Setting:", "Lighting:", "Ambient:",
+                  "Style:", "Ends on:"):
+        assert label in text, label
+    assert "No music" in text
+    # We burn our own captions; a second set from the model would collide.
+    assert "No subtitles" in text
+
+
+def test_prompts_stay_inside_the_useful_length_band():
+    """Every guide measured says over-long prompts restrict the model:
+    OpenAI warns they limit creativity, Runway that Gen-4 wants simplicity."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    for scene in plan.scenes:
+        for text in (prompts.build_image_prompt(plan, scene),
+                     prompts.build_motion_prompt(plan, scene)):
+            assert len(text.split()) < 320, len(text.split())
 
 
 def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
