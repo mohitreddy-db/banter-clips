@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -16,6 +17,13 @@ from pathlib import Path
 log = logging.getLogger("banter.video.media")
 
 WIDTH, HEIGHT, FPS = 1080, 1920, 30
+
+# x264 preset for every encode. "medium" at 1080x1920 saturates a single core
+# for minutes — measured on the droplet as load 12 and an API that stopped
+# answering while a clip assembled. "veryfast" is several times cheaper for
+# roughly 10-15% more bytes, which is the right trade when the same core also
+# has to serve the site. Override with FFMPEG_PRESET on bigger hardware.
+PRESET = os.environ.get("FFMPEG_PRESET", "veryfast")
 LOUDNESS = "loudnorm=I=-16:TP=-1.5:LRA=11"
 FONT_CANDIDATES = (
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -91,7 +99,7 @@ def ken_burns(image: str | Path, seconds: float, out: str | Path) -> Path:
         "-loop", "1", "-i", str(image),
         "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=48000",
         "-vf", vf, "-t", f"{seconds:.2f}",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k", "-shortest", str(out),
     ], "ken_burns")
     return Path(out)
@@ -107,7 +115,7 @@ def normalise(clip: str | Path, out: str | Path, trim: tuple[float, float] | Non
         "-vf", (f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase:flags=lanczos,"
                 f"crop={WIDTH}:{HEIGHT},fps={FPS},setsar=1"),
         "-af", LOUDNESS,
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(out),
     ]
     _run(args, "normalise")
@@ -236,7 +244,7 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
     args = ["ffmpeg", "-v", "error", "-y", "-i", str(video)]
     if filters:
         args += ["-vf", ",".join(filters)]
-    args += ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+    args += ["-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
              "-movflags", "+faststart", "-c:a", "copy", str(out)]
     try:
         _run(args, "brand")

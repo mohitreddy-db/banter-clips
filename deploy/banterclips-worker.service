@@ -29,8 +29,18 @@ RestartSec=5
 KillSignal=SIGTERM
 TimeoutStopSec=180
 
-# One render pins a core for minutes; keep it from starving the API.
-Nice=5
+# One render pins a core for minutes. On a single-vCPU droplet that made the
+# API stop answering entirely — measured at load 12 with 29 MB of RAM free
+# while a clip assembled. The worker must always lose to request handling:
+# Nice=15 plus a low CPU weight means ffmpeg gets the core only when uvicorn
+# does not want it, and the job simply takes a little longer.
+Nice=15
+CPUWeight=20
+IOWeight=20
+# Leave headroom for the API and Postgres. Past this the worker is killed and
+# the job returns to the queue, which is recoverable; an OOM killer picking
+# its own victim is not.
+MemoryMax=600M
 
 [Install]
 WantedBy=multi-user.target

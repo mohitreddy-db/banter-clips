@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor
 import shutil
 import threading
@@ -51,7 +52,11 @@ MAX_KEYFRAME_ATTEMPTS = 3
 # concurrently. Capped because every worker holds an HTTP connection to the
 # provider and a render pins a core during ffmpeg; unbounded fan-out on a
 # 12-scene job would be rude to both.
-MAX_PARALLEL_SCENES = 4
+# Scene work is mostly waiting on the provider, so more workers than cores is
+# fine — but each one can fall back to ffmpeg, and on a single-core box that
+# is the difference between a slow site and an unreachable one. Follow the
+# hardware: 1 vCPU -> 2, 4 vCPU -> 4.
+MAX_PARALLEL_SCENES = max(2, min(4, (os.cpu_count() or 1) * 2))
 
 
 class _Ledger:
