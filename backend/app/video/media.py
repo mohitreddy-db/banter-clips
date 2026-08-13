@@ -16,7 +16,21 @@ from pathlib import Path
 
 log = logging.getLogger("banter.video.media")
 
-WIDTH, HEIGHT, FPS = 1080, 1920, 30
+# Deliver at the generator's own resolution. Grok returns 720x1280 at "720p",
+# so the old 1080x1920 target meant every clip was upscaled to 2.25x the pixels
+# before encoding — 2.25x the x264 work for detail that does not exist in the
+# source. Measured on the droplet: 4.9s -> 3.0s per clip. Instagram accepts
+# 720x1280 Reels natively, so nothing is lost downstream.
+#
+# Set VIDEO_WIDTH=1080 to go back to upscaling, e.g. if the generator starts
+# returning true 1080p. All burn-in geometry below scales with it.
+WIDTH = int(os.environ.get("VIDEO_WIDTH", "720"))
+HEIGHT = WIDTH * 16 // 9
+FPS = 30
+
+# Text sizes and insets were designed against a 1080-wide frame; keeping them
+# as fractions means captions land in the same place at any delivery width.
+_S = WIDTH / 1080.0
 
 # x264 preset for every encode. "medium" at 1080x1920 saturates a single core
 # for minutes — measured on the droplet as load 12 and an API that stopped
@@ -75,7 +89,19 @@ def probe(path: str | Path) -> dict:
         "vcodec": video.get("codec_name") or "",
         "acodec": (audio or {}).get("codec_name") or "",
         "has_audio": audio is not None,
+        "fps": _ratio(video.get("avg_frame_rate") or video.get("r_frame_rate")),
+        # ffprobe omits this entirely when the pixels are already square.
+        "sar": video.get("sample_aspect_ratio") or "1:1",
     }
+
+
+def _ratio(value: str | None) -> float:
+    """ffprobe reports frame rates as "30/1". Returns 0.0 when unparseable."""
+    try:
+        num, _, den = str(value or "").partition("/")
+        return round(float(num) / float(den or 1), 3)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
 
 
 def ken_burns(image: str | Path, seconds: float, out: str | Path) -> Path:
@@ -105,8 +131,57 @@ def ken_burns(image: str | Path, seconds: float, out: str | Path) -> Path:
     return Path(out)
 
 
-def normalise(clip: str | Path, out: str | Path, trim: tuple[float, float] | None = None) -> Path:
-    """Common resolution, fps and loudness so clips can be joined seamlessly."""
+def joinable(infos: list[dict]) -> bool:
+    """True when these clips already share one video spec, so concat can join
+    them without a single frame being re-encoded.
+
+    The test is whether the clips agree with *each other*, not whether they hit
+    the WIDTH/HEIGHT/FPS constants. That matters: the generator returns
+    720x1280 at 24fps, so a target pinned to 30fps would re-encode every clip
+    forever while the clips were already perfectly compatible. Portrait shape
+    is still required, since a landscape source genuinely needs the crop.
+    """
+    if not infos or not all(infos):
+        return False
+    specs = {(i.get("width"), i.get("height"), i.get("vcodec"), i.get("fps"),
+              i.get("sar")) for i in infos}
+    if len(specs) != 1:
+        return False
+    (width, height, vcodec, fps, _sar), = specs
+    return bool(
+        width and height
+        and vcodec == "h264"
+        and fps
+        and height > width                      # already portrait
+        and all(i.get("has_audio") for i in infos)
+    )
+
+
+def normalise(clip: str | Path, out: str | Path, trim: tuple[float, float] | None = None,
+              stream_copy: bool = False) -> Path:
+    """Common resolution, fps and loudness so clips can be joined seamlessly.
+
+    With `stream_copy` the caller has already established (via `joinable`) that
+    every clip shares one spec, so re-encoding the video is pure waste — it
+    re-compresses identical pixels for nothing. Copy the video stream and
+    re-encode only the audio, which still leaves scenes loudness-matched (the
+    one thing concat cannot fix afterwards) for a fraction of the CPU.
+
+    The fast path is deliberately conservative: any trim, any missing audio, or
+    any failure falls through to the full re-encode below.
+    """
+    if stream_copy and trim is None and probe(clip).get("has_audio"):
+        try:
+            _run([
+                "ffmpeg", "-v", "error", "-y", "-i", str(clip),
+                "-c:v", "copy", "-af", LOUDNESS,
+                "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(out),
+            ], "normalise (stream copy)")
+            log.info("normalise: stream-copied %s", clip)
+            return Path(out)
+        except MediaError as exc:
+            log.warning("stream-copy normalise failed (%s); re-encoding", exc)
+
     args = ["ffmpeg", "-v", "error", "-y"]
     if trim:
         args += ["-ss", f"{trim[0]:.2f}", "-to", f"{trim[1]:.2f}"]
@@ -146,14 +221,14 @@ def concat(clips: list[Path], out: str | Path, work: Path) -> Path:
     return Path(out)
 
 
-CAPTION_FONT_SIZE = 46
+CAPTION_FONT_SIZE = round(46 * _S)
 CAPTION_WRAP_CHARS = 24
 CAPTION_MAX_LINES = 2
 # Low in the frame, over the ground plane rather than over people's knees, and
-# still clear of the ~250px of Instagram UI chrome along the bottom. The old
-# value (HEIGHT - 520 = 73% down) sat right where a standing figure's legs are
-# and left 400px of unused frame beneath it.
-CAPTION_BASE_Y = HEIGHT - 360
+# still clear of the Instagram UI chrome along the bottom (~13% of the frame).
+# The old value (73% down) sat right where a standing figure's legs are and
+# left a fifth of the frame unused beneath it.
+CAPTION_BASE_Y = HEIGHT - round(360 * _S)
 
 
 def _text_source(text: str, scratch: Path, name: str) -> str:
@@ -191,7 +266,8 @@ def caption_filters(
             source = _text_source(line, scratch, f"cap{index}_{row}")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white"
-                f":fontsize={CAPTION_FONT_SIZE}:borderw=4:bordercolor=black@0.85"
+                f":fontsize={CAPTION_FONT_SIZE}:borderw={max(2, round(4 * _S))}"
+                f":bordercolor=black@0.85"
                 f":x=(w-text_w)/2:y={y}"
                 f":enable='between(t,{start:.2f},{end:.2f})'"
             )
@@ -230,13 +306,15 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
             source = _text_source(disclosure, scratch, "disclosure")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white@0.82"
-                f":fontsize=32:borderw=3:bordercolor=black@0.75:x=(w-text_w)/2:y=95"
+                f":fontsize={round(32 * _S)}:borderw={max(2, round(3 * _S))}"
+                f":bordercolor=black@0.75:x=(w-text_w)/2:y={round(95 * _S)}"
             )
         if watermark:
             source = _text_source(watermark, scratch, "watermark")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white@0.88"
-                f":fontsize=38:borderw=3:bordercolor=black@0.75:x=w-text_w-48:y=h-160"
+                f":fontsize={round(38 * _S)}:borderw={max(2, round(3 * _S))}"
+                f":bordercolor=black@0.75:x=w-text_w-{round(48 * _S)}:y=h-{round(160 * _S)}"
             )
     else:
         log.warning("no usable font found; skipping burn-in")
@@ -270,7 +348,7 @@ def placeholder_image(out: str | Path, text: str = "") -> Path:
     vf = "format=yuv420p"
     if font and text:
         vf = (f"drawtext=fontfile={font}:text='{_esc(text[:40])}':fontcolor=white@0.9"
-              f":fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2,{vf}")
+              f":fontsize={round(64 * _S)}:x=(w-text_w)/2:y=(h-text_h)/2,{vf}")
     _run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
           "-i", f"gradients=s={WIDTH}x{HEIGHT}:c0=0x3d2c8d:c1=0x7b2ff7:duration=1",
           "-vf", vf, "-frames:v", "1", str(out)], "placeholder_image")

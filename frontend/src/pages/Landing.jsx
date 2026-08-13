@@ -27,7 +27,7 @@ const TONES_DEMO = ["Funny", "Savage", "Hype", "Bold"];
 /** The little animated demonstration inside a feature tile. */
 function FeatureVisual({ f }) {
   const frame = {
-    height: 120, borderRadius: 12, position: "relative", overflow: "hidden",
+    height: 150, borderRadius: 12, position: "relative", overflow: "hidden",
     marginBottom: 18, display: "grid", placeItems: "center",
     background: `linear-gradient(150deg,${f.c1},${f.c2})`,
   };
@@ -36,31 +36,30 @@ function FeatureVisual({ f }) {
   );
 
   if (f.key === "video") {
-    // A 9:16 frame inside a landscape tile. It gets its OWN portrait window so
-    // the whole figure is visible — `objectFit: cover` here would show a
-    // horizontal band through the middle: no head, no feet. The same image,
-    // blurred, fills the space around it.
+    // Full-bleed, no letterboxing: a 9:16 still centred in a landscape tile
+    // left dead bars down both sides, and filling them with a blurred copy of
+    // the same frame still read as a gap. Cropping to fill is the right trade
+    // here because this tile is decorative — the badge carries the "it's
+    // vertical" message, so the image only has to look like a real broadcast
+    // frame. `center 34%` puts the crop band on the face rather than the
+    // midriff, which is what a plain centred cover would land on.
     const src = `${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`;
     return (
       <div style={frame}>
         <img
           src={src}
-          alt=""
+          alt="A frame from a clip made with BanterClips"
           loading="lazy"
-          aria-hidden
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(18px) saturate(1.2)", transform: "scale(1.25)", opacity: 0.55 }}
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%",
+            objectFit: "cover", objectPosition: "center 34%",
+            animation: "slowZoom 9s ease-in-out infinite alternate",
+          }}
         />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(150deg,#0006,#0009)" }} />
-        <div style={{ position: "relative", height: "82%", aspectRatio: "9 / 16", borderRadius: 7, overflow: "hidden", boxShadow: "0 6px 20px #0007, 0 0 0 1px #ffffff2e" }}>
-          <img
-            src={src}
-            alt="A frame from a clip made with BanterClips"
-            loading="lazy"
-            style={{ width: "100%", height: "100%", objectFit: "cover", animation: "slowZoom 9s ease-in-out infinite alternate" }}
-          />
-        </div>
-        <div style={{ position: "absolute", right: 9, bottom: 8, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textShadow: "0 1px 4px #000" }}>
-          1080 × 1920
+        {/* Keeps the white badge legible over floodlights and pale kits. */}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000a6,transparent 42%)" }} />
+        <div style={{ position: "absolute", right: 10, bottom: 9, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textShadow: "0 1px 4px #000" }}>
+          1080 × 1920 · 9:16
         </div>
       </div>
     );
@@ -714,20 +713,30 @@ function HowItWorks() {
     return () => clearTimeout(t);
   }, [phase, typed, stage, visible]);
 
-  // Every phase must occupy the SAME box. The media area used to be flex:1
-  // with a `height:100%` + `aspectRatio:9/16` child; a percentage height
-  // against a content-sized parent is indefinite, so the aspect ratio drove
-  // height from WIDTH instead — a 260px card grew a 460px video, the grid
-  // stretched all three cards to match, and the section visibly jumped the
-  // moment the clip appeared. A fixed stage height removes the feedback loop.
-  const STAGE_H = 208;
   const card = {
     background: "var(--card)", border: "1px solid var(--border)",
     borderRadius: 18, padding: "22px 20px",
     display: "flex", flexDirection: "column", gap: 12,
   };
+  // Card 3 sets the height of the row. Its aspect ratio depends only on the
+  // card's WIDTH, which the grid hands down from `1fr 1fr 1fr` — so there is
+  // no width/height feedback loop, and because the box is identical in every
+  // phase nothing jumps when the clip replaces the placeholder. (The earlier
+  // bug was a `height:100%` + `aspectRatio` child inside a content-sized
+  // parent: an indefinite percentage height, so the ratio drove height from
+  // width and a 260px card grew a 460px video mid-animation.)
+  //
+  // 4:5 rather than the clip's own 9:16: it fills the card edge to edge with
+  // no side bars, and still shows 18%-89% of the frame — head, kit and the
+  // burned-in captions at 81% all survive the crop.
+  const mediaStage = {
+    aspectRatio: "4 / 5", flex: "0 0 auto", position: "relative",
+    borderRadius: 12, overflow: "hidden",
+  };
+  // Cards 1 and 2 are stretched to that same row height by the grid, so their
+  // stage just grows to fill whatever is left instead of leaving a dead gap.
   const stageBox = {
-    height: STAGE_H, flex: "0 0 auto", position: "relative",
+    flex: "1 1 auto", minHeight: 150, position: "relative",
     borderRadius: 12, overflow: "hidden",
   };
   const label = {
@@ -740,7 +749,7 @@ function HowItWorks() {
       {/* 1 — the take types itself */}
       <div style={card}>
         <span style={label}>1 · Type your take</span>
-        <div style={{ ...stageBox, background: "var(--bg2, #0b1020)", border: "1px solid var(--border)", padding: "14px 14px", fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>
+        <div style={{ ...stageBox, background: "var(--bg2, #0b1020)", border: "1px solid var(--border)", padding: "16px 16px", fontSize: 19, lineHeight: 1.45, fontWeight: 600 }}>
           {DEMO_TAKE.slice(0, typed)}
           <span style={{ animation: "caret 1s step-end infinite", color: "var(--accent)" }}>|</span>
         </div>
@@ -752,16 +761,16 @@ function HowItWorks() {
       {/* 2 — the real pipeline stages tick through */}
       <div style={card}>
         <span style={label}>2 · The AI builds it</span>
-        <div style={{ ...stageBox, display: "flex", flexDirection: "column", gap: 9, justifyContent: "center" }}>
+        <div style={{ ...stageBox, display: "flex", flexDirection: "column", gap: 13, justifyContent: "center" }}>
           {DEMO_STAGES.map((s, i) => {
             const done = phase === "ready" || i < stage;
             const active = phase === "building" && i === stage;
             if (phase === "typing") return (
-              <div key={s} style={{ height: 15, borderRadius: 5, background: "var(--border)", opacity: 0.4 }} />
+              <div key={s} style={{ height: 17, borderRadius: 5, background: "var(--border)", opacity: 0.4 }} />
             );
             return (
-              <div key={s} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, animation: "tickIn .3s ease both", color: done ? "var(--text, #e6edf7)" : active ? "var(--accent)" : "var(--muted2)" }}>
-                <span style={{ width: 15, textAlign: "center", flexShrink: 0 }}>
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, animation: "tickIn .3s ease both", color: done ? "var(--text, #e6edf7)" : active ? "var(--accent)" : "var(--muted2)" }}>
+                <span style={{ width: 16, textAlign: "center", flexShrink: 0 }}>
                   {done ? "✓" : active ? "◐" : "○"}
                 </span>
                 <span style={{ fontWeight: active ? 700 : 500 }}>{s}</span>
@@ -777,24 +786,27 @@ function HowItWorks() {
       {/* 3 — the clip those stages actually produced */}
       <div style={card}>
         <span style={label}>3 · Publish or download</span>
-        <div style={{ ...stageBox, background: "#0b1020", display: "grid", placeItems: "center" }}>
+        <div style={{ ...mediaStage, background: "#0b1020", display: "grid", placeItems: "center" }}>
           {phase === "ready" ? (
-            // Portrait window, not full-bleed: the clip is 9:16 and this box
-            // is not, so stretching it to cover would cut off head and feet.
-            <div style={{ height: "100%", aspectRatio: "9 / 16", borderRadius: 8, overflow: "hidden", animation: "floatUp .5s ease both", boxShadow: "0 0 0 1px #ffffff24" }}>
-              <video
-                src={`${SHOWCASE_BASE}/ronaldo-penalties/final.mp4`}
-                poster={`${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`}
-                muted
-                loop
-                autoPlay
-                playsInline
-                preload="none"
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            </div>
+            // `center 62%` biases the crop downward so the burned-in captions
+            // this card advertises stay in shot; a plain centred cover would
+            // cut them off along with the bottom of the kit.
+            <video
+              src={`${SHOWCASE_BASE}/ronaldo-penalties/final.mp4`}
+              poster={`${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`}
+              muted
+              loop
+              autoPlay
+              playsInline
+              preload="none"
+              style={{
+                position: "absolute", inset: 0, width: "100%", height: "100%",
+                objectFit: "cover", objectPosition: "center 62%",
+                animation: "floatUp .5s ease both",
+              }}
+            />
           ) : (
-            <span style={{ fontSize: 12.5, color: "var(--muted2)" }}>waiting for the render…</span>
+            <span style={{ fontSize: 13, color: "var(--muted2)" }}>waiting for the render…</span>
           )}
         </div>
         <div style={{ fontSize: 12.5, color: "var(--muted)" }}>

@@ -439,7 +439,9 @@ def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
         media.CAPTION_FONT_SIZE * 1.3
     )
     assert media.CAPTION_BASE_Y > media.HEIGHT * 0.78      # clear of standing legs
-    assert last_line < media.HEIGHT - 150                  # clear of the IG UI strip
+    # Fractions, not pixels: delivery is 720x1280 now and could go back to
+    # 1080x1920, and the captions must sit in the same place either way.
+    assert last_line < media.HEIGHT * 0.92                 # clear of the IG UI strip
 
 
 def test_retry_escalation_targets_the_actual_failure():

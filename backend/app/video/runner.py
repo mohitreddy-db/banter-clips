@@ -364,12 +364,30 @@ def generate_video(
     normalised: list[Path] = []
     captions: list[tuple[float, float, str]] = []
     clock = 0.0
+    # Give every clip an audio track first, then ask whether they already agree
+    # with one another. They almost always do — same generator, same job, same
+    # settings — and when they do the video streams can be copied straight
+    # through instead of re-encoded, which is the expensive half of assembly.
+    sources: list[tuple[object, Path]] = []
     for asset in usable:
         source = Path(asset.clip_path)
         try:
             if not media.probe(source).get("has_audio"):
                 source = media.silent_track(source, source.with_name(source.stem + "_snd.mp4"))
-            clip = media.normalise(source, source.with_name(source.stem + "_n.mp4"))
+        except media.MediaError as exc:
+            asset.note(f"silent track failed: {exc}")
+            result.warn(f"scene {asset.index}: dropped during assembly")
+            continue
+        sources.append((asset, source))
+
+    stream_copy = media.joinable([media.probe(s) for _, s in sources])
+    log.info("assembly: %s", "stream-copying clips (already uniform)"
+             if stream_copy else "re-encoding clips to a common spec")
+
+    for asset, source in sources:
+        try:
+            clip = media.normalise(source, source.with_name(source.stem + "_n.mp4"),
+                                   stream_copy=stream_copy)
         except media.MediaError as exc:
             asset.note(f"normalise failed: {exc}")
             result.warn(f"scene {asset.index}: dropped during assembly")
