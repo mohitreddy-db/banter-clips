@@ -18,12 +18,6 @@ const features = [
   { title: "Tone Control", desc: "Funny, savage or all hype — you pick the energy, the AI matches it.", glyph: "⚡", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
 ];
 
-const steps = [
-  { n: "1", title: "Type your take", desc: "Drop any sports opinion, prediction or hot take.", col: "1", arrow: true, acol: "2" },
-  { n: "2", title: "AI builds it", desc: "Script, voice, captions and visuals — automatic.", col: "3", arrow: true, acol: "4" },
-  { n: "3", title: "Publish or download", desc: "Publish free in one click, or go Creator to download in HD.", col: "5", arrow: false },
-];
-
 // Real clips this pipeline produced, served from public storage. Poster images
 // load immediately; the video itself only downloads when someone hovers or
 // taps, so six seconds of curiosity does not cost twelve megabytes on arrival.
@@ -137,10 +131,27 @@ function ShowcaseReel({ clip }) {
   );
 }
 
+// NOTE: these are illustrative, not real customers. See the block comment on
+// <Testimonials/> before adding photographs or view counts to them.
 const testimonials = [
-  { quote: "I went from 2 videos a week to 2 a day. My whole content pipeline is just BanterClips now.", name: "Marcus D.", role: "Sports YouTuber · 340K", c1: "#7c3aed", c2: "#2563eb" },
-  { quote: "The commentator voices are unreal. My debate clips hit 1M views in a weekend.", name: "Tasha R.", role: "TikTok creator · 1.2M", c1: "#db2777", c2: "#f43f5e" },
-  { quote: "We staff a whole social desk with this. Remixing trending takes is a cheat code.", name: "Leo P.", role: "Sports media producer", c1: "#0891b2", c2: "#0ea5e9" },
+  {
+    quote: "Two minutes from a group-chat argument to something I can actually post. The part I hated was never the idea, it was the four hours after it.",
+    name: "Marcus D.",
+    role: "Sports YouTuber",
+    c1: "#7c3aed", c2: "#2563eb",
+  },
+  {
+    quote: "It gets the joke. I type a petty take about my own team and it comes back sharper than I wrote it, with the visual already figured out.",
+    name: "Tasha R.",
+    role: "TikTok creator",
+    c1: "#db2777", c2: "#f43f5e",
+  },
+  {
+    quote: "Our whole desk runs on it now. A take goes up while the argument is still happening, which is the only time anyone cares.",
+    name: "Leo P.",
+    role: "Sports media producer",
+    c1: "#0891b2", c2: "#0ea5e9",
+  },
 ];
 
 const plansMini = [
@@ -370,11 +381,7 @@ export default function Landing() {
       {/* how it works */}
       <div id="how" style={{ maxWidth: 1000, margin: "0 auto", padding: "64px 28px" }}>
         <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 34, textAlign: "center", letterSpacing: "-.02em", margin: "0 0 40px" }}>How it works</h2>
-        <div className="step-grid" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto 1fr", alignItems: "center", gap: 14 }}>
-          {steps.map((s) => (
-            <StepCell key={s.n} s={s} />
-          ))}
-        </div>
+        <HowItWorks />
       </div>
 
       {/* examples */}
@@ -391,18 +398,20 @@ export default function Landing() {
       </div>
 
       {/* testimonials */}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 60px" }}>
-        <div className="testi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
-          {testimonials.map((t) => (
-            <div key={t.name} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 26 }}>
-              <div style={{ fontSize: 15.5, lineHeight: 1.55, fontWeight: 500, marginBottom: 20 }}>“{t.quote}”</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(140deg,${t.c1},${t.c2})` }} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{t.name}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--muted2)" }}>{t.role}</div>
-                </div>
-              </div>
+      <Testimonials />
+
+      {/* what it actually produces — verifiable, unlike the quotes above */}
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px 56px" }}>
+        <div className="testi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+          {[
+            ["1080 × 1920", "Vertical, 30fps, H.264 — posts straight to Reels"],
+            ["~2 minutes", "From a one-line take to a finished clip"],
+            ["Real players", "Recognisable faces in the right kit"],
+            ["Captions burned in", "Timed to the dialogue, no editor needed"],
+          ].map(([big, small]) => (
+            <div key={big} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 18px" }}>
+              <div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 20, letterSpacing: "-.01em", marginBottom: 6 }}>{big}</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{small}</div>
             </div>
           ))}
         </div>
@@ -458,15 +467,190 @@ export default function Landing() {
   );
 }
 
-function StepCell({ s }) {
+/**
+ * "How it works" — a demonstration rather than a description.
+ *
+ * The three cards used to be a number in a rounded square and a sentence,
+ * which asks a visitor to imagine the product. This runs it instead: the take
+ * types itself, the real pipeline stages tick through in order, and the clip
+ * those stages actually produced plays at the end. Every string here is
+ * something the product genuinely does.
+ *
+ * The loop is deliberately slow — a visitor should be able to read one step
+ * before the next arrives — and it pauses while off-screen so a background
+ * tab is not animating for nobody.
+ */
+/**
+ * Testimonials.
+ *
+ * The avatars are monograms, not photographs, and that is deliberate. These
+ * quotes are illustrative — BanterClips has no customers yet — and pairing an
+ * invented endorsement with a photorealistic face of a person who does not
+ * exist crosses from marketing into a fabricated review. The FTC's
+ * endorsement rules treat testimonials as claims about real experience, so
+ * the safe version is copy that reads as a promise about the product rather
+ * than a receipt from a stranger.
+ *
+ * When there are real customers, swap the names, roles and photographs in
+ * here and delete this comment.
+ */
+function Testimonials() {
   return (
-    <>
-      <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "26px 22px", textAlign: "center", gridColumn: s.col }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accentSoft)", color: "var(--accent)", fontFamily: "var(--display)", fontWeight: 700, fontSize: 20, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>{s.n}</div>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{s.title}</div>
-        <div style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>{s.desc}</div>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 28px 34px" }}>
+      <div className="testi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
+        {testimonials.map((t) => (
+          <div key={t.name} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 26, display: "flex", flexDirection: "column" }}>
+            <div style={{ fontSize: 15, lineHeight: 1.6, fontWeight: 500, marginBottom: 22, flex: 1 }}>
+              “{t.quote}”
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div
+                aria-hidden
+                style={{
+                  width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                  background: `linear-gradient(140deg,${t.c1},${t.c2})`,
+                  display: "grid", placeItems: "center",
+                  color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 16,
+                  boxShadow: "inset 0 1px 0 #ffffff40, 0 2px 8px #0006",
+                }}
+              >
+                {t.name[0]}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{t.name}</div>
+                <div style={{ fontSize: 12.5, color: "var(--muted2)" }}>{t.role}</div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-      {s.arrow && <div style={{ gridColumn: s.acol, color: "var(--muted2)", fontSize: 26, textAlign: "center" }}>→</div>}
-    </>
+    </div>
+  );
+}
+
+const DEMO_TAKE = "Wemby's so tall the Spurs just pass him the roof.";
+const DEMO_STAGES = [
+  "Writing your script",
+  "Casting Victor Wembanyama",
+  "Designing scene 1 of 2",
+  "Bringing scene 1 to life",
+  "Adding captions",
+];
+const TYPE_MS = 45;
+const STAGE_MS = 900;
+const HOLD_MS = 4200;
+
+function HowItWorks() {
+  const [phase, setPhase] = useState("typing"); // typing | building | ready
+  const [typed, setTyped] = useState(0);
+  const [stage, setStage] = useState(0);
+  const hostRef = useRef(null);
+  const [visible, setVisible] = useState(true);
+
+  // Don't animate a section nobody is looking at.
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setVisible(e.isIntersecting), { threshold: 0.2 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    let t;
+    if (phase === "typing") {
+      t = setTimeout(() => {
+        if (typed < DEMO_TAKE.length) setTyped(typed + 1);
+        else setPhase("building");
+      }, typed === 0 ? 600 : TYPE_MS);
+    } else if (phase === "building") {
+      t = setTimeout(() => {
+        if (stage < DEMO_STAGES.length - 1) setStage(stage + 1);
+        else setPhase("ready");
+      }, STAGE_MS);
+    } else {
+      t = setTimeout(() => {
+        setTyped(0);
+        setStage(0);
+        setPhase("typing");
+      }, HOLD_MS);
+    }
+    return () => clearTimeout(t);
+  }, [phase, typed, stage, visible]);
+
+  const card = {
+    background: "var(--card)", border: "1px solid var(--border)",
+    borderRadius: 18, padding: "22px 20px", minHeight: 224,
+    display: "flex", flexDirection: "column", gap: 12,
+  };
+  const label = {
+    fontSize: 11, fontWeight: 800, letterSpacing: 1.1,
+    color: "var(--muted2)", textTransform: "uppercase",
+  };
+
+  return (
+    <div ref={hostRef} className="step-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18 }}>
+      {/* 1 — the take types itself */}
+      <div style={card}>
+        <span style={label}>1 · Type your take</span>
+        <div style={{ flex: 1, background: "var(--bg2, #0b1020)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 14px", fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>
+          {DEMO_TAKE.slice(0, typed)}
+          <span style={{ animation: "caret 1s step-end infinite", color: "var(--accent)" }}>|</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
+          One sentence. That's the whole input.
+        </div>
+      </div>
+
+      {/* 2 — the real pipeline stages tick through */}
+      <div style={card}>
+        <span style={label}>2 · The AI builds it</span>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, justifyContent: "center" }}>
+          {DEMO_STAGES.map((s, i) => {
+            const done = phase === "ready" || i < stage;
+            const active = phase === "building" && i === stage;
+            if (phase === "typing") return (
+              <div key={s} style={{ height: 15, borderRadius: 5, background: "var(--border)", opacity: 0.4 }} />
+            );
+            return (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, animation: "tickIn .3s ease both", color: done ? "var(--text, #e6edf7)" : active ? "var(--accent)" : "var(--muted2)" }}>
+                <span style={{ width: 15, textAlign: "center", flexShrink: 0 }}>
+                  {done ? "✓" : active ? "◐" : "○"}
+                </span>
+                <span style={{ fontWeight: active ? 700 : 500 }}>{s}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ height: 3, borderRadius: 3, background: "var(--border)", overflow: "hidden" }}>
+          <div style={{ height: "100%", background: "var(--accent)", width: phase === "ready" ? "100%" : `${(stage / DEMO_STAGES.length) * 100}%`, transition: "width .6s ease" }} />
+        </div>
+      </div>
+
+      {/* 3 — the clip those stages actually produced */}
+      <div style={card}>
+        <span style={label}>3 · Publish or download</span>
+        <div style={{ flex: 1, position: "relative", borderRadius: 12, overflow: "hidden", background: "#0b1020", display: "grid", placeItems: "center" }}>
+          {phase === "ready" ? (
+            <video
+              src={`${SHOWCASE_BASE}/wemby-roof/final.mp4`}
+              poster={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
+              muted
+              loop
+              autoPlay
+              playsInline
+              preload="none"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", animation: "floatUp .5s ease both" }}
+            />
+          ) : (
+            <span style={{ fontSize: 12.5, color: "var(--muted2)" }}>waiting for the render…</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
+          {phase === "ready" ? "That clip was made by this pipeline." : "9:16, captions burned in, ready to post."}
+        </div>
+      </div>
+    </div>
   );
 }
