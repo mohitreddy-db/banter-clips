@@ -72,7 +72,7 @@ def enrich_member(member: CastMember, sport: str) -> bool:
         palette = " and ".join(_clean(c) for c in colors[:2] if _clean(c))
         if palette:
             member.wardrobe = (
-                f"a plain solid {palette} kit with no logos, no numbers, no lettering"
+                f"an authentic {palette} team kit with crest, name and number, crisp legible lettering"
             )
     voice = _clean(data.get("voice_style"))
     if voice:

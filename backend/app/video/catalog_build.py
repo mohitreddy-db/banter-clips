@@ -42,7 +42,7 @@ def build_character(char: catalog.Character, images) -> tuple[list[str], float]:
             name=char.name,
             look=char.look or f"a professional {char.sport} figure",
             wardrobe=char.default_wardrobe or "a plain solid team-coloured kit "
-                                              "with no logos, no numbers, no lettering",
+                                              "with crest, name and number in crisp legible lettering",
             framing=framing,
         )
         out = catalog.REFERENCES_DIR / f"{char.id}_{view}_01.jpg"

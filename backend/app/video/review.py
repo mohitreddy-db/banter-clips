@@ -7,8 +7,15 @@ Severity matters. An early binary version of this gate failed *every*
 candidate, because near-perfect hands are rare in generated images and it
 treated slightly odd fingers the same as a brand logo. Split the checks:
 
-  hard  — readable or garbled text, real logos, collages, non-photoreal
-          medium, severe anatomy. Regenerate.
+  hard  — GARBLED lettering, collages, non-photoreal medium, severe anatomy.
+          Regenerate.
+
+Note what is no longer a failure: visible text and real logos. A measured A/B
+found the model renders "SPURS 1" cleanly when asked for the real kit, and
+renders jersey-shaped gibberish when told a jersey must carry no lettering.
+Banning text caused the garbling it was meant to prevent, and rejecting every
+frame containing text threw away the good ones too. The gate now judges the
+QUALITY of lettering rather than its presence.
   soft  — hands, minor anatomy, background oddities, subject doubt. Note it
           and move on. (`subject_matches` is soft because it measured noisy:
           it rejected correct frames of the intended players.)
@@ -30,8 +37,8 @@ SYSTEM = """\
 You are a quality gate for AI-generated sports-comedy keyframes.
 Judge only what is visible. Return ONLY JSON with exactly these keys:
 
-{"readable_text": "<any readable or garbled words/letters/numbers visible, or NONE>",
- "has_text_defect": true/false,
+{"visible_text": "<every word, letter or number you can read in the image, or NONE>",
+ "has_garbled_text": true/false,
  "has_real_logo": true/false,
  "subject_matches": true/false,
  "is_single_frame": true/false,
@@ -41,9 +48,18 @@ Judge only what is visible. Return ONLY JSON with exactly these keys:
  "severe_defects": "<extra limbs, melted or duplicated faces, impossible bodies, or NONE>",
  "lower_quarter_clean": true/false}
 
-has_text_defect means lettering is visible anywhere on clothing, boards or
-signage — garbled or not. Judge hands under minor_defects unless a limb is
-duplicated or missing, which is severe.
+has_garbled_text judges the QUALITY of lettering, not its presence. Real kit
+names, squad numbers, club crests, sponsor boards and arena signage are all
+expected and wanted — they are what makes the frame look like real footage.
+
+Set has_garbled_text true ONLY when visible lettering is malformed: invented
+non-words ("RUACIS" where "SPURS" belongs), mirrored or upside-down glyphs,
+letters that dissolve into shapes, inconsistent typefaces within one word, or
+numbers that are not numbers. Correctly spelled, cleanly rendered text is a
+pass however much of it there is.
+
+Judge hands under minor_defects unless a limb is duplicated or missing, which
+is severe.
 
 is_single_frame is false if the image is a collage, split screen, grid,
 storyboard, or otherwise shows the same scene from two camera positions
@@ -104,14 +120,14 @@ def review_keyframe(path: Path, subject: str, client) -> Verdict:
         return Verdict(True, [], ["review unparseable; frame accepted"])
 
     hard, soft = [], []
-    if _truthy(data.get("has_text_defect")):
-        found = str(data.get("readable_text") or "").strip()
-        if found and found.upper() != "NONE":
-            hard.append(f"text visible: {found[:60]}")
-        else:
-            hard.append("text visible on kit or signage")
+    if _truthy(data.get("has_garbled_text")):
+        found = str(data.get("visible_text") or "").strip()
+        detail = f": {found[:60]}" if found and found.upper() != "NONE" else ""
+        hard.append(f"garbled lettering{detail}")
+    # Real crests, kit names and sponsor boards are wanted now — they are what
+    # makes a frame read as broadcast footage. Only note them.
     if _truthy(data.get("has_real_logo")):
-        hard.append("real brand or team logo visible")
+        soft.append("real logos visible (expected)")
     if data.get("subject_matches") is False:
         # Measured as noisy in both directions (it rejected correct frames of
         # Brunson and Wemby), so it warns instead of burning a retry (§8.2).

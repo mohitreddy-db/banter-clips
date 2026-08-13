@@ -12,8 +12,8 @@ hard-coded ROSTER below is the fallback when the catalog is missing or
 unreadable, so a broken data file can never take generation down.
 
 Every entry names the person (that is what holds the likeness) and pairs it
-with a no-lettering wardrobe rule (that is what keeps garbled text off the
-kit). Dropping either one degrades the frame.
+with the AUTHENTIC kit, asked for by name and number. Measured: asking for
+the real kit renders clean lettering; banning lettering renders gibberish.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import re
 from . import catalog
 from .types import CastMember
 
-_NO_TEXT = "with no lettering, no numbers and no text of any kind"
+_KIT = "with the club crest, name and number in crisp legible lettering"
 
 # Deliberately small and reviewable. Add entries only after seeing a render.
 ROSTER: dict[str, list[dict]] = {
@@ -31,11 +31,11 @@ ROSTER: dict[str, list[dict]] = {
         {"id": "wembanyama", "name": "Victor Wembanyama",
          "look": "an extremely tall and very slim 7-foot-4 French basketball player "
                  "with very long limbs and short dark hair, towering over everyone",
-         "wardrobe": f"a plain black and silver basketball uniform {_NO_TEXT}",
+         "wardrobe": f"a plain black and silver basketball uniform {_KIT}",
          "voice": "calm, French-accented, understated"},
         {"id": "brunson", "name": "Jalen Brunson",
          "look": "a short stocky 6-foot-2 point guard with a thick dark beard",
-         "wardrobe": f"a plain blue and orange basketball uniform {_NO_TEXT}",
+         "wardrobe": f"a plain blue and orange basketball uniform {_KIT}",
          "voice": "warm, confident, quick"},
         {"id": "coach", "name": "a weary head coach",
          "look": "a tired middle-aged head coach holding a clipboard",
@@ -49,7 +49,7 @@ ROSTER: dict[str, list[dict]] = {
     "Soccer": [
         {"id": "messi", "name": "Lionel Messi",
          "look": "a short left-footed forward with a short beard and dark hair",
-         "wardrobe": f"a plain blue and white striped football kit {_NO_TEXT}",
+         "wardrobe": f"a plain blue and white striped football kit {_KIT}",
          "voice": "quiet, deadpan"},
         {"id": "official", "name": "a senior football official",
          "look": "a bald football administrator in a dark suit",
@@ -63,11 +63,11 @@ ROSTER: dict[str, list[dict]] = {
     "NFL": [
         {"id": "quarterback", "name": "a veteran star quarterback",
          "look": "a tall athletic quarterback in full pads and helmet under one arm",
-         "wardrobe": f"a plain dark football uniform {_NO_TEXT}",
+         "wardrobe": f"a plain dark football uniform {_KIT}",
          "voice": "gravelly, assured"},
         {"id": "lineman", "name": "an enormous offensive lineman",
          "look": "an extremely large and wide offensive lineman",
-         "wardrobe": f"a plain football uniform {_NO_TEXT}",
+         "wardrobe": f"a plain football uniform {_KIT}",
          "voice": "booming, cheerful"},
         {"id": "coach", "name": "a weary head coach",
          "look": "a tired head coach in a team cap with a headset",
@@ -77,11 +77,11 @@ ROSTER: dict[str, list[dict]] = {
     "MLB": [
         {"id": "slugger", "name": "a star power hitter",
          "look": "a broad-shouldered baseball slugger with a thick beard",
-         "wardrobe": f"a plain pinstriped baseball uniform {_NO_TEXT}",
+         "wardrobe": f"a plain pinstriped baseball uniform {_KIT}",
          "voice": "laconic, dry"},
         {"id": "pitcher", "name": "an ace relief pitcher",
          "look": "a lean pitcher mid-windup",
-         "wardrobe": f"a plain baseball uniform {_NO_TEXT}",
+         "wardrobe": f"a plain baseball uniform {_KIT}",
          "voice": "intense, clipped"},
         {"id": "umpire", "name": "a home plate umpire",
          "look": "a stocky umpire in a chest protector and mask",
@@ -193,7 +193,7 @@ def resolve_member(name_or_id: str, sport: str, index: int = 0) -> CastMember:
         id=re.sub(r"[^a-z0-9]+", "_", wanted).strip("_")[:40] or f"cast_{index}",
         name=name_or_id.strip()[:80],
         look=f"{name_or_id.strip()[:80]}, a professional {sport} figure",
-        wardrobe=f"plain team-coloured kit {_NO_TEXT}",
+        wardrobe=f"plain team-coloured kit {_KIT}",
         voice="neutral, conversational",
     )
 

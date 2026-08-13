@@ -26,9 +26,11 @@ DEFAULT_SECONDS = 15
 # Matches the clips_take_len check constraint in the database.
 MIN_TAKE_CHARS = 10
 GENERIC_TAKE = "This team is not as good as everyone thinks."
-# Duration -> scene count. Keep clips long: fewer cuts means fewer voice and
-# ambience seams, which is the dominant quality risk in multi-clip video.
-TARGET_SCENE_SECONDS = 7.5
+# Duration -> scene count. Long shots, deliberately: the reference clip the
+# client shared runs 9 shots averaging 9.4s, and a gag needs room to land.
+# Fewer cuts also means fewer voice and ambience seams, which is the dominant
+# quality risk in multi-clip video.
+TARGET_SCENE_SECONDS = 10.0
 MIN_SCENES, MAX_SCENES = 2, 12
 
 # Only used when the sport is missing entirely — a cheap keyword vote.

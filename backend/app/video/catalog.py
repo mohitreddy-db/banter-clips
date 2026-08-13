@@ -4,8 +4,10 @@ The catalog is two JSON files plus a folder of AI-generated reference stills
 (`catalog/characters.json`, `catalog/teams.json`, `catalog/references/`).
 Design rules, from VIDEO-GENERATION-PLAN.md §5:
 
-- Team identity is colours + players + contextual venues. Never official
-  logos, crests or readable text on clothing.
+- Team identity is the AUTHENTIC kit: real colours, crest, name and number.
+  Measured — asking for the real kit renders clean lettering; banning
+  lettering renders gibberish, and the specificity is what makes a frame
+  look like real footage.
 - Reference stills are AI-generated with the SAME image model used for scene
   keyframes (see `catalog_build.py`), so a reference and a keyframe share a
   visual dialect.
@@ -29,9 +31,9 @@ log = logging.getLogger("banter.video.catalog")
 CATALOG_DIR = Path(__file__).resolve().parent / "catalog"
 REFERENCES_DIR = CATALOG_DIR / "references"
 
-# Every generated wardrobe must end with this. Image models still garble any
-# lettering they are asked for, so jerseys are solid colours only.
-NO_TEXT_RULE = "no logos, no numbers, no lettering"
+# Appended when a team has no explicit jersey_description. Asking for the real
+# kit is what produces clean lettering; asking for none produces gibberish.
+NO_TEXT_RULE = "crisp legible lettering"
 
 
 @dataclass
@@ -74,9 +76,9 @@ class Team:
         return " and ".join(self.primary_colors) or "team-coloured"
 
     def wardrobe(self) -> str:
-        """Jersey text for prompts; always carries the no-lettering rule."""
+        """Jersey text for prompts; always asks for legible lettering."""
         base = _clean(self.jersey_description) or (
-            f"a plain solid {self.palette()} jersey"
+            f"the authentic {self.name} {self.palette()} kit with crest, name and number"
         )
         if NO_TEXT_RULE.split(",")[0] not in base:
             base = f"{base}, {NO_TEXT_RULE}"
@@ -259,7 +261,7 @@ def cast_member(char: Character, team: Team | None = None) -> CastMember:
     """
     wardrobe = team.wardrobe() if team else char.default_wardrobe
     if not wardrobe:
-        wardrobe = f"a plain solid team-coloured kit, {NO_TEXT_RULE}"
+        wardrobe = f"an authentic team kit, {NO_TEXT_RULE}"
     return CastMember(
         id=char.id,
         name=char.name,

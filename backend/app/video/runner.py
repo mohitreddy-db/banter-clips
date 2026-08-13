@@ -150,7 +150,7 @@ def generate_video(
     references: dict[str, catalog.Character | None] = {}
     for member in plan.cast:
         if not member.wardrobe:
-            member.wardrobe = "plain team-coloured kit with no lettering or numbers"
+            member.wardrobe = "an authentic team kit with crest, name and number"
         char = catalog.get_character(member.id)
         references[member.id] = char
         if char is None and research.enabled():

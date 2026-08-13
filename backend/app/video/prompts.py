@@ -2,11 +2,13 @@
 
 Three rules here were learned from real renders, not from documentation:
 
-1. Name the person. Removing the name to suppress text also removes the
-   likeness — a named star renders accurately without any reference image.
-2. State the no-lettering rule positively on the wardrobe ("a plain kit with
-   no lettering"), not only as a trailing negative. Trailing negatives alone
-   produced garbled shirt text and leaked brand boards in every early render.
+1. Name the person. Removing the name to suppress the likeness also removes
+   the likeness — a named star renders accurately without a reference image.
+2. Ask for the AUTHENTIC kit, by team, with the name and number spelled out.
+   The opposite rule shipped first and was wrong: telling a model a jersey
+   must carry no lettering does not remove the lettering, it degrades it into
+   gibberish ("RUACIS" where "SPURS" belonged). A controlled A/B rendered
+   "SPURS 1" cleanly when simply asked for the real kit.
 3. Say "photograph", explicitly and every time. A scene once rendered as a
    cartoon illustration because the only mention of photorealism lived in the
    style bible, and a model-authored style line had replaced it.
@@ -43,9 +45,8 @@ PHOTOREAL = (
 
 # Appended to every image and motion prompt.
 NEGATIVES = (
-    "No readable text anywhere: no captions, subtitles, watermarks, logos, "
-    "crests, signage, scoreboards or advertising boards. No split screen, "
-    "panels or collage"
+    "No burned-in captions, subtitles or watermarks — those are added later. "
+    "No split screen, panels or collage"
 )
 
 # Framing. This replaced "keep the lower quarter of the frame visually calm",
@@ -83,19 +84,6 @@ _MEDIUM_WORDS = re.compile(
     re.IGNORECASE,
 )
 
-# Props that force an image model to render lettering. Detected so the prompt
-# can explicitly blank them; the planner is also told not to use them at all.
-TEXT_PROPS = re.compile(
-    # Capturing so findall yields the singular stem ("poll", not "polls").
-    r"\b(newspaper|magazine|tabloid|phone|smartphone|tablet|ipad|laptop|"
-    r"screen|monitor|television|tv|scoreboard|sign|signage|banner|poster|"
-    r"billboard|whiteboard|chalkboard|clipboard|book|letter|document|"
-    r"paperwork|chart|graph|poll|ballot|headline|placard|plaque|certificate|"
-    r"contract|ticket|label|jersey number|nameplate)s?\b",
-    re.IGNORECASE,
-)
-
-
 def safe_style(style: str) -> str:
     """Strip medium-changing words from a model-authored style line.
 
@@ -108,16 +96,6 @@ def safe_style(style: str) -> str:
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip(" ,.;-")
 
-
-def text_props_in(*fields: str) -> list[str]:
-    """Text-bearing props mentioned in a scene, lowercased and deduplicated."""
-    found: list[str] = []
-    for field in fields:
-        for match in TEXT_PROPS.findall(str(field or "")):
-            word = match.lower()
-            if word not in found:
-                found.append(word)
-    return found
 
 TONE_DIRECTION = {
     "Funny": "warm absurdist physical comedy; nobody is humiliated",
@@ -156,7 +134,7 @@ def cast_clause(plan: VideoPlan, scene: Scene, limit: int = 2) -> str:
         if member not in members and len(members) < limit:
             members.append(member)
     if not members:
-        return "a professional athlete in plain team-coloured kit with no lettering"
+        return "a professional athlete in an authentic team kit"
     return "; ".join(f"{m.name}, {m.look}, wearing {m.wardrobe}" for m in members if m)
 
 
@@ -187,15 +165,6 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
     ending most heavily, and the medium is the one property we can never
     afford to lose: a stylised frame poisons the clip animated from it.
     """
-    # A prop that normally carries writing gets an explicit blanking order.
-    # The planner is told to avoid these entirely; this catches the ones that
-    # slip through, which is what rejected two keyframes in a row once.
-    props = text_props_in(scene.action, scene.venue)
-    blanking = (
-        f"Any {', '.join(props)} visible must be completely blank: "
-        f"plain empty surfaces with absolutely no writing, print or symbols. "
-        if props else ""
-    )
     parts = [
         f"{PHOTOREAL}.",
         # A still is one frozen instant, so the camera never moves here.
@@ -212,8 +181,6 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
         parts.append(f"Lighting: {scene.lighting}.")
     parts.append(f"Style: {style_for(plan)}.")
     parts.append(SINGLE_FRAME + ".")
-    if blanking:
-        parts.append(blanking.strip())
     parts.append(FULL_FIGURE)
     parts.append(f"{NEGATIVES}.")
     parts.append("Remember: a real photograph of real people, never an illustration.")
@@ -229,13 +196,11 @@ _CORRECTIONS = (
      "REAL PHOTOGRAPH shot on a real camera — real skin with pores and blemishes, "
      "real woven fabric, real lens depth of field, documentary realism. "
      "Absolutely no illustration, cartoon, render or painted look."),
-    ("text visible",
-     "CRITICAL CORRECTION: the previous attempt contained visible lettering. "
-     "Every surface must be completely blank — no words, letters, numbers, "
-     "symbols or writing anywhere, on clothing, walls, props or background."),
-    ("logo",
-     "CRITICAL CORRECTION: the previous attempt showed a brand or team logo. "
-     "All clothing and surfaces must be plain unbranded solid colour."),
+    ("garbled",
+     "CRITICAL CORRECTION: lettering in the previous attempt was malformed. "
+     "Render every word correctly spelled and cleanly typeset — real kit "
+     "names, squad numbers and crests in a consistent, sharp typeface. If a "
+     "word cannot be rendered cleanly, leave that surface plain instead."),
     ("collage",
      "CRITICAL CORRECTION: the previous attempt was split into panels. Produce "
      "ONE single uninterrupted photograph from ONE camera position."),
@@ -361,10 +326,10 @@ distribution channel.
   one scene makes the image model render a split screen.
 - Everything is LIVE ACTION photographed on a real camera. Never describe
   animation, illustration, diagrams, isometric or board-game views.
-- NO text-bearing props anywhere: no newspapers, phones, tablets, screens,
-  scoreboards, signs, banners, whiteboards, documents or plaques. Image
-  models render lettering as garbled nonsense and the frame gets rejected.
-  Use wordless props: balls, boots, kit bags, confetti, food, furniture.
+- Props may carry writing — scoreboards, signs, banners, boards. When one
+  does, state EXACTLY what it should say in short block capitals, because a
+  model given specific short text renders it cleanly while a model left to
+  invent text renders gibberish. A few words at most.
 - Never present an invented score, result, injury, transfer or quote as real.
 - Mock performance, decisions and situations. Never mock a person's
   appearance, family, race or intelligence.

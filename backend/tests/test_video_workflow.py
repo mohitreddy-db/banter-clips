@@ -92,9 +92,10 @@ def test_plan_without_a_model_is_still_complete():
 
 
 def test_scene_count_follows_duration():
+    """Longer shots than before: the reference clip averages 9.4s a shot."""
     assert len(_plan(take="x" * 20, seconds=10).scenes) == 2
     assert len(_plan(take="x" * 20, seconds=15).scenes) == 2
-    assert len(_plan(take="x" * 20, seconds=30).scenes) == 4
+    assert len(_plan(take="x" * 20, seconds=30).scenes) == 3
 
 
 def test_beats_are_hook_then_escalation_then_payoff():
@@ -162,13 +163,14 @@ def test_overlong_lines_are_trimmed():
 
 # --------------------------------------------------------------------- prompts
 
-def test_prompts_name_the_subject_and_forbid_lettering():
-    """Both halves matter: the name holds the likeness, the rule kills the text."""
+def test_prompts_name_the_subject_and_ask_for_the_real_kit():
+    """The name holds the likeness; the authentic kit is what makes the frame
+    look like footage instead of a render."""
     plan = _plan(take="Wemby can't find Brunson", seconds=15)
     image = prompts.build_image_prompt(plan, plan.scenes[0])
     assert "Wembanyama" in image
-    assert "no lettering" in image
-    assert "no readable text" in image.lower() or "readable text" in image
+    assert "legible" in image
+    assert "no lettering" not in image
 
 
 def test_motion_prompt_carries_the_spoken_line():
@@ -195,12 +197,15 @@ def test_catalog_loads_characters_and_teams():
             assert pid in chars, f"{team.id} references unknown player {pid}"
 
 
-def test_every_wardrobe_forbids_lettering():
-    """The no-text rule is load-bearing; every kit string must carry it."""
+def test_every_kit_asks_for_legible_lettering():
+    """Measured: asking for the real kit renders clean text; banning text
+    renders gibberish. Every kit string must ask, not forbid."""
     for team in catalog.teams().values():
-        assert "no lettering" in team.wardrobe()
+        w = team.wardrobe()
+        assert "legible" in w, (team.id, w)
+        assert "no lettering" not in w, team.id
     for char in catalog.characters().values():
-        assert "no lettering" in (char.default_wardrobe or "no lettering")
+        assert "no lettering" not in (char.default_wardrobe or "")
 
 
 def test_catalog_reference_selection_never_fails():
@@ -233,7 +238,7 @@ def test_team_take_dresses_the_cast_in_team_colours():
     lebron = next((m for m in plan.cast if m.id == "lebron"), None)
     assert plan.focus == "team" and "lakers" in plan.team_ids
     if lebron:
-        assert "purple" in lebron.wardrobe and "no lettering" in lebron.wardrobe
+        assert "purple" in lebron.wardrobe and "legible" in lebron.wardrobe
 
 
 def test_focused_player_leads_the_roster_and_venue_is_on_brand():
@@ -354,17 +359,20 @@ def test_review_hard_fails_a_non_photoreal_frame():
 
 # ------------------------------------------------------------- text props
 
-def test_text_bearing_props_are_detected_and_blanked():
-    props = prompts.text_props_in("Ronaldo scrolls through polls on a tablet", "")
-    assert "tablet" in props and "poll" in props
+def test_props_may_carry_text_and_the_planner_states_it():
+    """Blanking props was part of the same mistake: a scoreboard with no
+    numbers is not a scoreboard, and asking for one produced gibberish."""
+    assert "Props may carry writing" in prompts.PLANNER_SYSTEM
+    assert "block capitals" in prompts.PLANNER_SYSTEM
     plan = _plan(take="Wemby can't find Brunson", seconds=15)
     plan.scenes[0].action = "he reads a newspaper on the bench"
     image = prompts.build_image_prompt(plan, plan.scenes[0])
-    assert "newspaper" in image and "completely blank" in image
+    assert "completely blank" not in image
 
 
-def test_planner_is_told_to_avoid_text_props():
-    assert "newspaper" in prompts.PLANNER_SYSTEM
+def test_planner_still_demands_live_action():
+    """The photoreal rule survives the text-ban removal — they were separate
+    defences and only the text one was wrong."""
     assert "LIVE ACTION" in prompts.PLANNER_SYSTEM
 
 
@@ -437,7 +445,7 @@ def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
 def test_retry_escalation_targets_the_actual_failure():
     base = "a prompt"
     assert "REAL PHOTOGRAPH" in prompts.escalate(base, ["not photoreal: cartoon"])
-    assert "blank" in prompts.escalate(base, ["text visible: NIKE"]).lower()
+    assert "correctly spelled" in prompts.escalate(base, ["garbled lettering: RUACIS"]).lower()
     assert "ONE single" in prompts.escalate(base, ["not a single frame: collage"])
     assert prompts.escalate(base, []) != base       # always adds something
 
