@@ -56,6 +56,13 @@ const examples = [
     c2: "#65a30d",
   },
   {
+    slug: "spurs-collapse",
+    sport: "NBA",
+    cap: "Blowing a 29-point lead takes real commitment.",
+    c1: "#111827",
+    c2: "#4b5563",
+  },
+  {
     slug: "wemby-blocks",
     sport: "NBA",
     cap: "Wemby blocks everything except the losing streak.",
