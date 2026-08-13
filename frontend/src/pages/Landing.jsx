@@ -36,18 +36,31 @@ function FeatureVisual({ f }) {
   );
 
   if (f.key === "video") {
-    // A real frame from a real clip, drifting.
+    // A 9:16 frame inside a landscape tile. It gets its OWN portrait window so
+    // the whole figure is visible — `objectFit: cover` here would show a
+    // horizontal band through the middle: no head, no feet. The same image,
+    // blurred, fills the space around it.
+    const src = `${SHOWCASE_BASE}/wemby-roof/poster.jpg`;
     return (
       <div style={frame}>
         <img
-          src={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
+          src={src}
           alt=""
           loading="lazy"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", animation: "slowZoom 9s ease-in-out infinite alternate" }}
+          aria-hidden
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "blur(18px) saturate(1.2)", transform: "scale(1.25)", opacity: 0.55 }}
         />
-        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000a0,transparent 60%)" }} />
-        <div style={{ position: "absolute", left: 10, bottom: 9, color: "#fff", fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4 }}>
-          1080 × 1920 · 9:16
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(150deg,#0006,#0009)" }} />
+        <div style={{ position: "relative", height: "82%", aspectRatio: "9 / 16", borderRadius: 7, overflow: "hidden", boxShadow: "0 6px 20px #0007, 0 0 0 1px #ffffff2e" }}>
+          <img
+            src={src}
+            alt="A frame from a clip made with BanterClips"
+            loading="lazy"
+            style={{ width: "100%", height: "100%", objectFit: "cover", animation: "slowZoom 9s ease-in-out infinite alternate" }}
+          />
+        </div>
+        <div style={{ position: "absolute", right: 9, bottom: 8, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textShadow: "0 1px 4px #000" }}>
+          1080 × 1920
         </div>
       </div>
     );
@@ -743,16 +756,20 @@ function HowItWorks() {
         <span style={label}>3 · Publish or download</span>
         <div style={{ flex: 1, position: "relative", borderRadius: 12, overflow: "hidden", background: "#0b1020", display: "grid", placeItems: "center" }}>
           {phase === "ready" ? (
-            <video
-              src={`${SHOWCASE_BASE}/wemby-roof/final.mp4`}
-              poster={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
-              muted
-              loop
-              autoPlay
-              playsInline
-              preload="none"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", animation: "floatUp .5s ease both" }}
-            />
+            // Portrait window, not full-bleed: the clip is 9:16 and this box
+            // is not, so stretching it to cover would cut off head and feet.
+            <div style={{ height: "100%", aspectRatio: "9 / 16", borderRadius: 8, overflow: "hidden", animation: "floatUp .5s ease both", boxShadow: "0 0 0 1px #ffffff24" }}>
+              <video
+                src={`${SHOWCASE_BASE}/wemby-roof/final.mp4`}
+                poster={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
+                muted
+                loop
+                autoPlay
+                playsInline
+                preload="none"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </div>
           ) : (
             <span style={{ fontSize: 12.5, color: "var(--muted2)" }}>waiting for the render…</span>
           )}

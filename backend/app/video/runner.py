@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 import shutil
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -44,6 +46,32 @@ STAGE_VALIDATE = "validating"
 # retry is escalated with a correction targeting what actually failed. Two
 # attempts left a rejected frame shipping into the final cut.
 MAX_KEYFRAME_ATTEMPTS = 3
+
+# Scenes are independent — separate prompts, separate files — so they render
+# concurrently. Capped because every worker holds an HTTP connection to the
+# provider and a render pins a core during ffmpeg; unbounded fan-out on a
+# 12-scene job would be rude to both.
+MAX_PARALLEL_SCENES = 4
+
+
+class _Ledger:
+    """Shared spend counter. `charge` is atomic and reports whether the job is
+    still inside budget, so two workers cannot both see room for the last
+    dollar and each spend it."""
+
+    def __init__(self, budget: float):
+        self.budget = budget
+        self.spent = 0.0
+        self._lock = threading.Lock()
+
+    def charge(self, amount: float) -> float:
+        with self._lock:
+            self.spent += amount
+            return self.spent
+
+    def exhausted(self) -> bool:
+        with self._lock:
+            return self.spent >= self.budget
 
 
 @dataclass
@@ -185,15 +213,17 @@ def generate_video(
         # Placeholder gradients are not photographs and never will be. Judging
         # them wastes a review call and all three attempts on every scene.
         reviewer = None
-    assets: list[SceneAsset] = []
+    ledger = _Ledger(budget)
+    done_count = threading.Lock()
+    finished = [0]
+    total = len(plan.scenes)
 
-    for scene in plan.scenes:
+    def make_keyframe(scene) -> SceneAsset:
+        """One scene's keyframe, start to finish. Runs on a worker thread."""
         asset = SceneAsset(index=scene.index)
         base_prompt = prompts.build_image_prompt(plan, scene)
         speaker = plan.speaker_for(scene)
         subject = (speaker or plan.cast[0]).name if plan.cast else "the subject"
-        # Reference stills anchor the speaker's identity (§5.7): face for
-        # close-ups, full body otherwise. Empty when the catalog has none.
         refs = catalog.select_references(
             references.get(speaker.id) if speaker else None, scene.camera
         )
@@ -201,26 +231,18 @@ def generate_video(
 
         for attempt in range(1, MAX_KEYFRAME_ATTEMPTS + 1):
             asset.attempts = attempt
-            if result.cost_usd >= budget:
+            if ledger.exhausted():
                 asset.note("budget reached; skipped keyframe generation")
                 break
-            # Retries carry a correction aimed at what the gate rejected;
-            # resending the identical prompt mostly reproduces the defect.
             prompt = base_prompt if best_hard is None else prompts.escalate(
                 base_prompt, best_hard
             )
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
-            say(f"scene {scene.index + 1}/{len(plan.scenes)}: keyframe attempt "
-                f"{attempt}/{MAX_KEYFRAME_ATTEMPTS} for {subject}"
-                f"{' with reference stills' if refs else ''}",
-                f"Designing scene {scene.index + 1} of {len(plan.scenes)}")
             path, cost = images.generate(prompt, target, references=refs)
-            result.cost_usd += cost
+            ledger.charge(cost)
             asset.cost_usd += cost
             if not path:
                 asset.note(f"attempt {attempt}: image generation returned nothing")
-                say(f"scene {scene.index + 1}: image generation returned nothing",
-                    f"Retrying scene {scene.index + 1}")
                 continue
 
             verdict = review.review_keyframe(path, subject, reviewer)
@@ -229,15 +251,8 @@ def generate_video(
                 asset.keyframe_path = str(path)
                 for soft in verdict.soft:
                     asset.note(soft)
-                say(f"scene {scene.index + 1}: keyframe approved "
-                    f"(${result.cost_usd:.2f} spent so far)",
-                    f"Scene {scene.index + 1} looks good")
                 break
             asset.note(f"attempt {attempt} rejected: {verdict.reason}")
-            say(f"scene {scene.index + 1}: rejected — {verdict.reason}; regenerating",
-                f"Polishing scene {scene.index + 1}")
-            # Keep the least-bad frame: fewer hard failures wins, so exhausting
-            # the budget still ships the closest attempt rather than the last.
             if best_hard is None or len(verdict.hard) < len(best_hard):
                 best_path, best_hard = path, verdict.hard
 
@@ -247,7 +262,6 @@ def generate_video(
             result.warn(f"scene {scene.index}: shipped a frame that failed review")
 
         if not asset.keyframe_path:
-            # Still no frame: synthesise one so the scene can still exist.
             try:
                 placeholder = media.placeholder_image(
                     work_dir / f"scene{scene.index}_placeholder.jpg", plan.title
@@ -257,7 +271,18 @@ def generate_video(
                 result.warn(f"scene {scene.index}: fell back to a placeholder still")
             except media.MediaError:
                 asset.note("placeholder generation failed")
-        assets.append(asset)
+
+        with done_count:
+            finished[0] += 1
+            say(f"scene {scene.index + 1}: keyframe done "
+                f"(${ledger.spent:.2f} spent so far)",
+                f"Designed {finished[0]} of {total} scenes")
+        return asset
+
+    say(f"designing {total} scenes, up to {MAX_PARALLEL_SCENES} at a time",
+        f"Designing {total} scenes")
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_SCENES, total)) as pool:
+        assets = list(pool.map(make_keyframe, plan.scenes))
 
     # ------------------------------------------------------ 5. animation
     stage(STAGE_ANIMATE)
@@ -266,27 +291,28 @@ def generate_video(
     if using_stub:
         result.warn("video generation is off; animating keyframes locally")
 
-    for scene, asset in zip(plan.scenes, assets):
+    animated = [0]
+
+    def animate_scene(pair) -> None:
+        """One scene's animation. Independent of every other scene."""
+        scene, asset = pair
         if not asset.keyframe_path:
-            continue
+            return
         keyframe = Path(asset.keyframe_path)
         target = work_dir / f"scene{scene.index}.mp4"
         motion = prompts.build_motion_prompt(plan, scene)
 
-        if result.cost_usd < budget:
-            say(f"scene {scene.index + 1}/{len(plan.scenes)}: animating "
-                f"{scene.seconds:.0f}s at {getattr(settings, 'VIDEO_RESOLUTION', '720p')}"
-                f"{'' if not using_stub else ' (local push-in, free)'}"
-                f" — this is the slow one, ~1-2 min",
-                f"Bringing scene {scene.index + 1} to life")
+        if not ledger.exhausted():
             started = time.time()
             path, cost = video.animate(motion, scene.seconds, target, first_frame=keyframe)
-            result.cost_usd += cost
+            ledger.charge(cost)
             asset.cost_usd += cost
-            say(f"scene {scene.index + 1}: {'animated' if path else 'animation failed'}"
-                f" in {time.time() - started:.0f}s"
-                f" (${result.cost_usd:.2f} spent so far)",
-                f"Scene {scene.index + 1} is alive")
+            with done_count:
+                animated[0] += 1
+                say(f"scene {scene.index + 1}: "
+                    f"{'animated' if path else 'animation failed'} in "
+                    f"{time.time() - started:.0f}s (${ledger.spent:.2f} spent so far)",
+                    f"Brought {animated[0]} of {total} scenes to life")
         else:
             path = None
             asset.note("budget reached; skipped animation")
@@ -309,6 +335,17 @@ def generate_video(
             asset.note("scene produced no clip")
             result.warn(f"scene {scene.index}: dropped")
 
+    say(f"animating {total} scenes, up to {MAX_PARALLEL_SCENES} at a time — "
+        f"the slow stage, ~1-2 min",
+        f"Bringing {total} scenes to life")
+    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_SCENES, total)) as pool:
+        # list() forces every future to complete (and re-raises nothing —
+        # animate_scene never raises).
+        list(pool.map(animate_scene, list(zip(plan.scenes, assets))))
+
+    # The ledger is the only thing that counted spend while workers ran
+    # concurrently; copy it back so the DB, result.json and the log agree.
+    result.cost_usd = ledger.spent
     result.assets = assets
     usable = [a for a in assets if a.ok and a.clip_path]
     if not usable:

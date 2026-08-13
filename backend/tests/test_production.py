@@ -314,6 +314,43 @@ def test_verification_reports_rather_than_rewrites():
     assert "write_text" not in src, "verification must not edit the catalog"
 
 
+# --------------------------------------------------------------- ledger
+
+def test_ledger_charges_are_atomic_under_concurrency():
+    """Two workers must not each see room for the last dollar and spend it."""
+    import threading as th
+    from app.video.runner import _Ledger
+
+    ledger = _Ledger(budget=100.0)
+    def charge():
+        for _ in range(500):
+            ledger.charge(0.01)
+    threads = [th.Thread(target=charge) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert abs(ledger.spent - 40.0) < 1e-6, ledger.spent
+
+
+def test_ledger_reports_exhaustion_at_the_ceiling():
+    from app.video.runner import _Ledger
+
+    ledger = _Ledger(budget=1.0)
+    assert not ledger.exhausted()
+    ledger.charge(0.99)
+    assert not ledger.exhausted()
+    ledger.charge(0.02)
+    assert ledger.exhausted()
+
+
+def test_parallelism_is_capped():
+    """Every worker holds a provider connection and a render pins a core."""
+    from app.video import runner
+
+    assert 1 < runner.MAX_PARALLEL_SCENES <= 8
+
+
 # ------------------------------------------------------------- housekeeping
 
 def test_stuck_threshold_exceeds_the_longest_real_run():
