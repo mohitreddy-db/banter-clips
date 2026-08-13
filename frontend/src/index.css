@@ -83,6 +83,32 @@ textarea:focus {
     transform: rotate(360deg);
   }
 }
+/* Feature tiles: each one performs the feature it describes rather than
+   showing a glyph on a gradient. */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.28); }
+  50%      { transform: scaleY(1); }
+}
+@keyframes wordPop {
+  0%, 12%  { opacity: 0; transform: translateY(7px) scale(0.9); }
+  22%, 88% { opacity: 1; transform: translateY(0) scale(1); }
+  100%     { opacity: 1; }
+}
+@keyframes sendUp {
+  0%, 18%  { transform: translateY(0); opacity: 1; }
+  55%      { transform: translateY(-46px); opacity: 0; }
+  56%, 100%{ transform: translateY(0); opacity: 0; }
+}
+@keyframes tickPop {
+  0%, 52%  { opacity: 0; transform: scale(0.5); }
+  66%, 92% { opacity: 1; transform: scale(1); }
+  100%     { opacity: 0; }
+}
+@keyframes slowZoom {
+  from { transform: scale(1); }
+  to   { transform: scale(1.12); }
+}
+
 /* "How it works": the take types itself, stages tick through, a clip appears.
    The section demonstrates the product instead of describing it. */
 @keyframes caret {

@@ -10,13 +10,126 @@ const FULL_TAKE = "Lakers won't make the playoffs.";
 
 const logos = ["HOOPSDAILY", "THE PODCAST", "GRIDIRON+", "FOOTYWORLD", "COURTSIDE"];
 
+// Each tile performs the feature it names. A glyph on a gradient tells a
+// visitor a feature exists; a caption actually popping in tells them what it
+// looks like, which is the thing they are trying to picture.
 const features = [
-  { title: "AI Video Generator", desc: "Type an opinion, get a finished 9:16 sports video in seconds.", glyph: "▶", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
-  { title: "AI Voiceovers", desc: "Expressive commentator voices tuned for hype and banter.", glyph: "◍", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
-  { title: "Animated Captions", desc: "TikTok-style word-pop captions, auto-timed to the voice.", glyph: "A", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
-  { title: "One-Click Publishing", desc: "Push straight to your socials the moment your clip is ready.", glyph: "↗", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
-  { title: "Tone Control", desc: "Funny, savage or all hype — you pick the energy, the AI matches it.", glyph: "⚡", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
+  { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — real players, real kits.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
+  { key: "voice",    title: "AI Voiceovers",       desc: "Characters speak their own lines, lip-synced, with crowd noise underneath.", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
+  { key: "captions", title: "Animated Captions",   desc: "Burned in and timed to the dialogue, so it lands with the sound off.", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
+  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram the moment it renders. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
+  { key: "tone",     title: "Tone Control",        desc: "Funny, savage, hype or bold — the tone changes the script and the lighting.", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
 ];
+
+const CAPTION_WORDS = ["Nothing", "gets", "past", "me."];
+const TONES_DEMO = ["Funny", "Savage", "Hype", "Bold"];
+
+/** The little animated demonstration inside a feature tile. */
+function FeatureVisual({ f }) {
+  const frame = {
+    height: 120, borderRadius: 12, position: "relative", overflow: "hidden",
+    marginBottom: 18, display: "grid", placeItems: "center",
+    background: `linear-gradient(150deg,${f.c1},${f.c2})`,
+  };
+  const sheen = (
+    <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 70% 20%,#ffffff26,transparent 55%)" }} />
+  );
+
+  if (f.key === "video") {
+    // A real frame from a real clip, drifting.
+    return (
+      <div style={frame}>
+        <img
+          src={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
+          alt=""
+          loading="lazy"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", animation: "slowZoom 9s ease-in-out infinite alternate" }}
+        />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000a0,transparent 60%)" }} />
+        <div style={{ position: "absolute", left: 10, bottom: 9, color: "#fff", fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4 }}>
+          1080 × 1920 · 9:16
+        </div>
+      </div>
+    );
+  }
+
+  if (f.key === "voice") {
+    return (
+      <div style={frame}>
+        {sheen}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, height: 46 }}>
+          {[0.9, 0.5, 1, 0.35, 0.75, 1, 0.45, 0.85, 0.6, 1, 0.4, 0.7].map((h, i) => (
+            <span
+              key={i}
+              style={{
+                width: 4, height: `${h * 100}%`, borderRadius: 3, background: "#fff",
+                opacity: 0.92, transformOrigin: "center",
+                animation: `wave ${0.7 + (i % 4) * 0.18}s ease-in-out ${i * 0.06}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (f.key === "captions") {
+    return (
+      <div style={frame}>
+        {sheen}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, justifyContent: "center", padding: "0 12px" }}>
+          {CAPTION_WORDS.map((w, i) => (
+            <span
+              key={w}
+              style={{
+                color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 17,
+                textShadow: "0 2px 6px #0009",
+                animation: `wordPop 3.2s ease-in-out ${i * 0.3}s infinite`,
+              }}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (f.key === "publish") {
+    return (
+      <div style={frame}>
+        {sheen}
+        <div style={{ position: "relative", width: 46, height: 66 }}>
+          <div style={{ position: "absolute", inset: 0, borderRadius: 7, background: "#ffffffe0", boxShadow: "0 6px 16px #0005", animation: "sendUp 3s ease-in-out infinite" }} />
+          <span style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", color: "#fff", fontSize: 26, animation: "tickPop 3s ease-in-out infinite" }}>
+            ✓
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // tone
+  return (
+    <div style={frame}>
+      {sheen}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", padding: "0 14px" }}>
+        {TONES_DEMO.map((t, i) => (
+          <span
+            key={t}
+            style={{
+              padding: "6px 13px", borderRadius: 999, fontSize: 12.5, fontWeight: 700,
+              color: "#fff", border: "1px solid #ffffff66", background: "#ffffff1f",
+              animation: `wordPop ${TONES_DEMO.length * 1.1}s ease-in-out ${i * 1.1}s infinite`,
+            }}
+          >
+            {t}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Real clips this pipeline produced, served from public storage. Poster images
 // load immediately; the video itself only downloads when someone hovers or
@@ -367,10 +480,7 @@ export default function Landing() {
         <div className="feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
           {features.map((f) => (
             <div key={f.title} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 18, padding: 24, gridColumn: f.span }}>
-              <div style={{ height: 120, borderRadius: 12, background: `linear-gradient(150deg,${f.c1},${f.c2})`, position: "relative", overflow: "hidden", marginBottom: 18, display: "grid", placeItems: "center" }}>
-                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 70% 20%,#ffffff26,transparent 55%)" }} />
-                <span style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 30, color: "#fff", opacity: 0.92, textShadow: "0 2px 12px #0004" }}>{f.glyph}</span>
-              </div>
+              <FeatureVisual f={f} />
               <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6 }}>{f.title}</div>
               <div style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.5 }}>{f.desc}</div>
             </div>
