@@ -40,7 +40,7 @@ function FeatureVisual({ f }) {
     // the whole figure is visible — `objectFit: cover` here would show a
     // horizontal band through the middle: no head, no feet. The same image,
     // blurred, fills the space around it.
-    const src = `${SHOWCASE_BASE}/wemby-roof/poster.jpg`;
+    const src = `${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`;
     return (
       <div style={frame}>
         <img
@@ -154,6 +154,15 @@ const SHOWCASE_BASE =
   "https://taphbakizdagamimbhjh.supabase.co/storage/v1/object/public/clips/showcase";
 
 const examples = [
+  {
+    // Leads the strip: the first clip made after kits stopped being banned,
+    // and the only one showing legible "RONALDO 7" and a readable sign.
+    slug: "ronaldo-penalties",
+    sport: "Soccer",
+    cap: "He takes penalties so the camera has somewhere to point.",
+    c1: "#facc15",
+    c2: "#1d4ed8",
+  },
   {
     slug: "wemby-hide-and-seek",
     sport: "NBA",
@@ -760,8 +769,8 @@ function HowItWorks() {
             // is not, so stretching it to cover would cut off head and feet.
             <div style={{ height: "100%", aspectRatio: "9 / 16", borderRadius: 8, overflow: "hidden", animation: "floatUp .5s ease both", boxShadow: "0 0 0 1px #ffffff24" }}>
               <video
-                src={`${SHOWCASE_BASE}/wemby-roof/final.mp4`}
-                poster={`${SHOWCASE_BASE}/wemby-roof/poster.jpg`}
+                src={`${SHOWCASE_BASE}/ronaldo-penalties/final.mp4`}
+                poster={`${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`}
                 muted
                 loop
                 autoPlay
