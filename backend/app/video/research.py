@@ -31,15 +31,23 @@ RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 RESEARCH_PROMPT = """\
 Search the web for the athlete or sports figure "{name}" ({sport}).
+
+We are going to render this person wearing their real kit, so the club, the
+squad number and the kit description have to be right — a confidently wrong
+number looks worse on screen than a vague one.
+
 Return ONLY a JSON object, no prose:
 
 {{"found": true/false,
-  "look": "one detailed sentence describing their physical appearance: build, height impression, hair, facial hair, skin tone, distinctive features",
-  "team": "their current team name, or empty string",
+  "look": "one detailed sentence on physical appearance: build, height impression, hair, facial hair, skin tone, distinctive features",
+  "team": "their current club or franchise, or empty string",
+  "number": "their current squad number as digits, or empty string",
+  "kit": "one clause describing their club's current home kit: colours, pattern, and the crest — e.g. 'pink Inter Miami home shirt with the heron crest'",
   "team_colors": ["primary", "colours"],
   "voice_style": "three or four words describing how they speak"}}
 
-If you cannot identify the person, return {{"found": false}}."""
+If you cannot identify the person, return {{"found": false}}. If you are
+unsure of the number, return an empty string rather than guessing."""
 
 
 def enabled() -> bool:
@@ -67,13 +75,20 @@ def enrich_member(member: CastMember, sport: str) -> bool:
     look = _clean(data.get("look"))
     if look:
         member.look = look
+    # Build the wardrobe from the most specific thing we got back. A named kit
+    # beats a colour palette, and a real squad number beats none — those are
+    # what the image model renders as legible lettering.
+    kit = _clean(data.get("kit"))
+    number = re.sub(r"[^0-9]", "", str(data.get("number") or ""))[:2]
     colors = data.get("team_colors")
+    palette = ""
     if isinstance(colors, list) and colors:
         palette = " and ".join(_clean(c) for c in colors[:2] if _clean(c))
-        if palette:
-            member.wardrobe = (
-                f"an authentic {palette} team kit with crest, name and number, crisp legible lettering"
-            )
+
+    base = kit or (f"an authentic {palette} team kit" if palette else "")
+    if base:
+        numbered = f", the number {number} on the front" if number else ""
+        member.wardrobe = f"{base}{numbered}, crisp legible lettering"
     voice = _clean(data.get("voice_style"))
     if voice:
         member.voice = voice

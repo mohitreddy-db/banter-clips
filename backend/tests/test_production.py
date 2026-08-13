@@ -261,6 +261,59 @@ def test_caption_length_is_capped():
                for c in cw.suggest("take", "NBA", "Funny", client=Windbag()))
 
 
+# ---------------------------------------------------------------- research
+
+def test_research_builds_a_wardrobe_from_the_most_specific_fact():
+    """We now render kit text, so a named kit beats a colour palette and a
+    real squad number beats none."""
+    from app.config import settings as st
+    from app.video import research
+    from app.video.types import CastMember
+
+    class Fake:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def post(self, *a, **k):
+            raise AssertionError("should not be called directly")
+
+    original = (st.WEB_RESEARCH, st.OPENAI_API_KEY)
+    try:
+        st.WEB_RESEARCH, st.OPENAI_API_KEY = "openai", "test-key"
+        payloads = [
+            ({"found": True, "kit": "pink Inter Miami home shirt with the heron crest",
+              "number": "10"}, "pink Inter Miami", "the number 10"),
+            ({"found": True, "team_colors": ["navy", "gold"], "number": ""},
+             "navy and gold", None),
+        ]
+        for data, expect_kit, expect_num in payloads:
+            research._search = lambda *a, _d=data, **k: _d
+            m = CastMember(id="x", name="Someone", wardrobe="old")
+            research.enrich_member(m, "Soccer")
+            assert expect_kit in m.wardrobe, m.wardrobe
+            assert "legible" in m.wardrobe
+            if expect_num:
+                assert expect_num in m.wardrobe
+    finally:
+        st.WEB_RESEARCH, st.OPENAI_API_KEY = original
+
+
+def test_research_never_guesses_a_number():
+    """A confidently wrong squad number renders cleanly and is wrong on
+    screen, which is worse than none."""
+    from app.video import research
+
+    assert "rather than guessing" in research.RESEARCH_PROMPT
+
+
+def test_verification_reports_rather_than_rewrites():
+    """Web results are data, not instructions — a person approves the change."""
+    from app.video import catalog_verify
+
+    src = Path(catalog_verify.__file__).read_text()
+    assert "write_text" not in src, "verification must not edit the catalog"
+
+
 # ------------------------------------------------------------- housekeeping
 
 def test_stuck_threshold_exceeds_the_longest_real_run():

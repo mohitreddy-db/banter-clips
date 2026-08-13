@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from . import captions, enhancer, prompts, research, review, takes
+from . import captions, catalog_verify, enhancer, prompts, research, review, takes
 
 
 @dataclass(frozen=True)
@@ -164,6 +164,20 @@ REGISTRY: tuple[PromptSpec, ...] = (
             "with WEB_RESEARCH=openai."
         ),
         text=research.RESEARCH_PROMPT,
+    ),
+    PromptSpec(
+        key="catalog_verify",
+        kind="template",
+        stage="catalog maintenance (offline, manual)",
+        model="OPENAI_RESEARCH_MODEL + web_search",
+        purpose=(
+            "Checks a catalog entry against the web: current club, squad "
+            "number, kit. Needed because wardrobes now assert specific facts "
+            "that get rendered as legible text, so a stale entry produces a "
+            "confidently wrong video rather than a vague one. Reports drift "
+            "only — never rewrites the catalog."
+        ),
+        text=catalog_verify.VERIFY_PROMPT,
     ),
     PromptSpec(
         key="style_bible",

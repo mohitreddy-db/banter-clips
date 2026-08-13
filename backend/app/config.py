@@ -87,7 +87,7 @@ class Settings(BaseSettings):
     # Optional web research for off-catalog cast members ("off" | "openai").
     # With "openai", an unknown name triggers one web-search call to write a
     # real look description before any image spend. Never fatal.
-    WEB_RESEARCH: str = "off"
+    WEB_RESEARCH: str = "openai"
     OPENAI_RESEARCH_MODEL: str = "gpt-4.1-mini"
 
     # Images and video (OpenRouter). Both default to offline stubs so the
