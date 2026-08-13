@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
@@ -97,6 +97,30 @@ export function PublishModal({ clip, onClose }) {
   const [state, setState] = useState("compose"); // compose | queued
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
+  // Written captions to pick between. Three options beat a blank box, and
+  // beat one suggestion — a list gets chosen from, a single one gets ignored.
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { captions } = await api.captionSuggestions(clip.id);
+        if (!cancelled && captions?.length) {
+          setSuggestions(captions);
+          setCaption(captions[0]); // the punchy one, already in the box
+        }
+      } catch {
+        /* suggestions are a nicety — the box still works without them */
+      } finally {
+        if (!cancelled) setLoadingSuggestions(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [clip.id]);
 
   const doConnect = async () => {
     setConnecting(true);
@@ -152,6 +176,30 @@ export function PublishModal({ clip, onClose }) {
               className="panel"
               style={{ padding: "12px 14px", fontSize: 14, color: "var(--app-text)", resize: "vertical", background: "var(--app-panel)" }}
             />
+            {(loadingSuggestions || suggestions.length > 0) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, paddingTop: 2 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8, color: "var(--app-muted2)" }}>
+                  {loadingSuggestions ? "WRITING SUGGESTIONS…" : "OR PICK ONE"}
+                </span>
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setCaption(s)}
+                    title="Use this caption"
+                    style={{
+                      textAlign: "left", padding: "9px 12px", borderRadius: 10, cursor: "pointer",
+                      fontSize: 13, lineHeight: 1.45,
+                      color: caption === s ? "var(--app-text)" : "var(--app-muted)",
+                      background: caption === s ? "rgba(34,211,238,.10)" : "transparent",
+                      border: `1px solid ${caption === s ? "var(--app-cyan)" : "var(--app-border)"}`,
+                    }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {watermarked && (
             <div style={{ fontSize: 12.5, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>

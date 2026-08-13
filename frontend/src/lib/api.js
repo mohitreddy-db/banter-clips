@@ -69,6 +69,8 @@ export const api = {
   createClip: (take, sport, tone, duration = 15) =>
     request("/clips", { method: "POST", body: { take, sport, tone, duration } }),
   getClip: (id) => request(`/clips/${id}`),
+  // Three written caption options to pick between when publishing.
+  captionSuggestions: (id) => request(`/clips/${id}/captions`),
   retryClip: (id) => request(`/clips/${id}/retry`, { method: "POST" }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),
 

@@ -171,6 +171,10 @@ class ClipOut(BaseModel):
     is_simulated: bool = False
 
 
+class CaptionSuggestions(BaseModel):
+    captions: list[str] = []
+
+
 # ---------- socials ----------
 class SocialConnectRequest(BaseModel):
     platform: Platform

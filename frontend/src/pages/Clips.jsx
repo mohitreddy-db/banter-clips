@@ -142,8 +142,18 @@ export default function Clips() {
                 </div>
               </div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-                {/* fixed two-line title box so action rows align across cards */}
-                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35, minHeight: 38, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {/* Fixed two-line title box so action rows align across cards.
+                    Clicking it opens the clip in full — the whole take, its
+                    status and its live steps — since two lines is not enough
+                    to read a 280-character take. */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  title="Open this clip"
+                  onClick={() => nav(`/studio?clip=${c.id}`)}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && nav(`/studio?clip=${c.id}`)}
+                  style={{ fontSize: 14, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.35, minHeight: 38, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", cursor: "pointer" }}
+                >
                   {c.take}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--app-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

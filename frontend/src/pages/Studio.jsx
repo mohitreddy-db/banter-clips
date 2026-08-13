@@ -377,9 +377,32 @@ export default function Studio() {
 
       {(phase === "generating" || phase === "failed") && clip && (
         <>
-          <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 20px", borderRadius: 14, marginTop: 12 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: "var(--app-text)" }}>“{clip.take}”</span>
-            <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)", flexShrink: 0 }}>{clip.sport} · {clip.tone} · Hot Take</span>
+          {/* The take in full — this is the view My Clips links to, so it
+              must not truncate the way a card does. */}
+          <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10, padding: "16px 20px", borderRadius: 14, marginTop: 12 }}>
+            <span style={{ fontSize: 15.5, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.5 }}>
+              “{clip.take}”
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", fontSize: 12.5, color: "var(--app-muted)" }}>
+              {[
+                clip.sport,
+                clip.tone,
+                `${clip.duration_target || 15}s`,
+                clip.is_simulated ? "demo run" : null,
+                clip.watermarked ? "watermarked" : null,
+              ]
+                .filter(Boolean)
+                .map((tag) => (
+                  <span key={tag} style={{ padding: "3px 9px", borderRadius: 999, border: "1px solid var(--app-border)" }}>
+                    {tag}
+                  </span>
+                ))}
+              <span style={{ marginLeft: "auto" }}>
+                {new Date(clip.created_at).toLocaleString(undefined, {
+                  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                })}
+              </span>
+            </div>
           </div>
 
           {phase === "generating" && (
@@ -483,7 +506,12 @@ export default function Studio() {
               <path d="m8 12.5 2.6 2.6L16 9.5" />
             </svg>
             <span style={{ fontSize: 15, fontWeight: 600, color: "var(--app-green)" }}>Video ready · 0:{String(Math.round(clip.duration_seconds || 14)).padStart(2, "0")}</span>
-            <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)" }}>“{clip.take}” · {clip.sport} · {clip.tone}</span>
+            <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)" }}>{clip.sport} · {clip.tone}</span>
+          </div>
+          {/* Full take, untruncated — opened from My Clips this is the only
+              place the whole thing is readable. */}
+          <div className="panel" style={{ padding: "14px 18px", borderRadius: 12, fontSize: 14.5, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.5 }}>
+            “{clip.take}”
           </div>
           <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start" }}>
             <div className="card" style={{ padding: 20, display: "grid", placeItems: "center" }}>

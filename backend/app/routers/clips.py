@@ -11,6 +11,7 @@ from ..db import get_db
 from ..deps import get_current_user, record_event, usage_for
 from ..models import Clip, Publish, SocialAccount, User
 from ..schemas import (
+    CaptionSuggestions,
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
 )
 from ..services import markers, storage
@@ -204,6 +205,27 @@ def download_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db
         if demo.exists():
             return FileResponse(demo, media_type="video/mp4", filename=filename)
     raise HTTPException(410, "This clip's file is no longer available.")
+
+
+@router.get("/{clip_id}/captions", response_model=CaptionSuggestions)
+def caption_suggestions(
+    clip_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Three caption options for this clip, to pick between when publishing.
+
+    Cheap and read-only. Always returns three, falling back to deterministic
+    options if the model is unavailable — an empty picker is worse than a
+    plain one.
+    """
+    clip = _own_clip(clip_id, user, db)
+    from ..video import captions as caption_writer, providers
+
+    options = caption_writer.suggest(
+        clip.take, clip.sport, clip.tone, client=providers.text_client()
+    )
+    return CaptionSuggestions(captions=options)
 
 
 @router.post("/{clip_id}/publish", response_model=PublishOut, status_code=201)

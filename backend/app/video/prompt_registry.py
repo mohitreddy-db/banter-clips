@@ -17,7 +17,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
-from . import enhancer, prompts, research, review
+from . import captions, enhancer, prompts, research, review
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,19 @@ REGISTRY: tuple[PromptSpec, ...] = (
             "questions the user is asked before any money is spent."
         ),
         text=enhancer.ENHANCER_SYSTEM,
+    ),
+    PromptSpec(
+        key="captions",
+        kind="system",
+        stage="publishing (on demand)",
+        model="OPENAI_PLAN_MODEL",
+        purpose=(
+            "Three Instagram caption options in different registers — punchy, "
+            "conversational, hype — with specific hashtags. Offered as a "
+            "picker at publish time: a list gets chosen from, whereas a single "
+            "suggestion gets ignored and a blank box stalls people."
+        ),
+        text=captions.CAPTION_SYSTEM,
     ),
     PromptSpec(
         key="planner",

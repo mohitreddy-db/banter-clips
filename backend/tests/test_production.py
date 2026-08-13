@@ -10,6 +10,7 @@ Runs under pytest, or standalone:
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 import tempfile
@@ -210,6 +211,54 @@ def test_sample_is_delivered_under_the_clips_own_key():
     finally:
         storage._backend = original_backend
         shutil.rmtree(root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------- captions
+
+def test_captions_always_returns_three_even_with_no_model():
+    from app.video import captions as cw
+
+    for take in ("The Lakers are frauds and everyone knows it", "", "x"):
+        options = cw.suggest(take, "NBA", "Savage", client=None)
+        assert len(options) == cw.SUGGESTION_COUNT, take
+        assert all(o.strip() for o in options)
+
+
+def test_captions_survive_a_broken_model():
+    from app.video import captions as cw
+
+    class Broken:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            raise RuntimeError("boom")
+
+    assert len(cw.suggest("The Lakers are frauds", "NBA", "Savage", client=Broken())) == 3
+
+
+def test_captions_parse_a_fenced_or_messy_response():
+    from app.video import captions as cw
+
+    class Messy:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return 'Sure! {"captions": ["one", "two", "three"]} hope that helps'
+
+    assert cw.suggest("take", "NBA", "Funny", client=Messy())[:3] == ["one", "two", "three"]
+
+
+def test_caption_length_is_capped():
+    from app.video import captions as cw
+
+    class Windbag:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"captions": ["x " * 900]})
+
+    assert all(len(c) <= cw.MAX_CAPTION_CHARS
+               for c in cw.suggest("take", "NBA", "Funny", client=Windbag()))
 
 
 # ------------------------------------------------------------- housekeeping
