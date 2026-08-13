@@ -268,8 +268,17 @@ textarea:focus {
   .testi-grid {
     grid-template-columns: 1fr !important;
   }
-  .step-grid > div {
+  /* A child still carrying `grid-column: span 2` inside a one-column grid
+     makes the grid grow an implicit second column, and the whole section
+     overflows the viewport. The Tone tile does exactly that, so .feat-grid
+     needs the same guard .step-grid already had. */
+  .step-grid > div,
+  .feat-grid > div,
+  .stat-grid > div {
     grid-column: auto !important;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
   h1.hero-h1 {
     font-size: 38px !important;

@@ -534,7 +534,10 @@ export default function Landing() {
 
       {/* what it actually produces — verifiable, unlike the quotes above */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px 56px" }}>
-        <div className="testi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
+        {/* Its own class, not testi-grid: that one is written for three
+            columns and forces one on mobile, which left these four cramped
+            between breakpoints. auto-fit reflows on its own. */}
+        <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14 }}>
           {[
             ["1080 × 1920", "Vertical, 30fps, H.264 — posts straight to Reels"],
             ["~2 minutes", "From a one-line take to a finished clip"],
