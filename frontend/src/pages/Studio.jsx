@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
+import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
@@ -428,7 +429,7 @@ export default function Studio() {
             {busy ? "Starting…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
-            Hot Take format · three cinematic scenes · 12–15s vertical MP4 · 1080 × 1920 · AI-parody labeled
+            Hot Take format · three cinematic scenes · 12–15s vertical MP4 · {VIDEO_RES} · AI-parody labeled
           </div>
 
           {/* recent clips strip */}
@@ -650,7 +651,7 @@ export default function Studio() {
               </button>
               <div className="panel" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  ["Resolution", "1080 × 1920 · 9:16"],
+                  ["Resolution", VIDEO_RES_RATIO],
                   ["Duration", `${clip.duration_seconds || 14}s`],
                   ["Format", "MP4 · H.264/AAC"],
                   ["Watermark", clip.watermarked ? "BanterClips (Free plan)" : "None (Creator)"],

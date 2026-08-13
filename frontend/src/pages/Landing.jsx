@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 
 /* Faithful port of the client's landing page (slim MVP prototype).
    Layout, copy, colors and animations preserved; only the pricing
@@ -59,7 +60,7 @@ function FeatureVisual({ f }) {
         {/* Keeps the white badge legible over floodlights and pale kits. */}
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000a6,transparent 42%)" }} />
         <div style={{ position: "absolute", right: 10, bottom: 9, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textShadow: "0 1px 4px #000" }}>
-          1080 × 1920 · 9:16
+          {VIDEO_RES_RATIO}
         </div>
       </div>
     );
@@ -538,7 +539,7 @@ export default function Landing() {
             between breakpoints. auto-fit reflows on its own. */}
         <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14 }}>
           {[
-            ["1080 × 1920", "Vertical, 30fps, H.264 — posts straight to Reels"],
+            [VIDEO_RES, "Vertical, H.264 — posts straight to Reels"],
             ["~2 minutes", "From a one-line take to a finished clip"],
             ["Real players", "Recognisable faces in the right kit"],
             ["Captions burned in", "Timed to the dialogue, no editor needed"],
