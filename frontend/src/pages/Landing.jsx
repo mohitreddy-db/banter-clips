@@ -35,6 +35,13 @@ const SHOWCASE_BASE =
 
 const examples = [
   {
+    slug: "wemby-hide-and-seek",
+    sport: "NBA",
+    cap: "Seven foot four and Wemby still couldn't find Brunson.",
+    c1: "#0f172a",
+    c2: "#334155",
+  },
+  {
     slug: "wemby-roof",
     sport: "NBA",
     cap: "Wemby's so tall the Spurs just pass him the roof.",
