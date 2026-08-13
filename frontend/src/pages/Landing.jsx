@@ -714,10 +714,21 @@ function HowItWorks() {
     return () => clearTimeout(t);
   }, [phase, typed, stage, visible]);
 
+  // Every phase must occupy the SAME box. The media area used to be flex:1
+  // with a `height:100%` + `aspectRatio:9/16` child; a percentage height
+  // against a content-sized parent is indefinite, so the aspect ratio drove
+  // height from WIDTH instead — a 260px card grew a 460px video, the grid
+  // stretched all three cards to match, and the section visibly jumped the
+  // moment the clip appeared. A fixed stage height removes the feedback loop.
+  const STAGE_H = 208;
   const card = {
     background: "var(--card)", border: "1px solid var(--border)",
-    borderRadius: 18, padding: "22px 20px", minHeight: 224,
+    borderRadius: 18, padding: "22px 20px",
     display: "flex", flexDirection: "column", gap: 12,
+  };
+  const stageBox = {
+    height: STAGE_H, flex: "0 0 auto", position: "relative",
+    borderRadius: 12, overflow: "hidden",
   };
   const label = {
     fontSize: 11, fontWeight: 800, letterSpacing: 1.1,
@@ -729,7 +740,7 @@ function HowItWorks() {
       {/* 1 — the take types itself */}
       <div style={card}>
         <span style={label}>1 · Type your take</span>
-        <div style={{ flex: 1, background: "var(--bg2, #0b1020)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 14px", fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>
+        <div style={{ ...stageBox, background: "var(--bg2, #0b1020)", border: "1px solid var(--border)", padding: "14px 14px", fontSize: 15, lineHeight: 1.5, fontWeight: 600 }}>
           {DEMO_TAKE.slice(0, typed)}
           <span style={{ animation: "caret 1s step-end infinite", color: "var(--accent)" }}>|</span>
         </div>
@@ -741,7 +752,7 @@ function HowItWorks() {
       {/* 2 — the real pipeline stages tick through */}
       <div style={card}>
         <span style={label}>2 · The AI builds it</span>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, justifyContent: "center" }}>
+        <div style={{ ...stageBox, display: "flex", flexDirection: "column", gap: 9, justifyContent: "center" }}>
           {DEMO_STAGES.map((s, i) => {
             const done = phase === "ready" || i < stage;
             const active = phase === "building" && i === stage;
@@ -766,7 +777,7 @@ function HowItWorks() {
       {/* 3 — the clip those stages actually produced */}
       <div style={card}>
         <span style={label}>3 · Publish or download</span>
-        <div style={{ flex: 1, position: "relative", borderRadius: 12, overflow: "hidden", background: "#0b1020", display: "grid", placeItems: "center" }}>
+        <div style={{ ...stageBox, background: "#0b1020", display: "grid", placeItems: "center" }}>
           {phase === "ready" ? (
             // Portrait window, not full-bleed: the clip is 9:16 and this box
             // is not, so stretching it to cover would cut off head and feet.
