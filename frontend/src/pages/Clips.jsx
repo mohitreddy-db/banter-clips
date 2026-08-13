@@ -101,6 +101,10 @@ export default function Clips() {
                 {c.status === "ready" && c.video_url ? (
                   <video
                     src={c.video_url}
+                    // A real frame instead of a black box before play, and it
+                    // means the card shows the clip without downloading 12 MB.
+                    poster={c.poster_url || undefined}
+                    preload="none"
                     controls
                     playsInline
                     controlsList="nodownload noremoteplayback"

@@ -442,8 +442,24 @@ export default function Studio() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 12 }}>
                 {clips.slice(0, 4).map((c) => (
-                  <div key={c.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, cursor: "pointer" }} onClick={() => nav("/clips")}>
-                    <div style={{ width: 34, height: 58, borderRadius: 7, background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)", flexShrink: 0 }} />
+                  <div key={c.id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, cursor: "pointer" }} onClick={() => nav(`/studio?clip=${c.id}`)}>
+                    {/* A real frame from the clip. The gradient stays as the
+                        fallback for clips made before posters were stored. */}
+                    <div
+                      style={{
+                        width: 34, height: 58, borderRadius: 7, flexShrink: 0, overflow: "hidden",
+                        background: c.thumb_gradient || "linear-gradient(160deg,#22d3ee,#3d2c8d)",
+                      }}
+                    >
+                      {c.poster_url && (
+                        <img
+                          src={c.poster_url}
+                          alt=""
+                          loading="lazy"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                        />
+                      )}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.take}</div>
                       <div style={{ fontSize: 10.5, color: c.status === "failed" ? "var(--app-error)" : "var(--app-muted)", marginTop: 3 }}>

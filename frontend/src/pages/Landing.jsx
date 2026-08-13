@@ -24,14 +24,104 @@ const steps = [
   { n: "3", title: "Publish or download", desc: "Publish free in one click, or go Creator to download in HD.", col: "5", arrow: false },
 ];
 
+// Real clips this pipeline produced, served from public storage. Poster images
+// load immediately; the video itself only downloads when someone hovers or
+// taps, so six seconds of curiosity does not cost twelve megabytes on arrival.
+//
+// To add one: upload final.mp4 and poster.jpg under showcase/<slug>/ in the
+// clips bucket, then add a row here with the take it was generated from.
+const SHOWCASE_BASE =
+  "https://taphbakizdagamimbhjh.supabase.co/storage/v1/object/public/clips/showcase";
+
 const examples = [
-  { sport: "NBA", cap: "🔥 LeBron IS the GOAT · Side A", c1: "#2563eb", c2: "#0ea5e9" },
-  { sport: "NBA", cap: "🔥 Jordan 6-0, case closed · Side B", c1: "#dc2626", c2: "#ea580c" },
-  { sport: "NBA", cap: "LeBron's still top 5, period.", c1: "#7c3aed", c2: "#db2777" },
-  { sport: "NFL", cap: "Chiefs are the team of the decade.", c1: "#059669", c2: "#0891b2" },
-  { sport: "Soccer", cap: "Messi ended the GOAT debate.", c1: "#16a34a", c2: "#65a30d" },
-  { sport: "F1", cap: "Verstappen is unbeatable in 2026.", c1: "#dc2626", c2: "#ea580c" },
+  {
+    slug: "wemby-roof",
+    sport: "NBA",
+    cap: "Wemby's so tall the Spurs just pass him the roof.",
+    c1: "#2563eb",
+    c2: "#0ea5e9",
+  },
+  {
+    slug: "goat-debate",
+    sport: "Soccer",
+    cap: "Messi and Ronaldo argued so long they forgot to retire.",
+    c1: "#16a34a",
+    c2: "#65a30d",
+  },
+  {
+    slug: "wemby-blocks",
+    sport: "NBA",
+    cap: "Wemby blocks everything except the losing streak.",
+    c1: "#7c3aed",
+    c2: "#db2777",
+  },
 ];
+
+/**
+ * One real clip in the showcase strip.
+ *
+ * Shows the poster until someone shows interest, then loads and plays the
+ * video muted and looping. `preload="none"` is what keeps the landing page
+ * light: three autoplaying reels would be ~35 MB before a visitor has read
+ * the headline.
+ */
+function ShowcaseReel({ clip }) {
+  const ref = useRef(null);
+  const [playing, setPlaying] = useState(false);
+
+  const start = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.play().then(() => setPlaying(true)).catch(() => {});
+  };
+  const stop = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.pause();
+    el.currentTime = 0;
+    setPlaying(false);
+  };
+
+  return (
+    <div
+      onMouseEnter={start}
+      onMouseLeave={stop}
+      onClick={() => (playing ? stop() : start())}
+      style={{
+        flex: "0 0 172px", scrollSnapAlign: "start", position: "relative",
+        borderRadius: 16, overflow: "hidden", aspectRatio: "9/16",
+        background: `linear-gradient(160deg,${clip.c1},${clip.c2})`, cursor: "pointer",
+      }}
+    >
+      <video
+        ref={ref}
+        src={`${SHOWCASE_BASE}/${clip.slug}/final.mp4`}
+        poster={`${SHOWCASE_BASE}/${clip.slug}/poster.jpg`}
+        muted
+        loop
+        playsInline
+        preload="none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+      />
+      <div style={{ position: "absolute", top: 10, left: 10, background: "#00000055", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "3px 7px", borderRadius: 6 }}>
+        {clip.sport}
+      </div>
+      {!playing && (
+        <>
+          {/* Caption and play affordance hide during playback so the clip
+              itself is unobstructed. */}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000b0 0%,transparent 55%)" }} />
+          <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 42, height: 42, borderRadius: "50%", background: "#00000066", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", color: "#fff", fontSize: 15, paddingLeft: 3 }}>
+            ▶
+          </div>
+          <div style={{ position: "absolute", left: 10, right: 10, bottom: 12, color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 14, lineHeight: 1.28, textShadow: "0 2px 10px #0008" }}>
+            {clip.cap}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 const testimonials = [
   { quote: "I went from 2 videos a week to 2 a day. My whole content pipeline is just BanterClips now.", name: "Marcus D.", role: "Sports YouTuber · 340K", c1: "#7c3aed", c2: "#2563eb" },
@@ -280,15 +370,8 @@ export default function Landing() {
           <span onClick={go("/signin")} style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", cursor: "pointer" }}>Start creating →</span>
         </div>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory", boxSizing: "border-box" }}>
-          {examples.map((c, i) => (
-            <div key={i} style={{ flex: "0 0 172px", scrollSnapAlign: "start", position: "relative", borderRadius: 16, overflow: "hidden", aspectRatio: "9/16", background: `linear-gradient(160deg,${c.c1},${c.c2})`, cursor: "pointer" }}>
-              <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 30% 15%,#ffffff26,transparent 55%)" }} />
-              <div style={{ position: "absolute", top: 10, left: 10, background: "#00000055", backdropFilter: "blur(4px)", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "3px 7px", borderRadius: 6 }}>{c.sport}</div>
-              <div style={{ position: "absolute", left: 10, right: 10, bottom: 34, color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 15, lineHeight: 1.25, textShadow: "0 2px 10px #0006" }}>{c.cap}</div>
-              <div style={{ position: "absolute", left: 10, right: 10, bottom: 14, height: 3, background: "#ffffff33", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: "32%", background: "#fff" }} />
-              </div>
-            </div>
+          {examples.map((c) => (
+            <ShowcaseReel key={c.slug} clip={c} />
           ))}
         </div>
       </div>

@@ -169,6 +169,9 @@ class ClipOut(BaseModel):
     # the row, so it is correct whichever worker serves the poll.
     current_step: str | None = None
     is_simulated: bool = False
+    # A real frame from the clip, for thumbnails. None for clips made before
+    # posters were stored, so the client keeps its gradient fallback.
+    poster_url: str | None = None
 
 
 class CaptionSuggestions(BaseModel):

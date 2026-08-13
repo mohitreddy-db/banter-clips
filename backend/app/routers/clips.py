@@ -39,6 +39,11 @@ def _serialize(clip: Clip) -> ClipOut:
     for pub_out, pub in zip(out.publishes, clip.publishes):
         pub_out.platform = pub.account.platform if pub.account else None
         pub_out.handle = pub.account.handle if pub.account else None
+    if clip.poster_key:
+        try:
+            out.poster_url = storage.get().url(clip.poster_key)
+        except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
+            log.warning("could not build a poster URL for clip %s", clip.id)
     return out
 
 
