@@ -217,16 +217,13 @@ def publish_clip(
     if clip.status != "ready":
         raise HTTPException(409, "Only completed clips can be published.")
     if clip.is_simulated:
-        # A demo clip holds the sample video, not this user's take. Publishing
-        # it would put the wrong content on a real account under their name.
-        raise HTTPException(
-            409,
-            detail={
-                "code": "simulated_clip",
-                "message": "This was a demo run, so there's no real video to publish. "
-                           "Generate it for real first.",
-            },
-        )
+        # Demo clips publish like any other. They hold a real, watchable video
+        # stored at their own key — it just was not generated from this take,
+        # so the caption and the footage can disagree. Allowed deliberately:
+        # publishing is the last step of the flow and demoing it end to end is
+        # worth more than protecting against a mismatch the user chose by
+        # typing [mock]. Recorded so it is visible in analytics.
+        log.info("publishing simulated clip %s for user %s", clip.id, user.id)
 
     account = db.get(SocialAccount, body.social_account_id)
     if account is None or account.user_id != user.id or account.status != "connected":
@@ -236,7 +233,8 @@ def publish_clip(
     pub = Publish(clip_id=clip.id, social_account_id=account.id, caption=body.caption)
     db.add(pub)
     db.commit()
-    record_event(db, "publish_started", user, clip_id=str(clip.id), platform=account.platform)
+    record_event(db, "publish_started", user, clip_id=str(clip.id),
+                 platform=account.platform, simulated=clip.is_simulated)
     start_publish(pub.id)
 
     out = PublishOut.model_validate(pub)
