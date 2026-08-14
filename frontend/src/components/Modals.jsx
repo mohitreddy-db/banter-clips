@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
@@ -101,26 +101,38 @@ export function PublishModal({ clip, onClose }) {
   // beat one suggestion — a list gets chosen from, a single one gets ignored.
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(true);
+  // Everything shown so far — sent back on regenerate so new options are new.
+  const seenRef = useRef([]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const fetchSuggestions = useCallback(
+    async (regenerate = false) => {
+      setLoadingSuggestions(true);
       try {
-        const { captions } = await api.captionSuggestions(clip.id);
-        if (!cancelled && captions?.length) {
+        const { captions } = await api.captionSuggestions(
+          clip.id, regenerate ? seenRef.current : []
+        );
+        if (captions?.length) {
+          seenRef.current = [...seenRef.current, ...captions];
           setSuggestions(captions);
-          setCaption(captions[0]); // the punchy one, already in the box
+          setCaption((current) =>
+            // Follow along unless the user typed their own caption.
+            !regenerate || seenRef.current.includes(current) || current === ""
+              ? captions[0]
+              : current
+          );
         }
       } catch {
         /* suggestions are a nicety — the box still works without them */
       } finally {
-        if (!cancelled) setLoadingSuggestions(false);
+        setLoadingSuggestions(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [clip.id]);
+    },
+    [clip.id]
+  );
+
+  useEffect(() => {
+    fetchSuggestions(false);
+  }, [fetchSuggestions]);
 
   const doConnect = async () => {
     setConnecting(true);
@@ -178,9 +190,21 @@ export function PublishModal({ clip, onClose }) {
             />
             {(loadingSuggestions || suggestions.length > 0) && (
               <div style={{ display: "flex", flexDirection: "column", gap: 7, paddingTop: 2 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8, color: "var(--app-muted2)" }}>
-                  {loadingSuggestions ? "WRITING SUGGESTIONS…" : "OR PICK ONE"}
-                </span>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.8, color: "var(--app-muted2)" }}>
+                    {loadingSuggestions ? "WRITING SUGGESTIONS…" : "OR PICK ONE"}
+                  </span>
+                  {!loadingSuggestions && suggestions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => fetchSuggestions(true)}
+                      title="Write three new caption suggestions"
+                      style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--app-cyan)", fontSize: 12, fontWeight: 600, padding: 0, display: "inline-flex", alignItems: "center", gap: 5 }}
+                    >
+                      ↻ New suggestions
+                    </button>
+                  )}
+                </div>
                 {suggestions.map((s, i) => (
                   <button
                     key={i}

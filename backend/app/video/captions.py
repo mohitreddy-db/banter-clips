@@ -44,19 +44,29 @@ Return ONLY JSON:
 {"captions": ["...", "...", "..."]}"""
 
 
-def suggest(take: str, sport: str, tone: str, client=None) -> list[str]:
-    """Three caption options. Never raises, never returns an empty list."""
+def suggest(take: str, sport: str, tone: str, client=None, avoid: list[str] | None = None) -> list[str]:
+    """Three caption options. Never raises, never returns an empty list.
+
+    `avoid` lists captions the user has already seen (a regenerate click);
+    they are excluded from the prompt and filtered from the result."""
     take = _clean(take)
+    avoid = [a for a in (avoid or []) if a]
     options: list[str] = []
 
     if client is not None and getattr(client, "available", False) and take:
         try:
             user = f"Sport: {sport}\nTone: {tone}\nThe take in the video: {take}"
+            if avoid:
+                seen = "\n".join(f"- {a[:MAX_CAPTION_CHARS]}" for a in avoid)
+                user += (
+                    "\nThe user rejected these captions — write three NEW ones "
+                    f"with clearly different angles and wording:\n{seen}"
+                )
             options = _parse(client.complete_json(CAPTION_SYSTEM, user))
         except Exception:  # noqa: BLE001 — suggestions are never load-bearing
             log.exception("caption suggestion failed; using fallbacks")
 
-    options = [c for c in (_clean(o)[:MAX_CAPTION_CHARS] for o in options) if c]
+    options = [c for c in (_clean(o)[:MAX_CAPTION_CHARS] for o in options) if c and c not in avoid]
     for fallback in _fallbacks(take, sport):
         if len(options) >= SUGGESTION_COUNT:
             break

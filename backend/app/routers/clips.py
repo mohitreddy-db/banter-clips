@@ -242,6 +242,7 @@ def download_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db
 @router.get("/{clip_id}/captions", response_model=CaptionSuggestions)
 def caption_suggestions(
     clip_id: uuid.UUID,
+    avoid: str = "",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -249,13 +250,16 @@ def caption_suggestions(
 
     Cheap and read-only. Always returns three, falling back to deterministic
     options if the model is unavailable — an empty picker is worse than a
-    plain one.
+    plain one. `avoid` carries the captions already shown (newline-separated)
+    so a "regenerate" click produces genuinely new ones, not a reshuffle.
     """
     clip = _own_clip(clip_id, user, db)
     from ..video import captions as caption_writer, providers
 
     options = caption_writer.suggest(
-        clip.take, clip.sport, clip.tone, client=providers.text_client()
+        clip.take, clip.sport, clip.tone,
+        client=providers.text_client(),
+        avoid=[a.strip() for a in avoid.split("\n") if a.strip()][:9],
     )
     return CaptionSuggestions(captions=options)
 
