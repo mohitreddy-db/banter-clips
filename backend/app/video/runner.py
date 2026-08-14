@@ -504,10 +504,16 @@ def _provenance(result: Result) -> dict:
 
 def _store_artifacts(clip, work: Path, result: Result) -> dict:
     """Upload what is worth keeping. Never raises — a storage failure must not
-    turn a finished video into a failed job."""
+    turn a finished video into a failed job.
+
+    If the video upload itself fails even after storage-level retries, the
+    finished MP4 is copied into MEDIA_DIR and served from this host instead:
+    the user must always end up with a playable video (a `ready` clip with no
+    URL renders as a phantom failure in the UI — observed 2026-08-14)."""
     from ..services import storage
 
     out: dict = {}
+    store = None
     try:
         store = storage.get()
         prefix = storage.clip_prefix(clip.user_id, clip.id)
@@ -530,6 +536,18 @@ def _store_artifacts(clip, work: Path, result: Result) -> dict:
                 )
     except Exception:  # noqa: BLE001 — the video is already made
         log.exception("storing artifacts failed for clip %s", clip.id)
+
+    if not out.get("video_url") and result.video_path and Path(result.video_path).exists():
+        try:
+            local = Path(settings.MEDIA_DIR) / f"{clip.id}.mp4"
+            shutil.copyfile(result.video_path, local)
+            out["video_url"] = f"{settings.API_BASE_URL}/media/{clip.id}.mp4"
+            log.error(
+                "clip %s: object storage unavailable — serving video from this "
+                "host (%s); re-upload it once storage recovers", clip.id, local
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("local fallback failed for clip %s — clip will have no video URL", clip.id)
     return out
 
 

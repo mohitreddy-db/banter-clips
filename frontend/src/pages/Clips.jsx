@@ -131,6 +131,13 @@ export default function Clips() {
                         <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 8 }}>{c.current_step || STATUS_LABEL[c.status] || "Working…"}</div>
                         <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.75 }}>Tap to watch progress →</div>
                       </div>
+                    ) : c.status === "ready" ? (
+                      // Finished but the video URL hasn't landed yet (storage
+                      // hiccup) — this is not a failure, don't call it one.
+                      <div style={{ textAlign: "center", color: "#fff", padding: "0 14px" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>🎬 Video is being prepared</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.8 }}>Check back in a minute</div>
+                      </div>
                     ) : (
                       <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
                     )}

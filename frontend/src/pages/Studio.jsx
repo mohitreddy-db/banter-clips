@@ -616,16 +616,28 @@ export default function Studio() {
           <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start" }}>
             <div className="card" style={{ padding: 20, display: "grid", placeItems: "center" }}>
               <div style={{ position: "relative", width: "100%", aspectRatio: "9/16", borderRadius: 16, overflow: "hidden", background: "#000" }}>
-                <video
-                  src={clip.video_url}
-                  controls
-                  playsInline
-                  controlsList="nodownload noremoteplayback"
-                  disablePictureInPicture
-                  onContextMenu={(e) => e.preventDefault()}
-                  onPlay={() => api.track("preview_played")}
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                />
+                {clip.video_url ? (
+                  <video
+                    src={clip.video_url}
+                    controls
+                    playsInline
+                    controlsList="nodownload noremoteplayback"
+                    disablePictureInPicture
+                    onContextMenu={(e) => e.preventDefault()}
+                    onPlay={() => api.track("preview_played")}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  // Ready but the URL hasn't landed (storage hiccup): honest
+                  // waiting state instead of a dead black player.
+                  <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", color: "var(--app-muted)", padding: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 28, marginBottom: 10 }}>🎬</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Your video is being prepared</div>
+                      <div style={{ fontSize: 12, marginTop: 6 }}>It's finished rendering — check back in a minute.</div>
+                    </div>
+                  </div>
+                )}
                 {clip.watermarked && (
                   <div style={{ position: "absolute", right: 10, bottom: 44, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 6, pointerEvents: "none" }}>
                     ▶ BanterClips

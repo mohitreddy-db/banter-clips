@@ -196,23 +196,47 @@ class SupabaseStorage(Storage):
     def _object_url(self, key: str) -> str:
         return f"{self.base}/storage/v1/object/{self.bucket}/{key}"
 
+    # The droplet→Supabase path stalls mid-upload every so often (observed
+    # 2026-08-14: WriteTimeout / server disconnect on ~10MB bodies that
+    # succeed instantly on retry). Uploads are upserts, so retrying is safe.
+    PUT_ATTEMPTS = 3
+
     def put(self, key: str, source: Path | bytes, content_type: str = "") -> StoredObject:
         payload = source if isinstance(source, (bytes, bytearray)) else Path(source).read_bytes()
         ctype = content_type or mimetypes.guess_type(key)[0] or "application/octet-stream"
-        with httpx.Client(timeout=self.timeout) as client:
-            resp = client.post(
-                self._object_url(key),
-                content=payload,
-                headers={
-                    **self._headers,
-                    "content-type": ctype,
-                    "x-upsert": "true",
-                    "cache-control": f"max-age={PUBLIC_CACHE_SECONDS}",
-                },
-            )
-        if resp.status_code >= 400:
-            raise RuntimeError(f"upload failed {resp.status_code}: {resp.text[:200]}")
-        return StoredObject(key=key, url=self.url(key), bytes=len(payload))
+        # Generous write budget for video bodies; the scalar timeout stays as
+        # the connect/read/pool budget.
+        timeout = httpx.Timeout(self.timeout, write=max(self.timeout, 300.0))
+        last_exc: Exception | None = None
+        for attempt in range(1, self.PUT_ATTEMPTS + 1):
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    resp = client.post(
+                        self._object_url(key),
+                        content=payload,
+                        headers={
+                            **self._headers,
+                            "content-type": ctype,
+                            "x-upsert": "true",
+                            "cache-control": f"max-age={PUBLIC_CACHE_SECONDS}",
+                        },
+                    )
+            except httpx.TransportError as exc:
+                last_exc = exc
+                log.warning("upload attempt %d/%d for %s failed: %s",
+                            attempt, self.PUT_ATTEMPTS, key, type(exc).__name__)
+                if attempt < self.PUT_ATTEMPTS:
+                    time.sleep(2 * attempt)
+                continue
+            if resp.status_code >= 500 and attempt < self.PUT_ATTEMPTS:
+                log.warning("upload attempt %d/%d for %s got HTTP %d",
+                            attempt, self.PUT_ATTEMPTS, key, resp.status_code)
+                time.sleep(2 * attempt)
+                continue
+            if resp.status_code >= 400:
+                raise RuntimeError(f"upload failed {resp.status_code}: {resp.text[:200]}")
+            return StoredObject(key=key, url=self.url(key), bytes=len(payload))
+        raise RuntimeError(f"upload failed after {self.PUT_ATTEMPTS} attempts: {last_exc}")
 
     def url(self, key: str) -> str:
         # Public read on an unguessable key: Instagram's fetcher cannot sign.
