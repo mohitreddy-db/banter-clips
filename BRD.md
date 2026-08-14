@@ -64,14 +64,16 @@ Each requirement is satisfied when every bullet under it is true.
 - The script never reverses the user's stated opinion.
 
 **BR-05 — Voice**
-- One licensed, generic commentator voice; no imitation of real people.
+- Characters deliver their own lines, lip-synced, in a voice style fitting
+  the character.
 - Speech is clear and synchronized with the captions.
 
 **BR-06 — Video output**
 - 9:16 vertical MP4, 1080×1920, matching the chosen length (10/15/30s),
   with burned-in animated captions.
-- One curated cinematic style; fictional or licensed characters only — no
-  real-person likenesses, team logos, or match footage.
+- One curated cinematic style featuring real players and authentic kits as
+  AI-generated parody; no real match footage or broadcast material is ever
+  used.
 - Every video carries an AI/parody disclosure on every plan.
 - (How the video is produced is defined in the companion technical spec,
   not in this document.)
