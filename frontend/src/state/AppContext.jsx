@@ -108,7 +108,13 @@ export function AppProvider({ children }) {
   const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/signin` },
+      options: {
+        redirectTo: `${window.location.origin}/signin`,
+        // Always show Google's account chooser. Without this, Google silently
+        // reuses the last account — signing into the wrong account with no
+        // way to pick another until you sign out of Google itself.
+        queryParams: { prompt: "select_account" },
+      },
     });
     if (error) throw new Error(error.message);
   }, []);
