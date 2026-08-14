@@ -267,7 +267,10 @@ export default function SignIn() {
             )}
 
             <div style={{ fontSize: 12, color: "var(--app-muted)", textAlign: "center", lineHeight: 1.5 }}>
-              By continuing you agree to the beta Terms and AI-content policy.
+              By continuing you agree to our{" "}
+              <a href="/terms" target="_blank" rel="noreferrer" style={{ color: "var(--app-cyan)", textDecoration: "none" }}>Terms</a>
+              {" "}and{" "}
+              <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: "var(--app-cyan)", textDecoration: "none" }}>Privacy Policy</a>.
             </div>
           </>
         )}

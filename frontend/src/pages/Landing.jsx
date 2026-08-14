@@ -595,7 +595,11 @@ export default function Landing() {
             <Logo size={22} />
             <span style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 15, color: "var(--text)" }}>BanterClips</span>
           </div>
-          <div>© 2026 BanterClips · Every sports opinion deserves a viral video. · All videos are AI-generated parody.</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <span>© 2026 BanterClips · Every sports opinion deserves a viral video. · All videos are AI-generated parody.</span>
+            <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Privacy</a>
+            <a href="/terms" style={{ color: "var(--muted)", textDecoration: "none" }}>Terms</a>
+          </div>
         </div>
       </div>
     </div>

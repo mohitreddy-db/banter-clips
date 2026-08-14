@@ -8,6 +8,7 @@ import Studio from "./pages/Studio.jsx";
 import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
+import { Privacy, Terms } from "./pages/Legal.jsx";
 
 export default function App() {
   return (
@@ -15,6 +16,8 @@ export default function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/signin" element={<SignIn />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route path="/onboarding" element={<Onboarding />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
