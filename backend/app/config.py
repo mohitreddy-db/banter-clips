@@ -55,11 +55,14 @@ class Settings(BaseSettings):
     SCRATCH_RETENTION_DAYS: int = 7
 
     # ── Video generation ────────────────────────────────────────────────
-    # "dummy" keeps the pre-rendered demo clip (instant, free). "mock" walks
-    # the real step sequence at real pacing without generating anything —
-    # for reviewing the flow. "real" runs the pipeline in app/video and
-    # spends money. Flip back to "dummy" to roll back instantly.
-    PIPELINE_MODE: str = "dummy"
+    # "real" runs the pipeline in app/video — with the default stub
+    # providers this is still free and offline (placeholder stills, Ken
+    # Burns); it only spends money once IMAGE/VIDEO_PROVIDER=openrouter.
+    # "mock" walks the real step sequence at real pacing without generating;
+    # "dummy" attaches the pre-rendered demo clip instantly. The mock flow
+    # also always runs for a take containing [mock], whatever this is set to
+    # — that marker is the one intended way to demo without generating.
+    PIPELINE_MODE: str = "real"
 
     # How generation is dispatched. "thread" runs it inside the API process —
     # simple, and fine for development. "postgres" writes a job row that a
@@ -112,9 +115,12 @@ class Settings(BaseSettings):
     # real athletes' likenesses — see the note in VIDEO-GENERATION-PLAN.md.
     VIDEO_DISCLOSURE: str = ""
 
-    # Hard ceiling per job. Cost scales with duration, so a runaway plan is
-    # expensive; the pipeline degrades to stills rather than exceeding this.
-    MAX_JOB_COST_USD: float = 8.0
+    # Hard ceiling per job. Cost scales with duration AND resolution, so a
+    # runaway plan is expensive; the pipeline degrades to stills rather than
+    # exceeding this. Sized for the dearest legitimate job — 30s at 1080p
+    # (~2x the measured $0.147/s at 720p) — so the cap only catches runaways,
+    # never a job a Creator was allowed to ask for.
+    MAX_JOB_COST_USD: float = 14.0
     # Ceiling across ALL jobs in a rolling 24 hours. The per-job limit stops
     # one runaway clip; this stops a normal day from emptying the account,
     # which at ~$2.40 a clip takes very few users. Past it, generation is

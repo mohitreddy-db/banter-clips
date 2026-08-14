@@ -30,6 +30,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "cost_usd", "numeric(7,3)"),
     ("clips", "provenance", "jsonb"),
     ("clips", "is_simulated", "boolean NOT NULL DEFAULT false"),
+    ("clips", "resolution", "text NOT NULL DEFAULT '720p'"),
 )
 
 

@@ -19,7 +19,7 @@ const PLATFORMS = [
 ];
 
 const FREE_FEATURES = ["5 videos a month", "One-click publish to Instagram", "Funny · Savage · Hype tones", "Watermark on every clip"];
-const CREATOR_FEATURES = ["30 videos a month", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
+const CREATOR_FEATURES = ["30 videos a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none" };

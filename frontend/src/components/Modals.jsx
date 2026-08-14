@@ -52,7 +52,7 @@ export function UpgradeModal({ onClose, reason }) {
             On the Free plan you publish with the BanterClips watermark — every post promotes you <i>and</i> us. Creator unlocks the full kit:
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {["Download in HD — no watermark", "Publish without the watermark", "30 videos a month (vs 5)", "Priority render queue"].map((f) => (
+            {["Download in HD — no watermark", "Publish without the watermark", "Full HD 1080p quality", "30 videos a month (vs 5)", "Priority render queue"].map((f) => (
               <div key={f} style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--app-text)", fontWeight: 500 }}>
                 <span style={{ color: "var(--app-green)", fontWeight: 700 }}>✓</span> {f}
               </div>

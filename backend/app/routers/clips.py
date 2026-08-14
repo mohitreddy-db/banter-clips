@@ -138,6 +138,16 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
             },
         )
 
+    # Full HD is a Creator feature (Free renders at 720p).
+    if body.resolution == "1080p" and user.plan != "creator":
+        raise HTTPException(
+            403,
+            detail={
+                "code": "upgrade_required",
+                "message": "1080p video is a Creator feature — Free renders at 720p.",
+            },
+        )
+
     clip = Clip(
         user_id=user.id,
         # Markers are stripped so they can never surface in the video, the
@@ -147,6 +157,7 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
         sport=body.sport,
         tone=body.tone,
         duration_target=body.duration,
+        resolution=body.resolution,
         # Watermark policy frozen per-clip from the plan at creation time.
         watermarked=user.plan != "creator",
     )

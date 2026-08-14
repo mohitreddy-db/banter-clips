@@ -65,6 +65,7 @@ erDiagram
         text status "queued .. ready | failed"
         int stage_index "0-6 while generating"
         int duration_target "10/15/30s; >15 Creator-only"
+        text resolution "720p | 1080p; 1080p Creator-only"
         text error
         numeric duration_seconds
         text video_url

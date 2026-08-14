@@ -8,11 +8,13 @@ const FREE = [
   [true, "One-click publish to Instagram"],
   [true, "Funny · Savage · Hype tones"],
   [true, "Free retries — failures never count"],
+  [false, "720p HD only"],
   [false, "Publishes with BanterClips watermark"],
   [false, "No downloads"],
 ];
 const CREATOR = [
   [true, "30 successful videos / month"],
+  [true, "Full HD 1080p quality"],
   [true, "Download in HD — no watermark"],
   [true, "Publish without the watermark"],
   [true, "Priority render queue"],

@@ -17,6 +17,15 @@ export const VIDEO_RES = `${VIDEO_WIDTH} × ${VIDEO_HEIGHT}`;
 /** e.g. "720 × 1280 · 9:16" */
 export const VIDEO_RES_RATIO = `${VIDEO_RES} · 9:16`;
 
+/** Per-clip label now that resolution is a user choice: "1080p" → "1080 ×
+ * 1920 · 9:16". Clips from before the choice existed fall back to the
+ * constant above. Height mirrors the backend's even-floored 16:9 maths. */
+export const resolutionLabel = (resolution) => {
+  const w = parseInt(resolution, 10);
+  if (!w) return VIDEO_RES_RATIO;
+  return `${w} × ${Math.floor((w * 16) / 9 / 2) * 2} · 9:16`;
+};
+
 // Deliberately no frame rate here. Clips are copied through at whatever the
 // generator produced (24fps today) and only re-encoded to a fixed rate on the
 // fallback path, so any single number we printed would be wrong half the time.

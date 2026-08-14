@@ -78,6 +78,7 @@ class ClipCreate(BaseModel):
     sport: Sport
     tone: Tone
     duration: Literal[10, 15, 30] = 15
+    resolution: Literal["720p", "1080p"] = "720p"
 
 
 # ---------- prompt enhancement ----------
@@ -158,6 +159,7 @@ class ClipOut(BaseModel):
     stage_index: int
     error: str | None
     duration_target: int = 15
+    resolution: str = "720p"
     duration_seconds: float | None
     video_url: str | None
     thumb_gradient: str | None

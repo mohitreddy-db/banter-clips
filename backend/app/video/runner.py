@@ -85,6 +85,7 @@ class Result:
     video_path: Path | None = None
     poster_path: Path | None = None
     duration: float = 0.0
+    resolution: str = ""
     cost_usd: float = 0.0
     plan: VideoPlan | None = None
     assets: list[SceneAsset] = field(default_factory=list)
@@ -108,14 +109,21 @@ def generate_video(
     on_stage=None,
     on_progress=None,
     brief: "enhancer.Brief | None" = None,
+    resolution: str | None = None,
 ) -> Result:
     """Run the whole pipeline. Never raises.
 
     `brief` is an already-enhanced brief (see `enhancer.enhance`), carrying a
     sharpened take, a fixed style preset and any choices the user made. Passing
     one skips re-enhancement; omitting it runs the raw inputs as before.
+
+    `resolution` is the clip's requested output ("720p"/"1080p"); omitted, the
+    VIDEO_RESOLUTION setting applies as before.
     """
     result = Result()
+    resolution = resolution or getattr(settings, "VIDEO_RESOLUTION", "720p")
+    result.resolution = resolution
+    size = media.dims(resolution)
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     budget = float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
@@ -269,7 +277,8 @@ def generate_video(
         if not asset.keyframe_path:
             try:
                 placeholder = media.placeholder_image(
-                    work_dir / f"scene{scene.index}_placeholder.jpg", plan.title
+                    work_dir / f"scene{scene.index}_placeholder.jpg", plan.title,
+                    size=size,
                 )
                 asset.keyframe_path = str(placeholder)
                 asset.note("used placeholder still")
@@ -291,7 +300,7 @@ def generate_video(
 
     # ------------------------------------------------------ 5. animation
     stage(STAGE_ANIMATE)
-    video = providers.video_provider()
+    video = providers.video_provider(resolution)
     using_stub = isinstance(video, providers.StubVideoProvider)
     if using_stub:
         result.warn("video generation is off; animating keyframes locally")
@@ -327,7 +336,7 @@ def generate_video(
         if not path and not using_stub:
             # Documented fallback: a still with a slow push-in beats no scene.
             try:
-                path = media.ken_burns(keyframe, scene.seconds, target)
+                path = media.ken_burns(keyframe, scene.seconds, target, size=size)
                 asset.note("animation failed; used Ken Burns fallback")
                 result.warn(f"scene {scene.index}: animation fell back to a still")
             except media.MediaError:
@@ -387,7 +396,7 @@ def generate_video(
     for asset, source in sources:
         try:
             clip = media.normalise(source, source.with_name(source.stem + "_n.mp4"),
-                                   stream_copy=stream_copy)
+                                   stream_copy=stream_copy, size=size)
         except media.MediaError as exc:
             asset.note(f"normalise failed: {exc}")
             result.warn(f"scene {asset.index}: dropped during assembly")
@@ -434,8 +443,9 @@ def generate_video(
     if result.duration <= 0:
         result.error = "final file has no duration"
         return result
-    if (info.get("width"), info.get("height")) != (media.WIDTH, media.HEIGHT):
-        result.warn(f"unexpected dimensions {info.get('width')}x{info.get('height')}")
+    if (info.get("width"), info.get("height")) != size:
+        result.warn(f"unexpected dimensions {info.get('width')}x{info.get('height')} "
+                    f"(wanted {size[0]}x{size[1]} for {resolution})")
     if not info.get("has_audio"):
         result.warn("final file has no audio track")
 
@@ -486,7 +496,7 @@ def _provenance(result: Result) -> dict:
             "review": getattr(settings, "OPENAI_REVIEW_MODEL", ""),
             "image": getattr(settings, "IMAGE_MODEL", ""),
             "video": getattr(settings, "VIDEO_MODEL", ""),
-            "resolution": getattr(settings, "VIDEO_RESOLUTION", ""),
+            "resolution": result.resolution or getattr(settings, "VIDEO_RESOLUTION", ""),
         },
         "scenes": [
             {
@@ -587,6 +597,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             watermark="BanterClips" if clip.watermarked else None,
             on_stage=on_stage,
             on_progress=on_progress,
+            resolution=getattr(clip, "resolution", None),
         )
 
         clip.cost_usd = round(result.cost_usd, 3)

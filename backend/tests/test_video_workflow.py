@@ -435,13 +435,22 @@ def test_prompts_stay_inside_the_useful_length_band():
 
 
 def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
-    last_line = media.CAPTION_BASE_Y + media.CAPTION_MAX_LINES * int(
-        media.CAPTION_FONT_SIZE * 1.3
-    )
-    assert media.CAPTION_BASE_Y > media.HEIGHT * 0.78      # clear of standing legs
-    # Fractions, not pixels: delivery is 720x1280 now and could go back to
-    # 1080x1920, and the captions must sit in the same place either way.
-    assert last_line < media.HEIGHT * 0.92                 # clear of the IG UI strip
+    # Fractions, not pixels: resolution is a per-clip choice now (720p free,
+    # 1080p Creator), and the captions must sit in the same place either way.
+    for resolution in ("720p", "1080p"):
+        size = media.dims(resolution)
+        font_size, base_y = media._caption_geometry(size)
+        last_line = base_y + media.CAPTION_MAX_LINES * int(font_size * 1.3)
+        assert base_y > size[1] * 0.78, resolution      # clear of standing legs
+        assert last_line < size[1] * 0.92, resolution   # clear of the IG UI strip
+
+
+def test_dims_resolves_per_clip_resolutions():
+    assert media.dims("720p") == (720, 1280)
+    assert media.dims("1080p") == (1080, 1920)
+    # Unknown or absent falls back to the deployment default, never crashes.
+    assert media.dims(None) == (media.WIDTH, media.HEIGHT)
+    assert media.dims("cinema") == (media.WIDTH, media.HEIGHT)
 
 
 def test_retry_escalation_targets_the_actual_failure():

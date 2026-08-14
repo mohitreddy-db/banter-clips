@@ -28,9 +28,24 @@ WIDTH = int(os.environ.get("VIDEO_WIDTH", "720"))
 HEIGHT = WIDTH * 16 // 9
 FPS = 30
 
-# Text sizes and insets were designed against a 1080-wide frame; keeping them
-# as fractions means captions land in the same place at any delivery width.
-_S = WIDTH / 1080.0
+# Text sizes and insets are designed against a 1080-wide frame and scaled as
+# fractions per call, so captions land in the same place at any delivery width.
+
+
+def dims(resolution: str | None) -> tuple[int, int]:
+    """Frame size for a per-clip resolution ("720p"/"1080p").
+
+    Resolution became a per-clip choice (Creator picks 1080p), so the module
+    constants above are only the default; anything unrecognised falls back to
+    them. Height is forced even — x264 rejects odd dimensions.
+    """
+    try:
+        width = int(str(resolution or "").lower().removesuffix("p"))
+    except ValueError:
+        return WIDTH, HEIGHT
+    if width < 240 or width > 2160:
+        return WIDTH, HEIGHT
+    return width, (width * 16 // 9) // 2 * 2
 
 # x264 preset for every encode. "medium" at 1080x1920 saturates a single core
 # for minutes — measured on the droplet as load 12 and an API that stopped
@@ -104,20 +119,22 @@ def _ratio(value: str | None) -> float:
         return 0.0
 
 
-def ken_burns(image: str | Path, seconds: float, out: str | Path) -> Path:
+def ken_burns(image: str | Path, seconds: float, out: str | Path,
+              size: tuple[int, int] | None = None) -> Path:
     """Animate a still with a slow push-in, plus a silent audio track.
 
     This is the documented fallback when a scene cannot be animated — and it
     is also what the pipeline uses while video generation is switched off, so
     a job always yields something watchable.
     """
+    width, height = size or (WIDTH, HEIGHT)
     seconds = max(1.0, float(seconds))
     frames = int(seconds * FPS)
     # zoompan works on an upscaled source to avoid visible stepping.
     vf = (
-        f"scale={WIDTH * 2}:{HEIGHT * 2}:force_original_aspect_ratio=increase,"
-        f"crop={WIDTH * 2}:{HEIGHT * 2},"
-        f"zoompan=z='min(zoom+0.0009,1.12)':d={frames}:s={WIDTH}x{HEIGHT}:fps={FPS},"
+        f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
+        f"crop={width * 2}:{height * 2},"
+        f"zoompan=z='min(zoom+0.0009,1.12)':d={frames}:s={width}x{height}:fps={FPS},"
         f"setsar=1,format=yuv420p"
     )
     _run([
@@ -158,7 +175,7 @@ def joinable(infos: list[dict]) -> bool:
 
 
 def normalise(clip: str | Path, out: str | Path, trim: tuple[float, float] | None = None,
-              stream_copy: bool = False) -> Path:
+              stream_copy: bool = False, size: tuple[int, int] | None = None) -> Path:
     """Common resolution, fps and loudness so clips can be joined seamlessly.
 
     With `stream_copy` the caller has already established (via `joinable`) that
@@ -182,13 +199,14 @@ def normalise(clip: str | Path, out: str | Path, trim: tuple[float, float] | Non
         except MediaError as exc:
             log.warning("stream-copy normalise failed (%s); re-encoding", exc)
 
+    width, height = size or (WIDTH, HEIGHT)
     args = ["ffmpeg", "-v", "error", "-y"]
     if trim:
         args += ["-ss", f"{trim[0]:.2f}", "-to", f"{trim[1]:.2f}"]
     args += [
         "-i", str(clip),
-        "-vf", (f"scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase:flags=lanczos,"
-                f"crop={WIDTH}:{HEIGHT},fps={FPS},setsar=1"),
+        "-vf", (f"scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+                f"crop={width}:{height},fps={FPS},setsar=1"),
         "-af", LOUDNESS,
         "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2", str(out),
@@ -221,14 +239,19 @@ def concat(clips: list[Path], out: str | Path, work: Path) -> Path:
     return Path(out)
 
 
-CAPTION_FONT_SIZE = round(46 * _S)
 CAPTION_WRAP_CHARS = 24
 CAPTION_MAX_LINES = 2
-# Low in the frame, over the ground plane rather than over people's knees, and
-# still clear of the Instagram UI chrome along the bottom (~13% of the frame).
-# The old value (73% down) sat right where a standing figure's legs are and
-# left a fifth of the frame unused beneath it.
-CAPTION_BASE_Y = HEIGHT - round(360 * _S)
+
+
+def _caption_geometry(size: tuple[int, int]) -> tuple[int, int]:
+    """(font size, base y) for a frame. The base line sits low in the frame,
+    over the ground plane rather than over people's knees, and still clear of
+    the Instagram UI chrome along the bottom (~13% of the frame). The old
+    fixed value (73% down) sat right where a standing figure's legs are and
+    left a fifth of the frame unused beneath it."""
+    width, height = size
+    s = width / 1080.0
+    return round(46 * s), height - round(360 * s)
 
 
 def _text_source(text: str, scratch: Path, name: str) -> str:
@@ -249,6 +272,7 @@ def _text_source(text: str, scratch: Path, name: str) -> str:
 
 def caption_filters(
     captions: list[tuple[float, float, str]], font: str, scratch: Path | None = None,
+    size: tuple[int, int] | None = None,
 ) -> list[str]:
     """drawtext filters for timed captions.
 
@@ -256,17 +280,20 @@ def caption_filters(
     and every line becomes its own drawtext — newlines inside one drawtext
     render literally as "n" (measured), so multi-line means multi-filter.
     """
+    width, height = size or (WIDTH, HEIGHT)
+    font_size, base_y = _caption_geometry((width, height))
+    s = width / 1080.0
     scratch = Path(scratch) if scratch else Path(tempfile.mkdtemp(prefix="banter_text_"))
     scratch.mkdir(parents=True, exist_ok=True)
     filters = []
     for index, (start, end, text) in enumerate(captions):
         lines = _wrap(text, CAPTION_WRAP_CHARS)[:CAPTION_MAX_LINES]
         for row, line in enumerate(lines):
-            y = CAPTION_BASE_Y + row * int(CAPTION_FONT_SIZE * 1.3)
+            y = base_y + row * int(font_size * 1.3)
             source = _text_source(line, scratch, f"cap{index}_{row}")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white"
-                f":fontsize={CAPTION_FONT_SIZE}:borderw={max(2, round(4 * _S))}"
+                f":fontsize={font_size}:borderw={max(2, round(4 * s))}"
                 f":bordercolor=black@0.85"
                 f":x=(w-text_w)/2:y={y}"
                 f":enable='between(t,{start:.2f},{end:.2f})'"
@@ -295,26 +322,33 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
     All product copy is deterministic ffmpeg text — the generator never draws
     words (rule §9.6). Falls back to a plain re-encode when no usable font
     exists, so a missing font degrades the frame rather than failing the job.
+
+    Text geometry follows the *input video's* actual frame, probed here —
+    resolution is a per-clip choice now, so a fixed scale factor would draw
+    720p-sized text on a 1080p frame.
     """
+    info = probe(video)
+    size = (info.get("width") or WIDTH, info.get("height") or HEIGHT)
+    s = size[0] / 1080.0
     font = font_path()
     filters = []
     scratch = Path(tempfile.mkdtemp(prefix="banter_text_"))
     if font:
         if captions:
-            filters.extend(caption_filters(captions, font, scratch))
+            filters.extend(caption_filters(captions, font, scratch, size=size))
         if disclosure:
             source = _text_source(disclosure, scratch, "disclosure")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white@0.82"
-                f":fontsize={round(32 * _S)}:borderw={max(2, round(3 * _S))}"
-                f":bordercolor=black@0.75:x=(w-text_w)/2:y={round(95 * _S)}"
+                f":fontsize={round(32 * s)}:borderw={max(2, round(3 * s))}"
+                f":bordercolor=black@0.75:x=(w-text_w)/2:y={round(95 * s)}"
             )
         if watermark:
             source = _text_source(watermark, scratch, "watermark")
             filters.append(
                 f"drawtext=fontfile={font}:{source}:fontcolor=white@0.88"
-                f":fontsize={round(38 * _S)}:borderw={max(2, round(3 * _S))}"
-                f":bordercolor=black@0.75:x=w-text_w-{round(48 * _S)}:y=h-{round(160 * _S)}"
+                f":fontsize={round(38 * s)}:borderw={max(2, round(3 * s))}"
+                f":bordercolor=black@0.75:x=w-text_w-{round(48 * s)}:y=h-{round(160 * s)}"
             )
     else:
         log.warning("no usable font found; skipping burn-in")
@@ -342,15 +376,18 @@ def poster(video: str | Path, out: str | Path, at: float = 0.5) -> Path | None:
         return None
 
 
-def placeholder_image(out: str | Path, text: str = "") -> Path:
-    """A plain gradient still, used when even image generation is unavailable."""
+def placeholder_image(out: str | Path, text: str = "",
+                      size: tuple[int, int] | None = None) -> Path:
+    """A gradient still, used when even image generation is unavailable."""
+    width, height = size or (WIDTH, HEIGHT)
+    s = width / 1080.0
     font = font_path()
     vf = "format=yuv420p"
     if font and text:
         vf = (f"drawtext=fontfile={font}:text='{_esc(text[:40])}':fontcolor=white@0.9"
-              f":fontsize={round(64 * _S)}:x=(w-text_w)/2:y=(h-text_h)/2,{vf}")
+              f":fontsize={round(64 * s)}:x=(w-text_w)/2:y=(h-text_h)/2,{vf}")
     _run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
-          "-i", f"gradients=s={WIDTH}x{HEIGHT}:c0=0x3d2c8d:c1=0x7b2ff7:duration=1",
+          "-i", f"gradients=s={width}x{height}:c0=0x3d2c8d:c1=0x7b2ff7:duration=1",
           "-vf", vf, "-frames:v", "1", str(out)], "placeholder_image")
     return Path(out)
 

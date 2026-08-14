@@ -289,13 +289,15 @@ def image_provider():
     return StubImageProvider()
 
 
-def video_provider():
+def video_provider(resolution: str | None = None):
+    """`resolution` is the per-clip choice (720p free, 1080p Creator);
+    VIDEO_RESOLUTION remains the default for callers that don't pass one."""
     mode = getattr(settings, "VIDEO_PROVIDER", "stub")
     key = getattr(settings, "OPENROUTER_API_KEY", "")
     if mode == "openrouter" and key:
         return VideoProvider(
             key,
             getattr(settings, "VIDEO_MODEL", ""),
-            getattr(settings, "VIDEO_RESOLUTION", "720p"),
+            resolution or getattr(settings, "VIDEO_RESOLUTION", "720p"),
         )
     return StubVideoProvider()

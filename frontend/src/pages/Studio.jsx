@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
-import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
+import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
@@ -15,6 +15,11 @@ const TONES = [
 // Free tops out at 15s; longer runs are a Creator feature (server-enforced too).
 const DURATIONS = [10, 15, 30];
 const FREE_MAX_DURATION = 15;
+// Free renders at 720p; 1080p is a Creator feature (server-enforced too).
+const RESOLUTIONS = [
+  { key: "720p", sub: "HD" },
+  { key: "1080p", sub: "Full HD" },
+];
 const STAGE_LABELS = {
   queued: "Queued",
   planning_story: "Planning story",
@@ -26,13 +31,6 @@ const STAGE_LABELS = {
   validating: "Validating",
 };
 const STAGES = Object.values(STAGE_LABELS).slice(1); // the 7 real stages
-
-const EXAMPLES_BY_SPORT = {
-  NBA: ["Messi is still the GOAT.", "Lakers won't make the playoffs.", "Knicks are contenders."],
-  NFL: ["Chiefs dynasty is over.", "Defense wins championships — still.", "Your QB is a system QB."],
-  Soccer: ["Messi is still the GOAT.", "VAR ruined the derby.", "The Prem is overrated."],
-  MLB: ["Yankees are cooked this season.", "Small ball is dead.", "The shift ban changed nothing."],
-};
 
 /** One selectable wording — the user's own, or a suggested variation. */
 function TakeOption({ selected, onClick, label, text, hint, badge }) {
@@ -90,6 +88,7 @@ export default function Studio() {
   const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
   const [tone, setTone] = useState("Funny");
   const [duration, setDuration] = useState(15);
+  const [resolution, setResolution] = useState("720p");
   const [clip, setClip] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
@@ -117,7 +116,10 @@ export default function Studio() {
         setClip(c);
         if (c.status === "ready") setPhase("result");
         else if (c.status === "failed") setPhase("failed");
-        else watchClip(c.id);
+        // Elapsed counts from when the job actually started, not from when
+        // this page happened to open — reopening a running clip mid-render
+        // used to restart the clock at 0:00.
+        else watchClip(c.id, new Date(c.created_at).getTime());
       } catch {
         setError("That clip could not be opened.");
       }
@@ -132,11 +134,15 @@ export default function Studio() {
   const valid = take.trim().length >= 10 && take.length <= 280;
 
   const watchClip = useCallback(
-    (id) => {
+    (id, startedAtMs) => {
       setPhase("generating");
-      setElapsed(0);
+      // Wall-clock arithmetic rather than a +1 counter: it survives the page
+      // being reopened mid-render and background-tab interval throttling.
+      const startedAt = startedAtMs || Date.now();
+      const sync = () => setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      sync();
       clearInterval(tickRef.current);
-      tickRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+      tickRef.current = setInterval(sync, 1000);
       clearInterval(pollRef.current);
       pollRef.current = setInterval(async () => {
         try {
@@ -191,10 +197,10 @@ export default function Studio() {
     setError("");
     setBusy(true);
     try {
-      const c = await api.createClip(activeTake, sport, tone, duration);
+      const c = await api.createClip(activeTake, sport, tone, duration, resolution);
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
-      watchClip(c.id);
+      watchClip(c.id, new Date(c.created_at).getTime());
     } catch (e) {
       if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
@@ -207,7 +213,9 @@ export default function Studio() {
     try {
       const c = await api.retryClip(clip.id);
       setClip(c);
-      watchClip(c.id);
+      // A retry starts now; created_at is the original creation, so counting
+      // from it would open the timer minutes or days in.
+      watchClip(c.id, Date.now());
     } catch (e) {
       setError(e.message);
     }
@@ -236,7 +244,6 @@ export default function Studio() {
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const stageIdx = clip ? clip.stage_index : 0;
   const latestStep = clip?.current_step || null;
-  const examples = EXAMPLES_BY_SPORT[sport] || EXAMPLES_BY_SPORT.NBA;
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", display: "flex", flexDirection: "column", gap: 22 }}>
@@ -328,16 +335,6 @@ export default function Studio() {
             )}
           </div>
 
-          {/* examples */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Try:</span>
-            {examples.map((ex) => (
-              <button key={ex} className="chip" style={{ fontSize: 13 }} onClick={() => setTake(ex)}>
-                {ex}
-              </button>
-            ))}
-          </div>
-
           {/* sport */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>SPORT</span>
@@ -404,6 +401,33 @@ export default function Studio() {
             </div>
           </div>
 
+          {/* quality — 720p for everyone, 1080p on Creator */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>QUALITY</span>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {RESOLUTIONS.map((r) => {
+                const locked = r.key === "1080p" && plan !== "creator";
+                const on = resolution === r.key;
+                return (
+                  <button
+                    key={r.key}
+                    className={`chip${on ? " on" : ""}`}
+                    style={locked ? { color: "var(--app-muted2)", borderStyle: "dashed", display: "inline-flex", alignItems: "center", gap: 6 } : undefined}
+                    title={locked ? "1080p video is a Creator feature — Free renders at 720p" : `${r.sub} · ${resolutionLabel(r.key)}`}
+                    onClick={() => (locked ? setUpgradeOpen(true) : setResolution(r.key))}
+                  >
+                    {r.key} · {r.sub}
+                    {locked && (
+                      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                        CREATOR
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* credits bar */}
           <div className="panel" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 14 }}>
             <span style={{ color: "var(--app-cyan)" }}>⚡</span>
@@ -429,7 +453,7 @@ export default function Studio() {
             {busy ? "Starting…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
-            Hot Take format · three cinematic scenes · 12–15s vertical MP4 · {VIDEO_RES} · AI-parody labeled
+            Hot Take format · cinematic scenes · {duration}s vertical MP4 · {resolution} · AI-parody labeled
           </div>
 
           {/* recent clips strip */}
@@ -488,6 +512,7 @@ export default function Studio() {
                 clip.sport,
                 clip.tone,
                 `${clip.duration_target || 15}s`,
+                clip.resolution || null,
                 clip.is_simulated ? "demo run" : null,
                 clip.watermarked ? "watermarked" : null,
               ]
@@ -663,7 +688,7 @@ export default function Studio() {
               </button>
               <div className="panel" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  ["Resolution", VIDEO_RES_RATIO],
+                  ["Resolution", resolutionLabel(clip.resolution)],
                   ["Duration", `${clip.duration_seconds || 14}s`],
                   ["Format", "MP4 · H.264/AAC"],
                   ["Watermark", clip.watermarked ? "BanterClips (Free plan)" : "None (Creator)"],

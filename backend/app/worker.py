@@ -133,6 +133,12 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # Additive column migrations, same as the API's startup. The worker can
+    # win the race after a deploy and select model columns the API has not
+    # added yet; applying here (idempotent, never raises) closes that window.
+    from . import db_migrate
+
+    db_migrate.apply()
     worker = Worker()
     worker.install_signals()
     worker.loop(once=args.once)

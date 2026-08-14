@@ -70,8 +70,8 @@ export const api = {
   // only widens the search so repeat presses give new ideas.
   enhanceTakeVariations: (take, sport, tone, round = 0) =>
     request("/clips/enhance-take", { method: "POST", body: { take, sport, tone, round } }),
-  createClip: (take, sport, tone, duration = 15) =>
-    request("/clips", { method: "POST", body: { take, sport, tone, duration } }),
+  createClip: (take, sport, tone, duration = 15, resolution = "720p") =>
+    request("/clips", { method: "POST", body: { take, sport, tone, duration, resolution } }),
   getClip: (id) => request(`/clips/${id}`),
   // Three written caption options to pick between when publishing.
   captionSuggestions: (id, avoid = []) =>

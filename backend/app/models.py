@@ -157,6 +157,8 @@ class Clip(Base):
     error: Mapped[str | None] = mapped_column(Text)
     # Requested length in seconds (10/15/30); >15 is Creator-only.
     duration_target: Mapped[int] = mapped_column(Integer, nullable=False, server_default="15")
+    # Requested output resolution ("720p"/"1080p"); 1080p is Creator-only.
+    resolution: Mapped[str] = mapped_column(Text, nullable=False, server_default="720p")
     duration_seconds: Mapped[float | None] = mapped_column(Numeric(4, 1))
     video_url: Mapped[str | None] = mapped_column(Text)
     thumb_gradient: Mapped[str | None] = mapped_column(Text)
