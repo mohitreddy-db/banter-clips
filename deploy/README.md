@@ -5,6 +5,10 @@ Caddy with auto-TLS) → **Supabase** (Postgres + Auth). Schema is already
 applied to the Supabase project (`taphbakizdagamimbhjh`, migration
 `initial_banterclips_schema`).
 
+Debugging something? See **[LOGS.md](LOGS.md)** — the logs runbook (which
+service logs what, journalctl recipes per symptom, Stripe/Vercel/Supabase log
+locations).
+
 ## 1. Droplet (backend)
 
 Create an Ubuntu 24.04 droplet (the $6/mo basic is plenty for beta), add your
