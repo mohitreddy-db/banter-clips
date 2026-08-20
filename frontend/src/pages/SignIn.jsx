@@ -21,7 +21,8 @@ function Logo() {
 }
 
 const label = { fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" };
-const input = { padding: "14px 16px", fontSize: 15, color: "var(--app-text)", background: "var(--app-panel)" };
+// 16px minimum — anything smaller makes iOS Safari zoom the page on focus.
+const input = { padding: "14px 16px", fontSize: 16, color: "var(--app-text)", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" };
 
 export default function SignIn() {
   const nav = useNavigate();
@@ -101,8 +102,8 @@ export default function SignIn() {
   };
 
   return (
-    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: 24 }}>
-      <div className="card" style={{ width: "100%", maxWidth: 430, padding: "40px 36px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: "clamp(14px, 4vw, 24px)" }}>
+      <div className="card auth-card" style={{ width: "100%", maxWidth: 430, padding: "40px 36px", display: "flex", flexDirection: "column", gap: 20 }}>
         {notice ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center", padding: "12px 0" }}>
             <div style={{ width: 64, height: 64, borderRadius: 18, background: "rgba(52,226,122,.14)", display: "grid", placeItems: "center" }}>

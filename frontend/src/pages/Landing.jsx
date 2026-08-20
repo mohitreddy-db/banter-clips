@@ -358,7 +358,7 @@ export default function Landing() {
     <div>
       {/* top nav */}
       <div style={{ position: "sticky", top: 0, zIndex: 40, backdropFilter: "blur(14px)", background: "oklch(0.14 0.01 260 / 0.7)", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 28px", display: "flex", alignItems: "center", gap: 32 }}>
+        <div className="land-nav" style={{ maxWidth: 1200, margin: "0 auto", padding: "16px 28px", display: "flex", alignItems: "center", gap: 32 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
             <Logo />
             <span style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.02em" }}>BanterClips</span>
@@ -370,9 +370,10 @@ export default function Landing() {
             <a href="#pricing" style={{ cursor: "pointer", color: "inherit" }}>Pricing</a>
           </div>
           <div className="land-nav-signin" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-            <span onClick={go("/signin")} style={{ cursor: "pointer", fontSize: 14.5, fontWeight: 600, color: "var(--muted)" }}>Sign in</span>
-            <button onClick={go("/signin")} style={{ background: "var(--grad)", color: "#fff", border: "none", padding: "11px 20px", borderRadius: 11, fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
-              Start Creating Free
+            <span className="land-signin-label" onClick={go("/signin")} style={{ cursor: "pointer", fontSize: 14.5, fontWeight: 600, color: "var(--muted)" }}>Sign in</span>
+            <button className="land-cta-btn" onClick={go("/signin")} style={{ background: "var(--grad)", color: "#fff", border: "none", padding: "11px 20px", borderRadius: 11, fontWeight: 700, fontSize: 14.5, cursor: "pointer", whiteSpace: "nowrap" }}>
+              <span className="cta-label-long">Start Creating Free</span>
+              <span className="cta-label-short">Start Free</span>
             </button>
           </div>
         </div>
@@ -386,13 +387,13 @@ export default function Landing() {
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "var(--bg3)", border: "1px solid var(--border)", padding: "7px 14px", borderRadius: 100, fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 26 }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent2)", boxShadow: "0 0 10px var(--accent2)" }} /> AI sports video studio
             </div>
-            <h1 className="hero-h1" style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 54, lineHeight: 1.03, letterSpacing: "-.03em", margin: "0 0 22px", textWrap: "balance" }}>
+            <h1 className="hero-h1" style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(33px, 8vw, 54px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: "0 0 22px", textWrap: "balance" }}>
               Turn Any Sports Opinion Into A <span style={{ background: "var(--grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Viral Video</span> In Seconds.
             </h1>
-            <p style={{ fontSize: 18.5, lineHeight: 1.55, color: "var(--muted)", margin: "0 0 32px", maxWidth: 520 }}>
+            <p style={{ fontSize: "clamp(15.5px, 4.2vw, 18.5px)", lineHeight: 1.55, color: "var(--muted)", margin: "0 0 32px", maxWidth: 520 }}>
               Create AI-powered sports banter, predictions, reactions and debates — ready for TikTok, Instagram Reels and YouTube Shorts.
             </p>
-            <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="hero-cta" style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
               <button onClick={go("/signin")} style={{ background: "var(--grad)", color: "#fff", border: "none", padding: "16px 28px", borderRadius: 13, fontWeight: 700, fontSize: 16, cursor: "pointer", animation: "glow 3.6s ease-in-out infinite" }}>
                 Start Creating Free →
               </button>
@@ -403,7 +404,7 @@ export default function Landing() {
                 Watch Demo
               </button>
             </div>
-            <div style={{ display: "flex", gap: 26, marginTop: 36, color: "var(--muted2)", fontSize: 13, fontWeight: 600 }}>
+            <div className="hero-trust" style={{ display: "flex", gap: 26, marginTop: 36, color: "var(--muted2)", fontSize: 13, fontWeight: 600, flexWrap: "wrap" }}>
               <span>No credit card</span><span>·</span><span>First video free</span><span>·</span><span>Export in 9:16</span>
             </div>
           </div>
@@ -417,7 +418,7 @@ export default function Landing() {
                 <span style={{ width: 11, height: 11, borderRadius: "50%", background: "#28c840" }} />
                 <span style={{ marginLeft: 10, fontSize: 12, color: "var(--muted2)", fontWeight: 600 }}>BanterClips Studio</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 16 }}>
+              <div className="demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 168px", gap: 16 }}>
                 <div>
                   <div style={{ fontSize: 11, color: "var(--muted2)", fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 8 }}>Your sports take</div>
                   <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, fontSize: 15, fontWeight: 600, minHeight: 58, lineHeight: 1.4 }}>
@@ -455,8 +456,8 @@ export default function Landing() {
                     </div>
                   ) : (
                     <>
-                      <div style={{ position: "absolute", left: 12, right: 12, bottom: 64, textAlign: "center" }}>
-                        <span style={{ display: "inline", background: "#000000c2", color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 20, lineHeight: 1.5, padding: "3px 6px", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone", animation: "pop .4s ease both" }}>
+                      <div className="demo-capwrap" style={{ position: "absolute", left: 12, right: 12, bottom: 64, textAlign: "center" }}>
+                        <span className="demo-caption" style={{ display: "inline", background: "#000000c2", color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 20, lineHeight: 1.5, padding: "3px 6px", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone", animation: "pop .4s ease both" }}>
                         NO WAY the Lakers <span style={{ color: "oklch(0.85 0.17 152)" }}>MISS</span> the playoffs 😤
                         </span>
                       </div>
@@ -485,7 +486,7 @@ export default function Landing() {
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--muted2)", marginBottom: 20 }}>
             Trusted by sports creators, podcasters, YouTubers &amp; media teams
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 44, flexWrap: "wrap", opacity: 0.55 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "clamp(20px, 4.5vw, 44px)", flexWrap: "wrap", opacity: 0.55 }}>
             {logos.map((l) => (
               <span key={l} style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 19, letterSpacing: "-.01em" }}>{l}</span>
             ))}
@@ -497,7 +498,7 @@ export default function Landing() {
       <div id="features" style={{ maxWidth: 1200, margin: "0 auto", padding: "46px 28px 20px" }}>
         <div style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 44px" }}>
           <div style={{ color: "var(--accent)", fontWeight: 700, fontSize: 13, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 12 }}>Everything, automated</div>
-          <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 38, letterSpacing: "-.02em", margin: 0, lineHeight: 1.1 }}>One opinion in. A finished video out.</h2>
+          <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(27px, 6.5vw, 38px)", letterSpacing: "-.02em", margin: 0, lineHeight: 1.12 }}>One opinion in. A finished video out.</h2>
         </div>
         <div className="feat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 18 }}>
           {features.map((f) => (
@@ -512,17 +513,17 @@ export default function Landing() {
 
       {/* how it works */}
       <div id="how" style={{ maxWidth: 1000, margin: "0 auto", padding: "64px 28px" }}>
-        <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 34, textAlign: "center", letterSpacing: "-.02em", margin: "0 0 40px" }}>How it works</h2>
+        <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(26px, 6vw, 34px)", textAlign: "center", letterSpacing: "-.02em", margin: "0 0 40px" }}>How it works</h2>
         <HowItWorks />
       </div>
 
       {/* examples */}
       <div id="examples" style={{ padding: "20px 0 60px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22 }}>
-          <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 32, letterSpacing: "-.02em", margin: 0 }}>Made with BanterClips</h2>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
+          <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(25px, 6vw, 32px)", letterSpacing: "-.02em", margin: 0 }}>Made with BanterClips</h2>
           <span onClick={go("/signin")} style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", cursor: "pointer" }}>Start creating →</span>
         </div>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory", boxSizing: "border-box" }}>
+        <div className="reel-strip" style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory", boxSizing: "border-box", WebkitOverflowScrolling: "touch" }}>
           {examples.map((c) => (
             <ShowcaseReel key={c.slug} clip={c} />
           ))}
@@ -554,7 +555,7 @@ export default function Landing() {
 
       {/* pricing preview — two-plan model */}
       <div id="pricing" style={{ maxWidth: 1200, margin: "0 auto", padding: "30px 28px 20px", textAlign: "center" }}>
-        <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 34, letterSpacing: "-.02em", margin: "0 0 8px" }}>Simple, creator-friendly pricing</h2>
+        <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(26px, 6vw, 34px)", letterSpacing: "-.02em", margin: "0 0 8px" }}>Simple, creator-friendly pricing</h2>
         <p style={{ color: "var(--muted)", fontSize: 16, margin: "0 0 34px" }}>Publish free. Upgrade to download without the watermark.</p>
         <div className="plan-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,340px))", justifyContent: "center", gap: 16, textAlign: "left" }}>
           {plansMini.map((p) => (
@@ -578,9 +579,9 @@ export default function Landing() {
 
       {/* final cta */}
       <div style={{ maxWidth: 1100, margin: "70px auto", padding: "0 28px" }}>
-        <div style={{ position: "relative", overflow: "hidden", borderRadius: 26, background: "var(--grad)", padding: "60px 40px", textAlign: "center" }}>
+        <div style={{ position: "relative", overflow: "hidden", borderRadius: 26, background: "var(--grad)", padding: "clamp(38px, 8vw, 60px) clamp(20px, 5vw, 40px)", textAlign: "center" }}>
           <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 80% 10%,#ffffff2e,transparent 50%)" }} />
-          <h2 style={{ position: "relative", fontFamily: "var(--display)", fontWeight: 700, fontSize: 42, letterSpacing: "-.02em", margin: "0 0 22px", color: "#fff", lineHeight: 1.08 }}>
+          <h2 style={{ position: "relative", fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(28px, 7vw, 42px)", letterSpacing: "-.02em", margin: "0 0 22px", color: "#fff", lineHeight: 1.1 }}>
             Ready to make sports content 10x faster?
           </h2>
           <button onClick={go("/signin")} style={{ position: "relative", background: "#0b0d13", color: "#fff", border: "none", padding: "17px 34px", borderRadius: 14, fontWeight: 700, fontSize: 17, cursor: "pointer" }}>Start Free →</button>

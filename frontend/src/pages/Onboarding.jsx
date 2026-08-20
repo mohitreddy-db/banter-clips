@@ -176,7 +176,7 @@ function OnboardingFlow() {
   };
 
   return (
-    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: 24 }}>
+    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: "clamp(14px, 4vw, 24px)" }}>
       <div style={{ width: "100%", maxWidth: 680, display: "flex", flexDirection: "column", gap: 18 }}>
         {/* progress */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -185,7 +185,7 @@ function OnboardingFlow() {
             <div style={{ height: "100%", width: `${(step / TOTAL) * 100}%`, background: "var(--app-grad)", transition: "width .25s" }} />
           </div>
         </div>
-        <h1 style={{ fontWeight: 800, fontSize: 32, color: "var(--app-text)", margin: 0 }}>{titles[step]}</h1>
+        <h1 style={{ fontWeight: 800, fontSize: "clamp(24px, 6vw, 32px)", color: "var(--app-text)", margin: 0 }}>{titles[step]}</h1>
         {subs[step] && <div style={{ fontSize: 15, color: "var(--app-muted)", marginTop: -6 }}>{subs[step]}</div>}
 
         {step === 1 && (
@@ -305,9 +305,9 @@ function OnboardingFlow() {
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: 16, paddingTop: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px, 2.5vw, 16px)", paddingTop: 14 }}>
           {step > 1 ? (
-            <button className="ghost-btn" style={{ padding: "12px 20px", fontSize: 14 }} onClick={back}>← Back</button>
+            <button className="ghost-btn" style={{ padding: "12px clamp(12px, 3vw, 20px)", fontSize: 14 }} onClick={back}>← Back</button>
           ) : (
             <span />
           )}
@@ -364,7 +364,7 @@ function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove }
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
           placeholder={placeholder}
-          style={{ flex: 1, background: "none", border: "none", color: "var(--app-text)", fontSize: 14 }}
+          style={{ flex: 1, minWidth: 0, background: "none", border: "none", color: "var(--app-text)", fontSize: 16 }}
         />
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

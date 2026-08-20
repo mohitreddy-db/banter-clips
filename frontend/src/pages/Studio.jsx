@@ -254,8 +254,8 @@ export default function Studio() {
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 16px", borderRadius: 999, background: "rgba(34,211,238,.1)", border: "1px solid rgba(34,211,238,.35)", color: "var(--app-cyan)", fontSize: 12, fontWeight: 700, letterSpacing: ".08em" }}>
               ⚡ NEW CLIP
             </span>
-            <h1 style={{ fontSize: 42, fontWeight: 800, color: "var(--app-text)", margin: "18px 0 10px" }}>What’s your sports take?</h1>
-            <div style={{ fontSize: 16, color: "var(--app-muted)" }}>One sentence. We’ll do the hook, voice, captions and video.</div>
+            <h1 style={{ fontSize: "clamp(28px, 7vw, 42px)", fontWeight: 800, color: "var(--app-text)", margin: "18px 0 10px" }}>What’s your sports take?</h1>
+            <div style={{ fontSize: "clamp(14px, 3.8vw, 16px)", color: "var(--app-muted)" }}>One sentence. We’ll do the hook, voice, captions and video.</div>
           </div>
 
           {/* take input */}
@@ -266,7 +266,7 @@ export default function Studio() {
               placeholder="Messi is still the GOAT."
               rows={4}
               className="panel"
-              style={{ width: "100%", padding: "22px 24px", fontSize: 19, fontWeight: 500, color: "var(--app-text)", resize: "vertical", background: "var(--app-surface)", border: "1.5px solid var(--app-border)", borderRadius: 20, lineHeight: 1.45, boxSizing: "border-box" }}
+              style={{ width: "100%", padding: "clamp(16px, 4vw, 22px) clamp(16px, 4vw, 24px)", fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 500, color: "var(--app-text)", resize: "vertical", background: "var(--app-surface)", border: "1.5px solid var(--app-border)", borderRadius: 20, lineHeight: 1.45, boxSizing: "border-box" }}
             />
             <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12, color: take.length > 280 ? "var(--app-error)" : "var(--app-muted2)" }}>
               {take.length} / 280
@@ -429,7 +429,7 @@ export default function Studio() {
           </div>
 
           {/* credits bar */}
-          <div className="panel" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 14 }}>
+          <div className="panel" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 14, flexWrap: "wrap" }}>
             <span style={{ color: "var(--app-cyan)" }}>⚡</span>
             <span style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
               <b style={{ color: "var(--app-text)" }}>{left}</b> of <b style={{ color: "var(--app-text)" }}>{limit}</b> monthly videos left · each clip uses 1 · failures are free
@@ -532,7 +532,7 @@ export default function Studio() {
 
           {phase === "generating" && (
             <>
-              <div className="card" style={{ padding: "26px 28px" }}>
+              <div className="card" style={{ padding: "clamp(18px, 4.5vw, 26px) clamp(16px, 5vw, 28px)" }}>
                 <div style={{ display: "flex", alignItems: "center", paddingBottom: 18 }}>
                   <span style={{ fontSize: 20, fontWeight: 600, color: "var(--app-text)" }}>Generating your video…</span>
                   <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)" }}>{fmt(elapsed)} elapsed</span>
@@ -610,7 +610,7 @@ export default function Studio() {
                 </div>
               </div>
               <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>{clip.error}</div>
-              <div style={{ display: "flex", gap: 12 }}>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <button className="grad-btn" style={{ padding: "13px 24px", fontSize: 15 }} onClick={retry}>
                   ↻ Retry for free
                 </button>
@@ -625,7 +625,7 @@ export default function Studio() {
 
       {phase === "result" && clip && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderRadius: 12, background: "rgba(52,226,122,.1)", border: "1px solid rgba(52,226,122,.35)", marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderRadius: 12, background: "rgba(52,226,122,.1)", border: "1px solid rgba(52,226,122,.35)", marginTop: 12, flexWrap: "wrap" }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34e27a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <path d="m8 12.5 2.6 2.6L16 9.5" />
@@ -640,7 +640,7 @@ export default function Studio() {
           </div>
           <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start" }}>
             <div className="card" style={{ padding: 20, display: "grid", placeItems: "center" }}>
-              <div style={{ position: "relative", width: "100%", aspectRatio: "9/16", borderRadius: 16, overflow: "hidden", background: "#000" }}>
+              <div className="result-player" style={{ position: "relative", width: "100%", aspectRatio: "9/16", borderRadius: 16, overflow: "hidden", background: "#000" }}>
                 {clip.video_url ? (
                   <video
                     src={clip.video_url}

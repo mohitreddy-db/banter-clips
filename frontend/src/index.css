@@ -42,6 +42,18 @@ body {
   margin: 0;
   padding: 0;
 }
+/* Mobile hygiene: no auto-inflated text after rotation, no grey flash on tap,
+   and no 300ms double-tap delay on anything tappable. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 body {
   background: var(--bg);
   color: var(--text);
@@ -273,16 +285,36 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
-/* Landing responsive rules (from the client's page) */
+/* Landing responsive rules (from the client's page).
+   Headline and section-title sizes are fluid via inline clamp() in the JSX;
+   these rules handle structure — column counts, hidden chrome, nav swaps. */
 @media (max-width: 860px) {
   .hero-grid {
     grid-template-columns: 1fr !important;
     gap: 32px !important;
     padding: 44px 20px 30px !important;
   }
-  .land-nav-links,
-  .land-nav-signin {
+  .land-nav-links {
     display: none !important;
+  }
+  /* The sign-in area stays — a visitor on a phone still needs the CTA.
+     Only the "Sign in" text link goes; the button carries both jobs. */
+  .land-nav {
+    padding: 12px 16px !important;
+    gap: 12px !important;
+  }
+  .land-signin-label {
+    display: none !important;
+  }
+  .land-cta-btn {
+    padding: 10px 14px !important;
+    font-size: 13.5px !important;
+  }
+  .app-topbar h1 {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .feat-grid,
   .plan-grid,
@@ -302,9 +334,6 @@ textarea:focus {
   .stat-grid {
     grid-template-columns: repeat(2, 1fr) !important;
   }
-  h1.hero-h1 {
-    font-size: 38px !important;
-  }
   .ob-sports {
     grid-template-columns: repeat(2, 1fr) !important;
   }
@@ -320,9 +349,156 @@ textarea:focus {
   .result-grid {
     grid-template-columns: 1fr !important;
   }
+  /* One column means the 9:16 player would fill the whole width and tower
+     over the actions below it — cap it and center it instead. */
+  .result-player {
+    max-width: 290px;
+    margin: 0 auto;
+  }
   .price-cards {
     grid-template-columns: 1fr !important;
   }
+
+  /* App chrome: compact top bar + bottom tab bar replaces the sidebar. */
+  .app-topbar {
+    padding: 10px 14px !important;
+    gap: 10px !important;
+  }
+  .app-topbar h1 {
+    font-size: 17px !important;
+  }
+  .app-content {
+    /* Bottom padding clears the fixed tab bar (plus the home-indicator inset). */
+    padding: 14px 16px calc(92px + env(safe-area-inset-bottom)) !important;
+  }
+  .usage-long {
+    display: none !important;
+  }
+  .usage-short {
+    display: inline !important;
+  }
+  .usage-pill {
+    padding: 7px 12px !important;
+  }
+
+  /* The showcase strip scrolls by swipe on touch — the scrollbar is noise. */
+  .reel-strip {
+    scrollbar-width: none;
+  }
+  .reel-strip::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Mobile bottom navigation for the app shell. Hidden on desktop, where the
+   sidebar does this job. */
+.app-bottomnav {
+  display: none;
+}
+@media (max-width: 860px) {
+  .app-bottomnav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    background: rgba(8, 12, 22, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--app-border);
+    padding: 6px max(10px, env(safe-area-inset-right))
+      calc(6px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+  .app-bottomnav a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 0 5px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--app-muted);
+    text-decoration: none;
+  }
+  .app-bottomnav a.active {
+    color: var(--app-cyan);
+  }
+}
+.usage-short {
+  display: none;
+}
+
+/* The long CTA label gives way to a short one on narrow phones — at 320px
+   "Start Creating Free" pushes the nav button off the right edge. */
+.cta-label-short {
+  display: none;
+}
+@media (max-width: 420px) {
+  .cta-label-long {
+    display: none;
+  }
+  .cta-label-short {
+    display: inline;
+  }
+}
+
+/* Phone-width refinements. */
+@media (max-width: 480px) {
+  /* Hero CTAs stack full-width — two side-by-side buttons at 320px wrap
+     into a ragged pile anyway, so make the stack deliberate. */
+  .hero-cta {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .hero-cta > button {
+    justify-content: center;
+  }
+  .hero-trust {
+    gap: 8px 14px !important;
+    font-size: 12px !important;
+  }
+  /* The in-hero studio demo: shrink the phone preview column so the text
+     column keeps room to breathe, and scale its burned-in caption down to
+     match — 20px type inside a 118px phone overflows the frame. */
+  .demo-grid {
+    grid-template-columns: 1fr 118px !important;
+  }
+  .demo-caption {
+    font-size: 12px !important;
+  }
+  .demo-capwrap {
+    bottom: 48px !important;
+  }
+  .tone-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .auth-card {
+    padding: 26px 20px !important;
+  }
+  .modal-card {
+    padding: 20px 18px !important;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Onboarding plan tiles: two 160px columns at phone width is cramped enough
+   to clip feature lines — stack them before that happens. */
+@media (max-width: 640px) {
+  .ob-plans {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Modals must never be taller than the screen (the publish modal with three
+   caption suggestions is, on phones) — scroll inside the card instead. */
+.modal-card {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
 
 /* App-side utility classes (Figma theme) */

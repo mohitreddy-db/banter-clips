@@ -145,16 +145,35 @@ export default function AppShell() {
               Upgrade
             </button>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)" }}>
+          <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: left > 0 ? "var(--app-green)" : "var(--app-error)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)" }}>{left} of {limit} videos left</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", whiteSpace: "nowrap" }}>
+              <span className="usage-long">{left} of {limit} videos left</span>
+              <span className="usage-short">{left}/{limit}</span>
+            </span>
           </div>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", cursor: "pointer" }} onClick={() => nav("/account")} />
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", cursor: "pointer", flexShrink: 0 }} onClick={() => nav("/account")} />
         </header>
-        <main className="app-content" style={{ padding: "16px 32px 40px", flex: 1 }}>
+        <main className="app-content" style={{ padding: "16px 32px 40px", flex: 1, minWidth: 0 }}>
           <Outlet />
         </main>
       </div>
+
+      {/* mobile bottom tab bar — the sidebar is hidden under 860px, and
+          navigation must not disappear with it */}
+      <nav className="app-bottomnav app-font">
+        {[
+          ["/studio", "Create", icons.create],
+          ["/clips", "My Clips", icons.clips],
+          ["/pricing", "Pricing", icons.pricing],
+          ["/account", "Account", icons.account],
+        ].map(([to, label, ic]) => (
+          <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "active" : undefined)}>
+            <Icon d={ic} size={20} />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

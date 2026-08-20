@@ -4,7 +4,8 @@ import { useApp } from "../state/AppContext.jsx";
 import { supabase, supabaseEnabled } from "../lib/supabase.js";
 
 const label = { fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" };
-const inputStyle = { padding: "14px 16px", fontSize: 15, color: "var(--app-text)", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" };
+// 16px minimum — anything smaller makes iOS Safari zoom the page on focus.
+const inputStyle = { padding: "14px 16px", fontSize: 16, color: "var(--app-text)", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" };
 
 export default function ResetPassword() {
   const nav = useNavigate();
@@ -58,8 +59,8 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: 24 }}>
-      <div className="card" style={{ width: "100%", maxWidth: 430, padding: "40px 36px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: "clamp(14px, 4vw, 24px)" }}>
+      <div className="card auth-card" style={{ width: "100%", maxWidth: 430, padding: "40px 36px", display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="32" height="32" viewBox="0 0 34 34">
             <defs>
