@@ -312,3 +312,29 @@ class CatalogCharacter(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class CatalogStill(Base):
+    """Every reference still ever generated for a character — the history.
+
+    A character's ACTIVE references stay on catalog_characters.reference_images
+    (a list of storage keys / repo paths); a still row is "active" when its
+    key is in that list. Keeping every generation lets an admin approve the
+    good batch, roll back to an older look, or mix stills across batches.
+    """
+
+    __tablename__ = "catalog_stills"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="full")  # face | full
+    # Where the bytes live: a Supabase Storage key, and/or a repo-relative
+    # path ("references/x.jpg") when the upload failed or the file is curated.
+    storage_key: Mapped[str | None] = mapped_column(Text)
+    local_path: Mapped[str | None] = mapped_column(Text)
+    # The admin's generation direction ("2005 Barcelona era, long curly hair").
+    notes: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default="admin")  # admin | auto
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("catalog_stills_char", "character_id", "created_at"),)

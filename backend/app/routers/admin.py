@@ -10,6 +10,7 @@ without a deploy.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -111,23 +112,164 @@ def update_character(char_id: str, body: CharacterPatch, admin: User = Depends(g
     return _out(saved)
 
 
-@router.post("/catalog/{char_id}/references", response_model=CharacterOut)
-def regenerate_references(char_id: str, admin: User = Depends(get_admin_user)):
+class GenerateRequest(BaseModel):
+    # Admin direction folded into the generation prompt: era, exact kit,
+    # hair, anything ("2005 Barcelona home kit, long curly hair, headband").
+    notes: str = Field(default="", max_length=500)
+
+
+class StillOut(BaseModel):
+    id: str
+    kind: str
+    url: str
+    notes: str = ""
+    source: str = "admin"
+    active: bool = False
+    created_at: str = ""
+
+
+class SelectionRequest(BaseModel):
+    still_ids: list[str] = Field(min_length=1, max_length=4)
+
+
+def _still_entry(row) -> str:
+    """The durable entry a still contributes to reference_images."""
+    return row.storage_key or row.local_path or ""
+
+
+def _still_out(row, active_entries: set[str]) -> StillOut:
+    url = ""
+    if row.storage_key:
+        try:
+            from ..services import storage
+
+            url = storage.get().url(row.storage_key)
+        except Exception:  # noqa: BLE001
+            pass
+    if not url:
+        url = f"/admin/stills/{row.id}/image"
+    return StillOut(
+        id=str(row.id), kind=row.kind, url=url, notes=row.notes or "",
+        source=row.source, active=_still_entry(row) in active_entries,
+        created_at=row.created_at.isoformat() if row.created_at else "",
+    )
+
+
+@router.get("/catalog/{char_id}/stills", response_model=list[StillOut])
+def list_stills(char_id: str, admin: User = Depends(get_admin_user)):
+    char = next((c for c in catalog.all_characters() if c.id == char_id), None)
+    if char is None:
+        raise HTTPException(404, "No such character.")
+    rows = catalog.stills_for(char_id)
+    if not rows and char.reference_images:
+        # Curated characters predate the history table — import their active
+        # stills as history rows once, so they're selectable like any batch.
+        for entry in char.reference_images:
+            kind = "face" if "_face_" in entry else "full"
+            if entry.startswith("references/"):
+                catalog.record_still(char_id, kind, local_path=entry, source="curated")
+            else:
+                catalog.record_still(char_id, kind, storage_key=entry, source="curated")
+        rows = catalog.stills_for(char_id)
+    active = set(char.reference_images)
+    return [_still_out(r, active) for r in rows]
+
+
+@router.post("/catalog/{char_id}/references", response_model=list[StillOut])
+def generate_references(char_id: str, body: GenerateRequest,
+                        admin: User = Depends(get_admin_user)):
     """Generate fresh reference stills (face + full body). REAL SPEND: about
-    $0.10 with the production image provider — an explicit admin action."""
+    $0.10. The results are CANDIDATES in the history — nothing changes on
+    the character until a selection is approved."""
     char = next((c for c in catalog.all_characters() if c.id == char_id), None)
     if char is None:
         raise HTTPException(404, "No such character.")
     from ..video import catalog_build, providers
 
     images = providers.image_provider()
-    paths, cost = catalog_build.build_character(char, images)
+    paths, cost = catalog_build.build_character(char, images, notes=body.notes)
     if not paths:
         raise HTTPException(502, "Still generation failed — check provider credit.")
-    catalog.set_reference_images(char_id, paths)
-    log.info("admin %s regenerated references for %s ($%.3f)", admin.email, char_id, cost)
-    fresh = next((c for c in catalog.all_characters() if c.id == char_id), char)
-    return _out(fresh)
+    catalog.save_candidate_stills(char_id, paths, notes=body.notes)
+    log.info("admin %s generated stills for %s ($%.3f) notes=%r",
+             admin.email, char_id, cost, body.notes)
+    active = set(char.reference_images)
+    fresh_ids = {Path(p).name for p in paths}
+    return [_still_out(r, active) for r in catalog.stills_for(char_id)
+            if (r.local_path or "").split("/")[-1] in fresh_ids]
+
+
+@router.put("/catalog/{char_id}/references", response_model=CharacterOut)
+def approve_reference_selection(char_id: str, body: SelectionRequest,
+                                admin: User = Depends(get_admin_user)):
+    """Approve: the chosen history stills become the character's active
+    references, used by every future generation."""
+    rows = {str(r.id): r for r in catalog.stills_for(char_id)}
+    entries = []
+    for sid in body.still_ids:
+        row = rows.get(sid)
+        if row is None or not _still_entry(row):
+            raise HTTPException(404, f"No such still {sid}.")
+        entries.append(_still_entry(row))
+    saved = catalog.apply_reference_selection(char_id, entries)
+    if saved is None:
+        raise HTTPException(500, "Could not apply the selection.")
+    log.info("admin %s approved %d stills for %s", admin.email, len(entries), char_id)
+    return _out(saved)
+
+
+class ResearchOut(BaseModel):
+    found: bool
+    look: str = ""
+    default_wardrobe: str = ""
+    voice_style: str = ""
+
+
+@router.post("/catalog/{char_id}/research", response_model=ResearchOut)
+def research_character(char_id: str, admin: User = Depends(get_admin_user)):
+    """One web-search call for the REAL details — exact kit colours, crest,
+    number, appearance. Returns suggestions; nothing is saved until the
+    admin saves the fields."""
+    char = next((c for c in catalog.all_characters() if c.id == char_id), None)
+    if char is None:
+        raise HTTPException(404, "No such character.")
+    from ..video import research
+    from ..video.types import CastMember
+
+    member = CastMember(id=char.id, name=char.name, look="", wardrobe="", voice="")
+    if not research.enabled():
+        raise HTTPException(503, "Web research is not configured on this server.")
+    found = research.enrich_member(member, char.sport)
+    return ResearchOut(found=found, look=member.look if found else "",
+                       default_wardrobe=member.wardrobe if found else "",
+                       voice_style=member.voice if found else "")
+
+
+@router.get("/stills/{still_id}/image")
+def still_image(still_id: str, token: str = ""):
+    """Serve a history still that has no public Storage URL (local-only)."""
+    user_id = decode_session_jwt(token)
+    if user_id is None:
+        raise HTTPException(404, "Not found")
+    db = SessionLocal()
+    try:
+        user = db.get(User, user_id)
+        from ..models import CatalogStill
+        import uuid as _uuid
+
+        try:
+            row = db.get(CatalogStill, _uuid.UUID(still_id))
+        except ValueError:
+            row = None
+    finally:
+        db.close()
+    if user is None or user.is_blocked or not user.is_admin or row is None:
+        raise HTTPException(404, "Not found")
+    if row.local_path:
+        path = catalog.CATALOG_DIR / row.local_path
+        if path.exists():
+            return FileResponse(path, media_type="image/jpeg")
+    raise HTTPException(404, "Not found")
 
 
 @router.get("/catalog/{char_id}/reference/{index}")

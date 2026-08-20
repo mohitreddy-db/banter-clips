@@ -101,7 +101,13 @@ export const api = {
   adminCatalog: () => request("/admin/catalog"),
   adminCreateCharacter: (body) => request("/admin/catalog", { method: "POST", body }),
   adminUpdateCharacter: (id, body) => request(`/admin/catalog/${id}`, { method: "PATCH", body }),
-  adminRegenerateRefs: (id) => request(`/admin/catalog/${id}/references`, { method: "POST" }),
+  adminStills: (id) => request(`/admin/catalog/${id}/stills`),
+  // Generates candidate stills (~$0.10); nothing is applied until approved.
+  adminGenerateStills: (id, notes = "") =>
+    request(`/admin/catalog/${id}/references`, { method: "POST", body: { notes } }),
+  adminApproveStills: (id, still_ids) =>
+    request(`/admin/catalog/${id}/references`, { method: "PUT", body: { still_ids } }),
+  adminResearch: (id) => request(`/admin/catalog/${id}/research`, { method: "POST" }),
 
   // analytics (fire-and-forget)
   track: (name, props = {}) =>

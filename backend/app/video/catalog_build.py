@@ -27,25 +27,34 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import uuid
 
 from . import catalog, prompts, providers
 
 EST_COST_PER_STILL = 0.05  # measured for x-ai/grok-imagine-image-quality
 
 
-def build_character(char: catalog.Character, images) -> tuple[list[str], float]:
-    """Generate the reference views for one character. Returns (paths, cost)."""
+def build_character(char: catalog.Character, images,
+                    notes: str = "") -> tuple[list[str], float]:
+    """Generate the reference views for one character. Returns (paths, cost).
+
+    `notes` is admin direction folded into the prompt ("2005 Barcelona era,
+    long curly hair, gold boots"). Filenames are unique per batch so history
+    accumulates instead of overwriting."""
     catalog.REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
+    batch = uuid.uuid4().hex[:6]
     written, spent = [], 0.0
     for view, framing in prompts.REFERENCE_VIEWS.items():
         prompt = prompts.REFERENCE_STILL_PROMPT.format(
             name=char.name,
             look=char.look or f"a professional {char.sport} figure",
-            wardrobe=char.default_wardrobe or "a plain solid team-coloured kit "
-                                              "with crest, name and number in crisp legible lettering",
+            wardrobe=char.default_wardrobe or "an authentic team kit with the real "
+                                              "crest, name and number in crisp legible lettering",
             framing=framing,
         )
-        out = catalog.REFERENCES_DIR / f"{char.id}_{view}_01.jpg"
+        if notes.strip():
+            prompt += f" Specific direction, follow exactly: {notes.strip()}."
+        out = catalog.REFERENCES_DIR / f"{char.id}_{view}_{batch}.jpg"
         path, cost = images.generate(prompt, out)
         spent += cost
         if path:

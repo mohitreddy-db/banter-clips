@@ -312,28 +312,96 @@ def save_dynamic_character(member: CastMember, sport: str) -> Character | None:
     return saved
 
 
-def set_reference_images(char_id: str, reference_paths: list[str]) -> None:
-    """Persist freshly generated stills: upload to Supabase Storage, record
-    the storage keys on the character's DB row. Local files stay behind as
-    the read cache. Never raises — an upload failure keeps the local-only
-    paths so this job still benefits."""
-    keys: list[str] = []
+def _upload_stills(char_id: str, reference_paths: list[str], notes: str = "",
+                   source: str = "auto") -> list[str]:
+    """Upload freshly generated stills to Storage and record each in the
+    history (catalog_stills). Returns the durable entries (storage keys, or
+    local paths for any that failed to upload). Never raises."""
+    entries: list[str] = []
+    store = None
     try:
         from ..services import storage
 
         store = storage.get()
-        for rel in reference_paths:
-            local = CATALOG_DIR / rel
-            if not local.exists():
-                continue
-            key = f"catalog/references/{local.name}"
-            store.put(key, local, "image/jpeg")
-            keys.append(key)
     except Exception:  # noqa: BLE001
-        log.exception("could not upload references for %r; keeping local paths", char_id)
-        keys = list(reference_paths)
-    upsert_character(char_id, {"reference_images": keys or list(reference_paths)},
-                     source="auto-research")
+        log.exception("storage unavailable; keeping local-only stills")
+    for rel in reference_paths:
+        local = CATALOG_DIR / rel
+        if not local.exists():
+            continue
+        key = None
+        if store is not None:
+            try:
+                key = f"catalog/references/{local.name}"
+                store.put(key, local, "image/jpeg")
+            except Exception:  # noqa: BLE001
+                log.exception("upload failed for %s", local.name)
+                key = None
+        entries.append(key or rel)
+        kind = "face" if "_face_" in local.name else "full"
+        record_still(char_id, kind, storage_key=key, local_path=rel,
+                     notes=notes, source=source)
+    return entries
+
+
+def record_still(char_id: str, kind: str, storage_key: str | None = None,
+                 local_path: str | None = None, notes: str = "",
+                 source: str = "admin") -> None:
+    """One history row per generated still. Never raises."""
+    try:
+        from ..db import SessionLocal
+        from ..models import CatalogStill
+
+        db = SessionLocal()
+        try:
+            db.add(CatalogStill(character_id=char_id, kind=kind,
+                                storage_key=storage_key, local_path=local_path,
+                                notes=_clean(notes), source=source))
+            db.commit()
+        finally:
+            db.close()
+    except Exception:  # noqa: BLE001
+        log.exception("could not record still history for %r", char_id)
+
+
+def stills_for(char_id: str) -> list:
+    """History rows for a character, newest first. Never raises."""
+    try:
+        from ..db import SessionLocal
+        from ..models import CatalogStill
+
+        db = SessionLocal()
+        try:
+            return (db.query(CatalogStill)
+                    .filter(CatalogStill.character_id == char_id)
+                    .order_by(CatalogStill.created_at.desc()).limit(60).all())
+        finally:
+            db.close()
+    except Exception:  # noqa: BLE001
+        log.exception("could not list stills for %r", char_id)
+        return []
+
+
+def save_candidate_stills(char_id: str, reference_paths: list[str],
+                          notes: str = "") -> list[str]:
+    """Admin generation: stills go into history as CANDIDATES only — the
+    character's active references change when the admin approves a
+    selection. Returns the durable entries."""
+    return _upload_stills(char_id, reference_paths, notes=notes, source="admin")
+
+
+def set_reference_images(char_id: str, reference_paths: list[str]) -> None:
+    """Pipeline auto-generation: upload + record history AND apply directly —
+    there is no admin in the loop mid-job, and any stills beat none. An admin
+    can re-curate later from the history. Never raises."""
+    entries = _upload_stills(char_id, reference_paths, source="auto")
+    if entries:
+        upsert_character(char_id, {"reference_images": entries}, source="auto-research")
+
+
+def apply_reference_selection(char_id: str, entries: list[str]) -> Character | None:
+    """Approve: make these history entries the character's active references."""
+    return upsert_character(char_id, {"reference_images": list(entries)[:4]})
 
 
 # -------------------------------------------------------------------- lookup

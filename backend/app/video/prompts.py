@@ -494,13 +494,16 @@ REFERENCE_STILL_PROMPT = (
     "single-colour shoes. "
     "{framing}. Neutral relaxed expression, arms at sides. "
     # Anatomy is spelled out because reference defects COMPOUND: a distorted
-    # still anchors every future keyframe of this person. Kit clarity is what
-    # lets the still carry team identity into scenes.
+    # still anchors every future keyframe of this person. Kit exactness is
+    # the point of the still: it carries team identity into every scene.
     "Accurate natural human proportions — correct head-to-body ratio, "
     "realistic limb lengths, an athletic adult physique photographed with a "
-    "standard portrait lens, no wide-angle distortion. The kit's colours, "
-    "crest, name and number are sharp, correctly spelled and clearly "
-    "readable. Extremely high facial and body detail. "
+    "standard portrait lens, no wide-angle distortion. "
+    "The kit is the person's REAL kit, reproduced faithfully: the exact true "
+    "team colours and shade, the actual jersey design and trim, the real "
+    "crest, with the name and number sharp, correctly spelled and clearly "
+    "readable — never a generic or invented kit. "
+    "Extremely high facial and body detail. "
     + SINGLE_FRAME + ". " + NEGATIVES + "."
 )
 

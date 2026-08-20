@@ -98,29 +98,54 @@ function Field({ label, value, onChange, rows = 0 }) {
   );
 }
 
-/** Full-detail dialog. On phones it becomes a full-height sheet. */
+/** Full-detail dialog: big centred dialog on desktop, full page on phones
+    (see .admin-dialog in index.css). */
 function Dialog({ children, onClose }) {
   return (
     <div
       onClick={onClose}
+      className="admin-dialog-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 120, background: "rgba(4,6,12,.74)",
         backdropFilter: "blur(6px)", display: "grid", placeItems: "center",
-        padding: "clamp(0px, 3vw, 24px)", animation: "fadeUp .18s ease both",
+        padding: "clamp(12px, 3vw, 28px)", animation: "fadeUp .18s ease both",
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="card app-font"
-        style={{
-          width: "100%", maxWidth: 540, maxHeight: "min(92dvh, 860px)",
-          overflowY: "auto", padding: "clamp(16px, 4vw, 26px)",
-          borderRadius: "clamp(14px, 3vw, 20px)", boxSizing: "border-box",
-        }}
+        className="card app-font admin-dialog"
+        style={{ padding: "clamp(16px, 4vw, 28px)", borderRadius: "clamp(14px, 3vw, 20px)" }}
       >
         {children}
       </div>
     </div>
+  );
+}
+
+/** One selectable still in the history grid. */
+function StillTile({ still, selected, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={still.notes || undefined}
+      style={{
+        position: "relative", padding: 0, background: "none", cursor: "pointer",
+        border: `2px solid ${selected ? "var(--app-cyan)" : "var(--app-border)"}`,
+        borderRadius: 10, overflow: "hidden", aspectRatio: "9/16",
+      }}
+    >
+      <img src={imgUrl(still.url)} alt="" loading="lazy"
+           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      <span style={{ position: "absolute", top: 5, left: 5, fontSize: 8.5, fontWeight: 800, padding: "2px 6px", borderRadius: 999, background: "rgba(4,6,12,.7)", color: "var(--app-muted)" }}>
+        {still.kind.toUpperCase()}
+      </span>
+      {selected && (
+        <span style={{ position: "absolute", top: 5, right: 5, width: 18, height: 18, borderRadius: "50%", background: "var(--app-cyan)", color: "#04121a", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900 }}>
+          ✓
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -129,6 +154,9 @@ function CharacterDialog({ char, onSaved, onClose }) {
     name: char.name, look: char.look, default_wardrobe: char.default_wardrobe,
     voice_style: char.voice_style, aliases: char.aliases.join(", "),
   });
+  const [stills, setStills] = useState(null);
+  const [selection, setSelection] = useState(new Set());
+  const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -138,11 +166,24 @@ function CharacterDialog({ char, onSaved, onClose }) {
     form.voice_style !== char.voice_style ||
     form.aliases !== char.aliases.join(", ");
 
+  useEffect(() => {
+    api.adminStills(char.id)
+      .then((rows) => {
+        setStills(rows);
+        setSelection(new Set(rows.filter((s) => s.active).map((s) => s.id)));
+      })
+      .catch(() => setStills([]));
+  }, [char.id]);
+
+  const activeIds = new Set((stills || []).filter((s) => s.active).map((s) => s.id));
+  const selectionChanged =
+    stills && (selection.size !== activeIds.size || [...selection].some((id) => !activeIds.has(id)));
+
   const run = async (kind, fn) => {
     setBusy(kind);
     setError("");
     try {
-      onSaved(await fn());
+      await fn();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -150,73 +191,143 @@ function CharacterDialog({ char, onSaved, onClose }) {
     }
   };
 
-  const save = () => run("save", () => api.adminUpdateCharacter(char.id, {
+  const save = () => run("save", async () => onSaved(await api.adminUpdateCharacter(char.id, {
     name: form.name, look: form.look, default_wardrobe: form.default_wardrobe,
     voice_style: form.voice_style,
     aliases: form.aliases.split(",").map((a) => a.trim()).filter(Boolean),
-  }));
-  const toggle = () => run("toggle", () => api.adminUpdateCharacter(char.id, { active: !char.active }));
-  const regen = () => {
-    if (!window.confirm(`Generate fresh reference stills for ${char.name}? Costs ~$0.10 of real image credit.`)) return;
-    run("regen", () => api.adminRegenerateRefs(char.id));
+  })));
+  const toggle = () => run("toggle", async () =>
+    onSaved(await api.adminUpdateCharacter(char.id, { active: !char.active })));
+
+  const generate = () => {
+    if (!window.confirm(`Generate 2 new stills for ${char.name}? Costs ~$0.10 of image credit. They appear below as candidates — approve to use them.`)) return;
+    run("regen", async () => {
+      const fresh = await api.adminGenerateStills(char.id, notes.trim());
+      setStills((s) => [...fresh, ...(s || [])]);
+      setNotes("");
+    });
   };
+
+  const approve = () => run("approve", async () => {
+    const updated = await api.adminApproveStills(char.id, [...selection]);
+    onSaved(updated);
+    setStills((rows) => rows.map((r) => ({ ...r, active: selection.has(r.id) })));
+  });
+
+  const research = () => run("research", async () => {
+    const r = await api.adminResearch(char.id);
+    if (!r.found) {
+      setError("Research couldn't identify this person — fill the fields manually.");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      look: r.look || f.look,
+      default_wardrobe: r.default_wardrobe || f.default_wardrobe,
+      voice_style: r.voice_style || f.voice_style,
+    }));
+  });
+
+  const toggleStill = (id) =>
+    setSelection((sel) => {
+      const next = new Set(sel);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 4) next.add(id);
+      return next;
+    });
 
   return (
     <Dialog onClose={() => !busy && onClose()}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800, fontSize: 19, color: "var(--app-text)" }}>{char.name}</span>
+          <span style={{ fontWeight: 800, fontSize: "clamp(17px, 4.5vw, 20px)", color: "var(--app-text)" }}>{char.name}</span>
           <span style={badgeStyle(char.source)}>{char.source}</span>
           {!char.active && <span style={{ fontSize: 11, color: "var(--app-error)", fontWeight: 700 }}>INACTIVE</span>}
           <button onClick={onClose} aria-label="Close"
-                  style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--app-muted)", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: "2px 6px" }}>
+                  style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--app-muted)", fontSize: 24, cursor: "pointer", lineHeight: 1, padding: "2px 8px" }}>
             ×
           </button>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: -10 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: -12 }}>
           <code style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>{char.id}</code>
           <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>· {char.sport}</span>
         </div>
 
-        {/* stills */}
-        <div style={{ display: "flex", gap: 10 }}>
-          {(char.reference_urls.length ? char.reference_urls : [null]).map((u, i) => (
-            <div key={i} style={{ width: 104, aspectRatio: "9/16", borderRadius: 10, overflow: "hidden", border: "1px solid var(--app-border)", flexShrink: 0 }}>
-              {u ? (
-                <img src={imgUrl(u)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <div className="admin-dialog-grid" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* ── left: stills, history, generation ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: "var(--app-muted2)" }}>
+                STILLS — select up to 4, then approve
+              </span>
+              {stills === null ? (
+                <div style={{ fontSize: 12.5, color: "var(--app-muted2)" }}>loading history…</div>
+              ) : stills.length === 0 ? (
+                <div style={{ width: 96, aspectRatio: "9/16", borderRadius: 10, overflow: "hidden", border: "1px solid var(--app-border)" }}>
+                  <NoImage />
+                </div>
               ) : (
-                <NoImage />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))", gap: 8 }}>
+                  {stills.map((s) => (
+                    <StillTile key={s.id} still={s} selected={selection.has(s.id)} onToggle={() => toggleStill(s.id)} />
+                  ))}
+                </div>
+              )}
+              {selectionChanged && (
+                <button className="grad-btn" style={{ padding: "11px 16px", fontSize: 13.5 }}
+                        disabled={!!busy || selection.size === 0} onClick={approve}>
+                  {busy === "approve" ? "Applying…" : `✓ Approve selection (${selection.size})`}
+                </button>
               )}
             </div>
-          ))}
+
+            <div className="panel" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: "var(--app-muted2)" }}>
+                GENERATE NEW STILLS
+              </span>
+              <textarea
+                rows={2}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Direction for the shoot — era, exact kit, hair… e.g. “2005 Barcelona home kit, long curly hair, headband”"
+                style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", fontSize: 13, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 9, resize: "vertical" }}
+              />
+              <button className="ghost-btn" style={{ padding: "10px 14px", fontSize: 13 }} disabled={!!busy} onClick={generate}>
+                {busy === "regen" ? "Generating…" : "📸 Generate 2 stills ($0.10)"}
+              </button>
+            </div>
+          </div>
+
+          {/* ── right: identity fields ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <button className="ghost-btn" style={{ padding: "10px 14px", fontSize: 13, alignSelf: "flex-start" }}
+                    disabled={!!busy} onClick={research}
+                    title="One web search fills look, exact kit colours/crest/number and voice from real data">
+              {busy === "research" ? "Researching…" : "✨ Auto-fill real details (web research)"}
+            </button>
+            <Field label="NAME" value={form.name} onChange={set("name")} />
+            <Field label="LOOK — physical appearance" value={form.look} onChange={set("look")} rows={3} />
+            <Field label="WARDROBE — exact kit: colours, design, crest, number" value={form.default_wardrobe} onChange={set("default_wardrobe")} rows={3} />
+            <Field label="VOICE STYLE" value={form.voice_style} onChange={set("voice_style")} />
+            <Field label="ALIASES — comma-separated" value={form.aliases} onChange={set("aliases")} />
+
+            {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
+
+            <button className="grad-btn" style={{ padding: "12px 20px", fontSize: 14, opacity: dirty ? 1 : 0.5 }}
+                    disabled={!dirty || !!busy} onClick={save}>
+              {busy === "save" ? "Saving…" : "Save changes"}
+            </button>
+            <button
+              className="ghost-btn"
+              style={{ padding: "11px 16px", fontSize: 13.5, color: char.active ? "var(--app-error)" : "var(--app-green)" }}
+              disabled={!!busy}
+              onClick={toggle}
+            >
+              {busy === "toggle" ? "…" : char.active ? "Deactivate — hide from generation" : "Activate"}
+            </button>
+          </div>
         </div>
-
-        <Field label="NAME" value={form.name} onChange={set("name")} />
-        <Field label="LOOK — physical appearance" value={form.look} onChange={set("look")} rows={3} />
-        <Field label="WARDROBE — kit, colours, number" value={form.default_wardrobe} onChange={set("default_wardrobe")} rows={2} />
-        <Field label="VOICE STYLE" value={form.voice_style} onChange={set("voice_style")} />
-        <Field label="ALIASES — comma-separated" value={form.aliases} onChange={set("aliases")} />
-
-        {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="grad-btn" style={{ padding: "12px 20px", fontSize: 14, opacity: dirty ? 1 : 0.5, flex: "1 1 auto" }}
-                  disabled={!dirty || !!busy} onClick={save}>
-            {busy === "save" ? "Saving…" : "Save changes"}
-          </button>
-          <button className="ghost-btn" style={{ padding: "12px 16px", fontSize: 13.5, flex: "1 1 auto" }} disabled={!!busy} onClick={regen}>
-            {busy === "regen" ? "Generating…" : "↻ New stills ($0.10)"}
-          </button>
-        </div>
-        <button
-          className="ghost-btn"
-          style={{ padding: "11px 16px", fontSize: 13.5, color: char.active ? "var(--app-error)" : "var(--app-green)" }}
-          disabled={!!busy}
-          onClick={toggle}
-        >
-          {busy === "toggle" ? "…" : char.active ? "Deactivate — hide from generation" : "Activate"}
-        </button>
       </div>
     </Dialog>
   );

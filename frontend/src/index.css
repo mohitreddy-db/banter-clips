@@ -581,3 +581,30 @@ video:-webkit-full-screen {
   object-fit: contain !important;
   background: #000;
 }
+
+/* ── Admin catalog dialog ─────────────────────────────────────────────────
+   Desktop: a large centred dialog. Phones: a full-page sheet. */
+.admin-dialog {
+  width: 100%;
+  max-width: 920px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+@media (min-width: 900px) {
+  .admin-dialog-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 26px;
+    align-items: start;
+  }
+}
+@media (max-width: 640px) {
+  .admin-dialog-overlay { padding: 0 !important; align-items: stretch !important; }
+  .admin-dialog {
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0 !important;
+  }
+}
