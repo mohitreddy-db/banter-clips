@@ -70,6 +70,9 @@ class UserOut(BaseModel):
     cancel_at_period_end: bool
     created_at: datetime
     preferences: PreferencesOut | None = None
+    # Read from the User.is_admin property (ADMIN_EMAILS allow-list); shows
+    # the admin nav in the client. Endpoints enforce it server-side.
+    is_admin: bool = False
 
 
 # ---------- clips ----------

@@ -60,6 +60,14 @@ class User(Base):
     # the same way — from the outside it looks like a login that won't stick.
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
+    @property
+    def is_admin(self) -> bool:
+        """Admin = allow-listed email (ADMIN_EMAILS). Deliberately not a DB
+        column: the list is tiny, and env config can't be escalated by SQL."""
+        from .config import settings
+
+        return self.email in settings.admin_emails
+
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
@@ -272,3 +280,35 @@ class Event(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (Index("events_name_time", "name", "created_at"),)
+
+
+class CatalogCharacter(Base):
+    """Persistent character catalog — the DB half of the two-layer catalog.
+
+    The curated JSON in app/video/catalog/ ships with the code; rows here are
+    written at runtime (auto-research discoveries) and by the admin catalog
+    page, and OVERRIDE the JSON entry with the same id. Reference stills for
+    these rows live in Supabase Storage (keys in reference_images), so the
+    whole dynamic layer survives droplet rebuilds and works across processes.
+    """
+
+    __tablename__ = "catalog_characters"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)  # slug, e.g. "ronaldinho"
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    sport: Mapped[str] = mapped_column(Text, nullable=False, server_default="NBA")
+    look: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    default_wardrobe: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    voice_style: Mapped[str] = mapped_column(Text, nullable=False, server_default="neutral, conversational")
+    aliases: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    teams: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    # Supabase Storage keys ("catalog/references/x.jpg") or repo-relative
+    # paths ("references/x.jpg") for entries that mirror a curated character.
+    reference_images: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # "auto-research" (pipeline discovered) | "admin" (created/edited by hand)
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default="auto-research")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

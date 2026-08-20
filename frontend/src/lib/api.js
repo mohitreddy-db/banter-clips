@@ -2,6 +2,7 @@
 // VITE_API_URL points at the FastAPI server (droplet in prod, :8000 locally).
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE = BASE;
 const TOKEN_KEY = "banterclips-session";
 
 export class ApiError extends Error {
@@ -95,6 +96,12 @@ export const api = {
   billingPortal: () => request("/billing/portal", { method: "POST" }),
   upgrade: () => request("/billing/upgrade", { method: "POST" }),
   cancelPlan: () => request("/billing/cancel", { method: "POST" }),
+
+  // admin — 404s for non-admins by design
+  adminCatalog: () => request("/admin/catalog"),
+  adminCreateCharacter: (body) => request("/admin/catalog", { method: "POST", body }),
+  adminUpdateCharacter: (id, body) => request(`/admin/catalog/${id}`, { method: "PATCH", body }),
+  adminRegenerateRefs: (id) => request(`/admin/catalog/${id}/references`, { method: "POST" }),
 
   // analytics (fire-and-forget)
   track: (name, props = {}) =>

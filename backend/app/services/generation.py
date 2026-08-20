@@ -98,6 +98,13 @@ def run_for_clip(clip_id: uuid.UUID) -> None:
     The job state machine, allowance accounting and API shape are identical
     in all three, so switching is a config change and rollback is instant.
     """
+    # Fresh catalog per job: admin edits and characters discovered by other
+    # processes land in the DB, and this worker's lru_cache would otherwise
+    # hold a stale view until restart.
+    from ..video import catalog
+
+    catalog.reload()
+
     # A [mock] take is simulated whatever the deployment is set to, so the
     # flow can be demonstrated on production without spending anything.
     if _is_simulated(clip_id):

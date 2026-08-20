@@ -109,6 +109,9 @@ class Settings(BaseSettings):
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
+    # Comma-separated emails with access to the admin panel (/admin/*).
+    ADMIN_EMAILS: str = ""
+
     # When a job casts a real person the catalog doesn't know (and web
     # research confirms who they are), generate their two reference stills
     # on the spot (~$0.10, charged to the job) so this character renders
@@ -138,6 +141,10 @@ class Settings(BaseSettings):
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
     CREATOR_PRICE: str = "$9.99/mo"
+
+    @property
+    def admin_emails(self) -> set[str]:
+        return {e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()}
 
     @property
     def cors_origins(self) -> list[str]:

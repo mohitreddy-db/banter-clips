@@ -136,8 +136,14 @@ def main(argv: list[str] | None = None) -> int:
     # Additive column migrations, same as the API's startup. The worker can
     # win the race after a deploy and select model columns the API has not
     # added yet; applying here (idempotent, never raises) closes that window.
+    # create_all covers brand-new tables (e.g. catalog_characters) the same way.
     from . import db_migrate
+    from .db import Base, engine
 
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:  # noqa: BLE001 — boot must survive; the API creates them too
+        logging.getLogger("banter.worker").exception("create_all failed; continuing")
     db_migrate.apply()
     worker = Worker()
     worker.install_signals()

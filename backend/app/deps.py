@@ -32,6 +32,14 @@ def get_current_user(
     return user
 
 
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    """ADMIN_EMAILS allow-list. 404, not 403: non-admins shouldn't learn the
+    admin surface exists."""
+    if not user.is_admin:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return user
+
+
 def month_start() -> datetime:
     now = datetime.now(timezone.utc)
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

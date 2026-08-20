@@ -13,6 +13,14 @@ function Icon({ d, size = 18, color = "currentColor" }) {
 
 const icons = {
   create: <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  catalog: (
+    <>
+      <circle cx="9" cy="7" r="3" />
+      <path d="M3 19c0-3 2.5-5 6-5s6 2 6 5" />
+      <circle cx="17" cy="9" r="2.4" />
+      <path d="M15.5 14.2c3-.4 5.5 1.3 5.5 4.3" />
+    </>
+  ),
   clips: (
     <>
       <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -55,7 +63,7 @@ const icons = {
 export default function AppShell() {
   const nav = useNavigate();
   const loc = useLocation();
-  const { plan, left, limit, booted, signedIn, apiDown } = useApp();
+  const { plan, left, limit, booted, signedIn, apiDown, user } = useApp();
 
   // App pages require a session (BR-02). Wait for boot, then gate.
   if (!booted) {
@@ -109,6 +117,11 @@ export default function AppShell() {
         <NavLink to="/account" style={navItem}>
           <Icon d={icons.account} /> Account
         </NavLink>
+        {user?.is_admin && (
+          <NavLink to="/admin" style={navItem}>
+            <Icon d={icons.catalog} /> Catalog
+          </NavLink>
+        )}
 
         <div style={{ borderTop: "1px solid var(--app-border)", margin: "14px 0 10px" }} />
         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted2)", padding: "0 12px 4px" }}>COMING SOON</div>

@@ -9,6 +9,7 @@ import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import { Privacy, Terms } from "./pages/Legal.jsx";
+import AdminCatalog from "./pages/AdminCatalog.jsx";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/clips" element={<Clips />} />
         <Route path="/account" element={<Account />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/admin" element={<AdminCatalog />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

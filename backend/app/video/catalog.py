@@ -48,14 +48,37 @@ class Character:
     voice_style: str = "neutral, conversational"
     reference_images: list[str] = field(default_factory=list)
     active: bool = True
+    source: str = "curated"  # "curated" | "auto-research" | "admin"
 
     def reference_paths(self) -> list[Path]:
-        """Only references that actually exist on disk."""
+        """Local files for this character's stills, downloading as needed.
+
+        Entries are either repo-relative ("references/x.jpg", curated in git)
+        or Supabase Storage keys ("catalog/references/x.jpg", the durable
+        home of runtime-generated stills). Storage-backed stills are cached
+        into the local references dir on first use — the pipeline reads
+        bytes from disk. Never raises; an unfetchable still is skipped."""
         paths = []
-        for rel in self.reference_images:
-            p = CATALOG_DIR / rel
-            if p.exists():
-                paths.append(p)
+        for entry in self.reference_images:
+            if entry.startswith("references/"):
+                p = CATALOG_DIR / entry
+                if p.exists():
+                    paths.append(p)
+                continue
+            cached = REFERENCES_DIR / Path(entry).name
+            if cached.exists():
+                paths.append(cached)
+                continue
+            try:
+                from ..services import storage
+
+                payload = storage.get().open(entry)
+                if payload:
+                    REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
+                    cached.write_bytes(payload)
+                    paths.append(cached)
+            except Exception:  # noqa: BLE001 — a missing still degrades, never fails
+                log.warning("could not fetch reference %s", entry)
         return paths
 
 
@@ -103,22 +126,41 @@ def reload() -> None:
     teams.cache_clear()
 
 
-# Runtime-discovered characters live in an OVERLAY file, not characters.json:
-# the main file is in git and a deploy's `git pull` would clobber runtime
-# writes. The overlay is gitignored, merged on load (curated ids win), and is
-# what the future admin catalog page will curate from.
-OVERLAY_PATH = CATALOG_DIR / "characters.local.json"
-
-
+# Two-layer catalog. The curated JSON ships with the code; the DB layer
+# (catalog_characters) is written at runtime — auto-research discoveries and
+# admin-panel edits — and OVERRIDES a curated entry with the same id, so the
+# admin page can edit or deactivate anything. DB rows plus Storage-hosted
+# stills survive droplet rebuilds and are shared across API and worker.
 def _load_characters() -> list[Character]:
-    out = []
-    seen: set[str] = set()
-    for path in (CATALOG_DIR / "characters.json", OVERLAY_PATH):
-        for char in _parse_characters(_read_entries(path, "characters")):
-            if char.id not in seen:
-                seen.add(char.id)
-                out.append(char)
-    return out
+    by_id = {c.id: c for c in _parse_characters(
+        _read_entries(CATALOG_DIR / "characters.json", "characters"))}
+    for char in _load_db_characters():
+        by_id[char.id] = char
+    return list(by_id.values())
+
+
+def _load_db_characters() -> list[Character]:
+    """Rows from catalog_characters. Never raises — no DB, no dynamic layer."""
+    try:
+        from ..db import SessionLocal
+        from ..models import CatalogCharacter
+
+        db = SessionLocal()
+        try:
+            rows = db.query(CatalogCharacter).all()
+        finally:
+            db.close()
+        return [Character(
+            id=r.id, name=r.name, sport=r.sport,
+            teams=list(r.teams or []), aliases=[a.lower() for a in (r.aliases or [])],
+            look=r.look, default_wardrobe=r.default_wardrobe,
+            voice_style=r.voice_style or "neutral, conversational",
+            reference_images=list(r.reference_images or []),
+            active=bool(r.active), source=r.source or "admin",
+        ) for r in rows]
+    except Exception:  # noqa: BLE001 — the curated catalog must still load
+        log.warning("catalog DB layer unavailable; using curated entries only")
+        return []
 
 
 def _parse_characters(entries: list[dict]) -> list[Character]:
@@ -184,8 +226,63 @@ def _strs(value: object) -> list[str]:
 
 # ------------------------------------------------- dynamic (runtime) entries
 
+def slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")[:40]
+
+
+def upsert_character(char_id: str, fields: dict, source: str = "admin") -> Character | None:
+    """Create or update a DB catalog row (the layer that overrides curated).
+
+    `fields` may hold any of: name, sport, look, default_wardrobe,
+    voice_style, aliases, teams, reference_images, active. Missing fields on
+    a NEW row are seeded from the curated entry of the same id, so an admin
+    edit of a curated character starts from what ships in git. Never raises.
+    """
+    try:
+        from ..db import SessionLocal
+        from ..models import CatalogCharacter
+
+        char_id = slugify(char_id)
+        if not char_id:
+            return None
+        db = SessionLocal()
+        try:
+            row = db.get(CatalogCharacter, char_id)
+            if row is None:
+                base = characters().get(char_id)
+                row = CatalogCharacter(
+                    id=char_id,
+                    name=(base.name if base else char_id.replace("_", " ").title()),
+                    sport=(base.sport if base else "NBA"),
+                    look=(base.look if base else ""),
+                    default_wardrobe=(base.default_wardrobe if base else ""),
+                    voice_style=(base.voice_style if base else "neutral, conversational"),
+                    aliases=(base.aliases if base else []),
+                    teams=(base.teams if base else []),
+                    reference_images=(base.reference_images if base else []),
+                    source=source,
+                )
+                db.add(row)
+            for key in ("name", "sport", "look", "default_wardrobe", "voice_style",
+                        "aliases", "teams", "reference_images", "active"):
+                if key in fields and fields[key] is not None:
+                    setattr(row, key, fields[key])
+            if source == "admin":
+                row.source = "admin"
+            db.commit()
+        finally:
+            db.close()
+        reload()
+        return characters().get(char_id) or next(
+            (c for c in _load_db_characters() if c.id == char_id), None
+        )
+    except Exception:  # noqa: BLE001 — persistence is a bonus, never a blocker
+        log.exception("could not upsert catalog character %r", char_id)
+        return None
+
+
 def save_dynamic_character(member: CastMember, sport: str) -> Character | None:
-    """Persist a researched off-catalog cast member into the overlay.
+    """Persist a researched off-catalog cast member into the DB layer.
 
     Called after web research confirmed WHO this is and wrote a real look and
     kit, so the entry meets the same bar as a curated one. Ronaldinho and
@@ -194,63 +291,58 @@ def save_dynamic_character(member: CastMember, sport: str) -> Character | None:
     wins over discovery. Returns the loaded Character (existing or new).
     Never raises.
     """
-    try:
-        from . import research
-        if not research.looks_like_real_person(member.name):
-            return None
-        char_id = re.sub(r"[^a-z0-9]+", "_", (member.id or member.name).lower()).strip("_")[:40]
-        if not char_id:
-            return None
-        existing = characters().get(char_id)
-        if existing:
-            return existing
-        entry = {
-            "id": char_id,
-            "name": _clean(member.name, char_id.replace("_", " ").title()),
-            "sport": _clean(sport, "NBA"),
-            "teams": [],
-            "aliases": [],
-            "look": _clean(member.look),
-            "default_wardrobe": _clean(member.wardrobe),
-            "voice_style": _clean(member.voice, "neutral, conversational"),
-            "reference_images": [],
-            "active": True,
-            "source": "auto-research",   # the admin page will surface these
-        }
-        data = {"characters": []}
-        if OVERLAY_PATH.exists():
-            try:
-                data = json.loads(OVERLAY_PATH.read_text())
-            except json.JSONDecodeError:
-                log.warning("overlay unreadable; starting a fresh one")
-        entries = data.setdefault("characters", [])
-        entries[:] = [e for e in entries if e.get("id") != char_id]
-        entries.append(entry)
-        OVERLAY_PATH.write_text(json.dumps(data, indent=2) + "\n")
-        reload()
-        log.info("catalog: added dynamic character %r (%s)", char_id, entry["name"])
-        return characters().get(char_id)
-    except Exception:  # noqa: BLE001 — persistence is a bonus, never a blocker
-        log.exception("could not persist dynamic character %r", member.name)
+    from . import research
+    if not research.looks_like_real_person(member.name):
         return None
+    char_id = slugify(member.id or member.name)
+    if not char_id:
+        return None
+    existing = characters().get(char_id)
+    if existing:
+        return existing
+    saved = upsert_character(char_id, {
+        "name": _clean(member.name, char_id.replace("_", " ").title()),
+        "sport": _clean(sport, "NBA"),
+        "look": _clean(member.look),
+        "default_wardrobe": _clean(member.wardrobe),
+        "voice_style": _clean(member.voice, "neutral, conversational"),
+    }, source="auto-research")
+    if saved:
+        log.info("catalog: added dynamic character %r (%s)", saved.id, saved.name)
+    return saved
 
 
 def set_reference_images(char_id: str, reference_paths: list[str]) -> None:
-    """Record generated stills for an overlay character. Never raises."""
+    """Persist freshly generated stills: upload to Supabase Storage, record
+    the storage keys on the character's DB row. Local files stay behind as
+    the read cache. Never raises — an upload failure keeps the local-only
+    paths so this job still benefits."""
+    keys: list[str] = []
     try:
-        if not OVERLAY_PATH.exists():
-            return
-        data = json.loads(OVERLAY_PATH.read_text())
-        for entry in data.get("characters", []):
-            if entry.get("id") == char_id:
-                entry["reference_images"] = reference_paths
-        OVERLAY_PATH.write_text(json.dumps(data, indent=2) + "\n")
-        reload()
+        from ..services import storage
+
+        store = storage.get()
+        for rel in reference_paths:
+            local = CATALOG_DIR / rel
+            if not local.exists():
+                continue
+            key = f"catalog/references/{local.name}"
+            store.put(key, local, "image/jpeg")
+            keys.append(key)
     except Exception:  # noqa: BLE001
-        log.exception("could not record references for %r", char_id)
+        log.exception("could not upload references for %r; keeping local paths", char_id)
+        keys = list(reference_paths)
+    upsert_character(char_id, {"reference_images": keys or list(reference_paths)},
+                     source="auto-research")
 
 
 # -------------------------------------------------------------------- lookup
+
+def all_characters() -> list[Character]:
+    """Every entry incl. inactive, freshly loaded — the admin page's view."""
+    reload()
+    return sorted(_load_characters(), key=lambda c: (c.sport, c.id))
+
 
 def characters_for(sport: str) -> list[Character]:
     return [c for c in characters().values() if c.sport == sport]
