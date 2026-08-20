@@ -25,6 +25,10 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Account no longer exists")
+    if user.is_blocked:
+        # Kills already-issued session JWTs too, with the same generic 401 a
+        # stale session gets — blocked users are never told they're blocked.
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session")
     return user
 
 

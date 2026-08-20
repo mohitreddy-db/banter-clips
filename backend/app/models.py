@@ -55,6 +55,10 @@ class User(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Blocklist. A blocked account is never told it is blocked: sign-in
+    # returns the same generic 401 as a bad token, and existing sessions die
+    # the same way — from the outside it looks like a login that won't stick.
+    is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

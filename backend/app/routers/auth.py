@@ -84,6 +84,11 @@ def supabase_exchange(body: SupabaseExchangeRequest, db: Session = Depends(get_d
         supabase_uid=info.get("id"),
         display_name=meta.get("display_name") or meta.get("full_name"),
     )
+    if user.is_blocked:
+        # Deliberately IDENTICAL to the bad-token response above: a blocked
+        # account is never told it is blocked — the sign-in simply never
+        # sticks and the app lands back on the login page.
+        raise HTTPException(401, "Invalid or expired sign-in. Please sign in again.")
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
     record_event(db, "signed_in", user, provider="supabase")
@@ -126,6 +131,9 @@ def verify(body: VerifyRequest, db: Session = Depends(get_db)):
     token.used_at = now
 
     user = db.get(User, token.user_id)
+    if user is None or user.is_blocked:
+        # Same wording as a spent link — a blocked account learns nothing.
+        raise HTTPException(401, "This sign-in link is invalid or has expired.")
     user.last_login_at = now
     db.commit()
     record_event(db, "signed_in", user, provider="dev-link")
