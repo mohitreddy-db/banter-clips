@@ -165,7 +165,7 @@ def list_stills(char_id: str, admin: User = Depends(get_admin_user)):
         # Curated characters predate the history table — import their active
         # stills as history rows once, so they're selectable like any batch.
         for entry in char.reference_images:
-            kind = "face" if "_face_" in entry else "full"
+            kind = catalog.still_kind(entry)
             if entry.startswith("references/"):
                 catalog.record_still(char_id, kind, local_path=entry, source="curated")
             else:

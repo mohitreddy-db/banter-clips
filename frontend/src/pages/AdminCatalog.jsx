@@ -200,7 +200,7 @@ function CharacterDialog({ char, onSaved, onClose }) {
     onSaved(await api.adminUpdateCharacter(char.id, { active: !char.active })));
 
   const generate = () => {
-    if (!window.confirm(`Generate 2 new stills for ${char.name}? Costs ~$0.10 of image credit. They appear below as candidates — approve to use them.`)) return;
+    if (!window.confirm(`Generate 4 new stills for ${char.name} (face, full body, jersey detail, footwear detail)? Costs ~$0.20 of image credit. They appear below as candidates — approve to use them.`)) return;
     run("regen", async () => {
       const fresh = await api.adminGenerateStills(char.id, notes.trim());
       setStills((s) => [...fresh, ...(s || [])]);
@@ -290,11 +290,11 @@ function CharacterDialog({ char, onSaved, onClose }) {
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Direction for the shoot — era, exact kit, hair… e.g. “2005 Barcelona home kit, long curly hair, headband”"
+                placeholder="Direction for the shoot — era, exact kit, colours, hair… e.g. “2005 Barcelona home kit, long curly hair, gold Nike Mercurial boots”"
                 style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", fontSize: 13, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 9, resize: "vertical" }}
               />
               <button className="ghost-btn" style={{ padding: "10px 14px", fontSize: 13 }} disabled={!!busy} onClick={generate}>
-                {busy === "regen" ? "Generating…" : "📸 Generate 2 stills ($0.10)"}
+                {busy === "regen" ? "Generating…" : "📸 Generate 4 stills ($0.20)"}
               </button>
             </div>
           </div>

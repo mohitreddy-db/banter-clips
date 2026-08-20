@@ -338,10 +338,17 @@ def _upload_stills(char_id: str, reference_paths: list[str], notes: str = "",
                 log.exception("upload failed for %s", local.name)
                 key = None
         entries.append(key or rel)
-        kind = "face" if "_face_" in local.name else "full"
-        record_still(char_id, kind, storage_key=key, local_path=rel,
-                     notes=notes, source=source)
+        record_still(char_id, still_kind(local.name), storage_key=key,
+                     local_path=rel, notes=notes, source=source)
     return entries
+
+
+def still_kind(filename: str) -> str:
+    """face | full | kit | gear, from the filename convention."""
+    for kind in ("face", "kit", "gear"):
+        if f"_{kind}_" in filename:
+            return kind
+    return "full"
 
 
 def record_still(char_id: str, kind: str, storage_key: str | None = None,
@@ -536,9 +543,13 @@ def select_references(char: Character | None, camera: str = "") -> list[Path]:
         return paths
 
     def rank(p: Path) -> int:
-        stem = p.stem.lower()
+        # The identity anchors are the person views; kit/gear detail shots
+        # exist for wardrobe fidelity and rank behind them.
+        kind = still_kind(p.name)
         if _CLOSE_UP.search(camera or ""):
-            return 0 if "face" in stem else 1
-        return 0 if ("full" in stem or "body" in stem) else 1
+            order = ("face", "full", "kit", "gear")
+        else:
+            order = ("full", "face", "kit", "gear")
+        return order.index(kind) if kind in order else len(order)
 
     return sorted(paths, key=rank)[:2]

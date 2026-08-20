@@ -38,28 +38,51 @@ def build_character(char: catalog.Character, images,
                     notes: str = "") -> tuple[list[str], float]:
     """Generate the reference views for one character. Returns (paths, cost).
 
+    Four views — face close-up, full body, jersey detail, footwear detail —
+    each on its own canvas (a close-up on a 9:16 canvas produced squashed
+    bodies; see prompts.REFERENCE_VIEWS). Every still passes the vision
+    review gate, with ONE escalated retry on anatomy/lettering defects, so a
+    distorted still doesn't silently become a character's anchor.
+
     `notes` is admin direction folded into the prompt ("2005 Barcelona era,
     long curly hair, gold boots"). Filenames are unique per batch so history
     accumulates instead of overwriting."""
+    from . import providers, review
+
     catalog.REFERENCES_DIR.mkdir(parents=True, exist_ok=True)
+    reviewer = providers.review_client()
+    reviewer = reviewer if getattr(reviewer, "available", False) else None
+    if isinstance(images, providers.StubImageProvider):
+        reviewer = None  # placeholder gradients would never pass review
     batch = uuid.uuid4().hex[:6]
     written, spent = [], 0.0
-    for view, framing in prompts.REFERENCE_VIEWS.items():
+    for view, spec in prompts.REFERENCE_VIEWS.items():
         prompt = prompts.REFERENCE_STILL_PROMPT.format(
             name=char.name,
             look=char.look or f"a professional {char.sport} figure",
             wardrobe=char.default_wardrobe or "an authentic team kit with the real "
                                               "crest, name and number in crisp legible lettering",
-            framing=framing,
+            framing=spec["framing"],
         )
         if notes.strip():
             prompt += f" Specific direction, follow exactly: {notes.strip()}."
+
         out = catalog.REFERENCES_DIR / f"{char.id}_{view}_{batch}.jpg"
-        path, cost = images.generate(prompt, out)
-        spent += cost
+        path = None
+        for attempt in (1, 2):
+            path, cost = images.generate(prompt, out, aspect_ratio=spec["aspect"])
+            spent += cost
+            if not path:
+                continue
+            verdict = review.review_keyframe(path, char.name, reviewer)
+            if verdict or not verdict.hard:
+                break
+            print(f"  {char.id}: {view} attempt {attempt} rejected ({'; '.join(verdict.hard)})")
+            if attempt == 1:
+                prompt = prompts.escalate(prompt, verdict.hard)
         if path:
             written.append(f"references/{out.name}")
-            print(f"  {char.id}: {view} -> {out.name} (${cost:.3f})")
+            print(f"  {char.id}: {view} -> {out.name}")
         else:
             print(f"  {char.id}: {view} FAILED")
     return written, spent

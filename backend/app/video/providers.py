@@ -119,6 +119,7 @@ class ImageProvider:
 
     def generate(
         self, prompt: str, out: Path, references: list[Path] | None = None,
+        aspect_ratio: str = "9:16",
     ) -> tuple[Path | None, float]:
         """Returns (path, cost). Path is None if generation failed.
 
@@ -129,7 +130,7 @@ class ImageProvider:
         """
         if not self.available:
             return None, 0.0
-        body: dict = {"model": self.model, "prompt": prompt, "aspect_ratio": "9:16"}
+        body: dict = {"model": self.model, "prompt": prompt, "aspect_ratio": aspect_ratio}
         if references:
             # Up to three: two identity stills plus the scene-0 world anchor.
             body["image_urls"] = [_data_uri(p) for p in references if Path(p).exists()][:3]
@@ -169,7 +170,8 @@ class StubImageProvider:
     available = True
 
     def generate(self, prompt: str, out: Path,
-                 references: list[Path] | None = None) -> tuple[Path | None, float]:
+                 references: list[Path] | None = None,
+                 aspect_ratio: str = "9:16") -> tuple[Path | None, float]:
         try:
             return media.placeholder_image(out), 0.0
         except media.MediaError:

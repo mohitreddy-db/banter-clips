@@ -14,7 +14,7 @@
         "victor"
       ],
       "look": "an extremely tall, very slim 7-foot-4 French basketball player with very long limbs, short dark hair and sharp youthful features, towering over everyone around him",
-      "default_wardrobe": "a solid black and silver basketball jersey with the club crest and the number 1, crisp legible lettering; matching shorts",
+      "default_wardrobe": "the authentic San Antonio Spurs black and silver jersey with the Spurs crest and the number 1, crisp legible lettering; matching shorts",
       "voice_style": "calm, French-accented, understated",
       "reference_images": [
         "references/wembanyama_face_01.jpg",
@@ -34,7 +34,7 @@
         "captain clutch"
       ],
       "look": "a compact, powerfully built 6-foot-2 professional basketball point guard with an athletic muscular physique, a thick dark beard, short dark hair and an unbothered expression",
-      "default_wardrobe": "a solid blue and orange basketball jersey with the club crest and the number 11, crisp legible lettering; matching shorts",
+      "default_wardrobe": "the authentic New York Knicks blue and orange jersey with the Knicks crest and the number 11, crisp legible lettering; matching shorts",
       "voice_style": "warm, confident, quick",
       "reference_images": [
         "references/brunson_face_01.jpg",
@@ -55,7 +55,7 @@
         "the king"
       ],
       "look": "a powerfully built veteran basketball forward with a trimmed greying beard, receding hairline and a commanding, weary presence",
-      "default_wardrobe": "a solid purple and gold basketball jersey with the club crest and the number 23, crisp legible lettering; matching shorts",
+      "default_wardrobe": "the authentic Los Angeles Lakers purple and gold jersey with the Lakers crest and the number 23, crisp legible lettering; matching shorts",
       "voice_style": "deep, deliberate, elder-statesman",
       "reference_images": [
         "references/lebron_face_01.jpg",
@@ -75,7 +75,7 @@
         "chef curry"
       ],
       "look": "a lean 6-foot-2 guard with light brown skin, a neat short beard, short dark hair and a boyish grin, chewing his mouthguard",
-      "default_wardrobe": "a solid royal blue and gold basketball jersey with the club crest and the number 30, crisp legible lettering; matching shorts",
+      "default_wardrobe": "the authentic Golden State Warriors royal blue and gold jersey with the Warriors crest and the number 30, crisp legible lettering; matching shorts",
       "voice_style": "light, playful, teasing",
       "reference_images": [],
       "active": true
@@ -92,7 +92,7 @@
         "big honey"
       ],
       "look": "a huge soft-featured Serbian centre with short dark hair, pale skin, heavy-lidded eyes and a deceptively casual slouch",
-      "default_wardrobe": "a solid navy and gold basketball jersey with the club crest and the number 15, crisp legible lettering; matching shorts",
+      "default_wardrobe": "the authentic Denver Nuggets navy and gold jersey with the Nuggets crest and the number 15, crisp legible lettering; matching shorts",
       "voice_style": "flat, Serbian-accented, completely unimpressed",
       "reference_images": [],
       "active": true
@@ -143,7 +143,7 @@
         "the goat"
       ],
       "look": "a short left-footed Argentine forward with a full short beard, dark hair and calm knowing eyes",
-      "default_wardrobe": "a solid pink soccer jersey with the club crest and the number 10, crisp legible lettering; matching shorts; cleats",
+      "default_wardrobe": "the authentic Inter Miami pink home shirt with the Inter Miami heron crest and the number 10, crisp legible lettering; matching shorts; cleats",
       "voice_style": "quiet, Spanish-accented, deadpan",
       "reference_images": [
         "references/messi_face_01.jpg",
@@ -164,7 +164,7 @@
         "cristiano"
       ],
       "look": "an athletic muscular forward with short dark hair with faded sides, sharp jawline, intense focused eyes, light stubble, Portuguese features",
-      "default_wardrobe": "a solid yellow and blue soccer jersey with the club crest and the number 7, crisp legible lettering; matching shorts; cleats",
+      "default_wardrobe": "the authentic Al-Nassr yellow and blue home shirt with the Al-Nassr crest and the number 7, crisp legible lettering; matching shorts; cleats",
       "voice_style": "confident, slightly accented, declarative and intense",
       "reference_images": [
         "references/ronaldo_face_01.jpg",
@@ -184,7 +184,7 @@
         "kylian"
       ],
       "look": "a fast, compact French forward with very short cropped hair, smooth dark skin and a wide mischievous grin",
-      "default_wardrobe": "a solid white soccer jersey with the club crest and the number 10, crisp legible lettering; matching shorts; cleats",
+      "default_wardrobe": "the authentic Real Madrid white home shirt with the Real Madrid crest and the number 10, crisp legible lettering; matching shorts; cleats",
       "voice_style": "quick, cheerful, French-accented",
       "reference_images": [],
       "active": true
@@ -201,7 +201,7 @@
         "lamine"
       ],
       "look": "a teenage Spanish winger with short curly dark hair, a slight frame and effortless swagger",
-      "default_wardrobe": "a solid deep blue and garnet soccer jersey with the club crest and the number 10, crisp legible lettering; matching shorts; cleats",
+      "default_wardrobe": "the authentic FC Barcelona blue and garnet home shirt with the Barcelona crest and the number 10, crisp legible lettering; matching shorts; cleats",
       "voice_style": "young, cocky, amused",
       "reference_images": [],
       "active": true
@@ -249,7 +249,7 @@
         "showtime"
       ],
       "look": "an athletic quarterback with curly dark hair pushed back by a thin headband, scruffy beard and restless eyes",
-      "default_wardrobe": "a solid red football jersey with the club crest and the number 15, crisp legible lettering; white football pants",
+      "default_wardrobe": "the authentic Kansas City Chiefs red jersey with the Chiefs logo and the number 15, crisp legible lettering; white football pants",
       "voice_style": "raspy, animated, competitive",
       "reference_images": [],
       "active": true
@@ -265,7 +265,7 @@
         "hurts so good"
       ],
       "look": "a compact, heavily muscled quarterback with a short beard, calm stoic expression and slow deliberate movements",
-      "default_wardrobe": "a solid midnight green football jersey with the club crest and the number 1, crisp legible lettering; white football pants",
+      "default_wardrobe": "the authentic Philadelphia Eagles midnight green jersey with the Eagles logo and the number 1, crisp legible lettering; white football pants",
       "voice_style": "low, measured, unshakeable",
       "reference_images": [],
       "active": true
@@ -329,7 +329,7 @@
         "all rise"
       ],
       "look": "a gigantic 6-foot-7 outfielder with short dark hair, a wide easy grin and shoulders that fill a doorway",
-      "default_wardrobe": "a solid navy pinstriped baseball uniform with the club crest and the number 99, crisp legible lettering",
+      "default_wardrobe": "the authentic New York Yankees navy pinstriped home uniform with the interlocking NY and the number 99, crisp legible lettering",
       "voice_style": "easygoing, rumbling, midwestern",
       "reference_images": [],
       "active": true

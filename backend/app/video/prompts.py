@@ -507,8 +507,36 @@ REFERENCE_STILL_PROMPT = (
     + SINGLE_FRAME + ". " + NEGATIVES + "."
 )
 
+# The reference set is four views, each with its own framing AND canvas.
+# The canvas matters: a head-and-shoulders close-up forced onto a 9:16 canvas
+# made the model fill the tall frame with a vertically squashed body
+# (observed 2026-08-21) — portrait crops get 3:4, only the standing figure
+# gets 9:16.
 REFERENCE_VIEWS = {
-    "face": "Tight head-and-shoulders close-up, face perfectly sharp and centred",
-    "full": "Full-body shot from head to feet, whole figure visible and centred, "
-            "standing naturally with weight on both feet",
+    "face": {
+        "framing": "Tight head-and-shoulders close-up, face perfectly sharp and "
+                   "centred, filling the frame; skin texture, hairline and eyes "
+                   "in maximum detail",
+        "aspect": "3:4",
+    },
+    "full": {
+        "framing": "Full-body shot from head to feet, whole figure visible and "
+                   "centred, standing naturally with weight on both feet; every "
+                   "item worn is visible and in focus — jersey, shorts, socks "
+                   "and footwear all sharp",
+        "aspect": "9:16",
+    },
+    "kit": {
+        "framing": "Torso-only detail shot of the jersey filling the frame: "
+                   "exact fabric colours and shade, the crest, every logo, the "
+                   "name and number — all lettering perfectly sharp, correctly "
+                   "spelled and legible",
+        "aspect": "3:4",
+    },
+    "gear": {
+        "framing": "Waist-down detail shot: shorts, socks and footwear filling "
+                   "the frame, their exact colours, trim, logos and laces sharp "
+                   "and in focus",
+        "aspect": "3:4",
+    },
 }
