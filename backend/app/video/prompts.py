@@ -49,6 +49,16 @@ NEGATIVES = (
     "No split screen, panels or collage"
 )
 
+# Every clip reviewed on 2026-08-20 carried invented lettering somewhere the
+# prompt was silent — sponsor "Hobiin" on a jersey, "ffe far" arena boards, a
+# gibberish scoreboard. Models render named text cleanly and unnamed text as
+# alien script, so unnamed surfaces must be explicitly plain.
+CLEAN_TEXT = (
+    "Readable lettering only where named: kit crests, names, numbers, named "
+    "props. Ad boards, scoreboards, signage and sponsor patches stay plain "
+    "or out of focus, unreadable"
+)
+
 # Framing. This replaced "keep the lower quarter of the frame visually calm",
 # which was written to give burned-in captions a clean background but had an
 # expensive side effect: the model honoured it by ENDING THE SUBJECT above the
@@ -154,7 +164,15 @@ def short_look(member) -> str:
     # Cut at a clause boundary, not a word count. Truncating mid-phrase gave
     # "an extremely tall, very slim 7-foot-4 French basketball" — a dangling
     # adjective that describes nothing and reads as a mistake to the model.
-    head = re.split(r"[,;]", look)[0].strip()
+    # But the FIRST clause alone can be junk too: "a fast, compact French
+    # forward" opens with "a fast" — every motion prompt read "Mbappe, a
+    # fast, says". Keep taking clauses until the fragment stands on its own.
+    clauses = [c.strip() for c in re.split(r"[,;]", look) if c.strip()]
+    head = ""
+    for clause in clauses:
+        head = f"{head}, {clause}" if head else clause
+        if len(head.split()) >= 3:
+            break
     words = head.split()
     if len(words) > 12:
         head = " ".join(words[:12])
@@ -191,6 +209,7 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
     parts.append(f"Style: {style_for(plan)}.")
     parts.append(SINGLE_FRAME + ".")
     parts.append(FULL_FIGURE)
+    parts.append(f"{CLEAN_TEXT}.")
     parts.append(f"{NEGATIVES}.")
     parts.append("Remember: a real photograph of real people, never an illustration.")
     return " ".join(parts)
@@ -305,7 +324,8 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
         parts.append(f"Ends on: {scene.transition}.")
     # Veo is documented to burn in its own subtitles when given dialogue; we
     # burn our own captions with ffmpeg, so a second set would collide.
-    parts.append(f"{NEGATIVES}. No subtitles, no burned-in dialogue text.")
+    parts.append(f"{NEGATIVES}. No subtitles, no burned-in dialogue text. "
+                 "Background signage and scoreboards stay unreadable.")
     return " ".join(parts)
 
 
@@ -329,6 +349,20 @@ Rivalry and mock-outrage travel further than praise: the reply guy is the
 distribution channel.
 </what_makes_these_work>
 
+<if_the_take_is_a_brief>
+Some users type a full production brief instead of an opinion ("Create a
+15-sec funny roast: X happens, then Y, end with Z…"). When the take contains
+explicit instructions — named people, ordered beats, a specified ending,
+requested on-screen text — those are REQUIREMENTS, not inspiration:
+- Same plot, same order of events, same characters. You add cinematic
+  detail (camera, lighting, timing, expressions, blocking); you never
+  substitute a different story or different people.
+- Every person the brief names MUST appear in the cast, as themselves.
+- A requested ending or closing text becomes the payoff scene, verbatim.
+- If the brief asks for something this pipeline cannot do (music tracks,
+  real footage), simply omit it — never replace it with something else.
+</if_the_take_is_a_brief>
+
 <hard_rules>
 - Keep the user's stance. Sharpen and exaggerate it; never reverse or soften
   it. If they say a team is bad, the video says it harder.
@@ -338,7 +372,17 @@ distribution channel.
   generator gives a character a different voice in every clip, so alternating
   speakers is what stops one character audibly changing voice mid-video.
 - A line must be speakable inside its scene: at most {max_words} words.
-- Cast only from the provided roster, using their exact `id` values.
+- Casting: use roster members (by their exact `id`) when the story is about
+  them — but the roster is NOT a limit. When the take names a real figure
+  who is not on it, cast them anyway: invent a short id, and write their
+  real appearance, their real club's kit, and a fitting voice. Never swap a
+  named person for a lookalike or a roster member ("Ronaldinho" is not
+  "Ronaldo"). When the story is about fans or a crowd, cast generic
+  characters (a die-hard fan in the team's shirt and scarf, a steward) —
+  never dress a superstar as a stand-in for a fan.
+- Wardrobe follows the STORY, not the roster entry: a player acting in an
+  Arsenal story wears the Arsenal kit described in the team context, not
+  their own club's kit.
 - When the take targets a team, cast that team's players and use their colour
   palette and venues.
 - Describe ONE continuous take per scene: one camera setup, one action. Never
@@ -353,6 +397,11 @@ distribution channel.
 - Never present an invented score, result, injury, transfer or quote as real.
 - Mock performance, decisions and situations. Never mock a person's
   appearance, family, race or intelligence.
+- The payoff is a PHYSICAL comedic moment performed by the cast in-scene —
+  a reaction, a reveal, an escalation completed. Never a person holding a
+  homemade sign, never an empty-jersey tableau, never a summary shot: the
+  last scene is the one that gets shared, so it must be the strongest image,
+  not a caption card.
 </hard_rules>
 
 <how_to_fill_each_field>
@@ -414,7 +463,8 @@ def planner_user_message(
         f"Tone: {tone}\n"
         f"The opinion to dramatise: {take}\n"
         f"{context}\n"
-        f"Roster you may cast (use these ids):\n{names}\n\n"
+        f"Pre-described roster (use these ids when casting these people; the "
+        f"roster is not a limit — see the casting rule):\n{names}\n\n"
         f"Locations you may reuse:\n{places}\n"
     )
 
@@ -428,10 +478,19 @@ REFERENCE_STILL_PROMPT = (
     "Subject: {name}, {look}, wearing {wardrobe}, with plain unbranded "
     "single-colour shoes. "
     "{framing}. Neutral relaxed expression, arms at sides. "
-    "Extremely high facial and body detail. " + SINGLE_FRAME + ". " + NEGATIVES + "."
+    # Anatomy is spelled out because reference defects COMPOUND: a distorted
+    # still anchors every future keyframe of this person. Kit clarity is what
+    # lets the still carry team identity into scenes.
+    "Accurate natural human proportions — correct head-to-body ratio, "
+    "realistic limb lengths, an athletic adult physique photographed with a "
+    "standard portrait lens, no wide-angle distortion. The kit's colours, "
+    "crest, name and number are sharp, correctly spelled and clearly "
+    "readable. Extremely high facial and body detail. "
+    + SINGLE_FRAME + ". " + NEGATIVES + "."
 )
 
 REFERENCE_VIEWS = {
     "face": "Tight head-and-shoulders close-up, face perfectly sharp and centred",
-    "full": "Full-body shot from head to feet, whole figure visible and centred",
+    "full": "Full-body shot from head to feet, whole figure visible and centred, "
+            "standing naturally with weight on both feet",
 }

@@ -279,10 +279,32 @@ def test_every_tier_yields_speakable_scenes():
 def test_caption_wrapping_and_filters():
     lines = media._wrap("a caption long enough to need wrapping onto two lines", 24)
     assert len(lines) >= 2 and all(len(l) <= 30 for l in lines)
+    # Captions burn as timed word-chunks that tile the scene's window: the
+    # first chunk starts at the window start, the last ends at the window end.
     filters = media.caption_filters([(0.0, 3.5, "he said what he said")], "/font.ttf")
-    assert filters and "between(t,0.00,3.50)" in filters[0]
+    assert filters and "between(t,0.00," in filters[0]
+    assert filters[-1].split("between(t,")[1].startswith(tuple("0123456789"))
+    assert ",3.50)" in filters[-1]
     # Newlines never reach drawtext — they render literally as "n" (measured).
     assert not any("\n" in f for f in filters)
+
+
+def test_captions_never_drop_words():
+    """The block style silently truncated at 2 lines x 24 chars — every clip
+    reviewed on 2026-08-20 shipped a punchline cut mid-sentence."""
+    line = ("Jordan might have the killer instinct but I am bringing the "
+            "power that breaks dynasties tonight and every night after")
+    filters = media.caption_filters([(0.0, 10.0, line)], "/font.ttf")
+    texts = [Path(f.split("textfile=")[1].split(":")[0]).read_text() for f in filters]
+    assert " ".join(" ".join(texts).split()) == line
+
+
+def test_caption_chunks_merge_rather_than_flash():
+    # A long line in a tiny window widens chunks instead of flashing them.
+    chunks = media.caption_chunks("one two three four five six seven eight", 1.5)
+    assert all(t1 - t0 >= media.CAPTION_MIN_CHUNK_SECONDS or len(chunks) == 1
+               for t0, t1, _ in chunks)
+    assert " ".join(c for _, _, c in chunks) == "one two three four five six seven eight"
 
 
 def test_caption_text_goes_through_a_file_not_the_filtergraph():
@@ -447,7 +469,9 @@ def test_captions_sit_below_the_figure_and_above_the_platform_chrome():
 
 def test_dims_resolves_per_clip_resolutions():
     assert media.dims("720p") == (720, 1280)
-    assert media.dims("1080p") == (1080, 1920)
+    # Grok's "1080p" tier really delivers 1088x1920; targeting 1080 exactly
+    # would re-encode every scene for 8 invisible pixels.
+    assert media.dims("1080p") == (1088, 1920)
     # Unknown or absent falls back to the deployment default, never crashes.
     assert media.dims(None) == (media.WIDTH, media.HEIGHT)
     assert media.dims("cinema") == (media.WIDTH, media.HEIGHT)

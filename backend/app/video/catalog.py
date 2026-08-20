@@ -103,9 +103,27 @@ def reload() -> None:
     teams.cache_clear()
 
 
+# Runtime-discovered characters live in an OVERLAY file, not characters.json:
+# the main file is in git and a deploy's `git pull` would clobber runtime
+# writes. The overlay is gitignored, merged on load (curated ids win), and is
+# what the future admin catalog page will curate from.
+OVERLAY_PATH = CATALOG_DIR / "characters.local.json"
+
+
 def _load_characters() -> list[Character]:
     out = []
-    for raw in _read_entries(CATALOG_DIR / "characters.json", "characters"):
+    seen: set[str] = set()
+    for path in (CATALOG_DIR / "characters.json", OVERLAY_PATH):
+        for char in _parse_characters(_read_entries(path, "characters")):
+            if char.id not in seen:
+                seen.add(char.id)
+                out.append(char)
+    return out
+
+
+def _parse_characters(entries: list[dict]) -> list[Character]:
+    out = []
+    for raw in entries:
         try:
             out.append(Character(
                 id=_clean(raw.get("id")),
@@ -147,6 +165,8 @@ def _load_teams() -> list[Team]:
 
 def _read_entries(path: Path, key: str) -> list[dict]:
     """Never raises. A missing or corrupt file is an empty catalog."""
+    if not path.exists():
+        return []
     try:
         data = json.loads(path.read_text())
         entries = data.get(key) if isinstance(data, dict) else data
@@ -160,6 +180,71 @@ def _strs(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [_clean(v) for v in value if _clean(v)]
+
+
+# ------------------------------------------------- dynamic (runtime) entries
+
+def save_dynamic_character(member: CastMember, sport: str) -> Character | None:
+    """Persist a researched off-catalog cast member into the overlay.
+
+    Called after web research confirmed WHO this is and wrote a real look and
+    kit, so the entry meets the same bar as a curated one. Ronaldinho and
+    Ronaldo stay separate people: the id comes from the member's own id/name,
+    and an id already in the catalog is never overwritten here — curation
+    wins over discovery. Returns the loaded Character (existing or new).
+    Never raises.
+    """
+    try:
+        char_id = re.sub(r"[^a-z0-9]+", "_", (member.id or member.name).lower()).strip("_")[:40]
+        if not char_id:
+            return None
+        existing = characters().get(char_id)
+        if existing:
+            return existing
+        entry = {
+            "id": char_id,
+            "name": _clean(member.name, char_id.replace("_", " ").title()),
+            "sport": _clean(sport, "NBA"),
+            "teams": [],
+            "aliases": [],
+            "look": _clean(member.look),
+            "default_wardrobe": _clean(member.wardrobe),
+            "voice_style": _clean(member.voice, "neutral, conversational"),
+            "reference_images": [],
+            "active": True,
+            "source": "auto-research",   # the admin page will surface these
+        }
+        data = {"characters": []}
+        if OVERLAY_PATH.exists():
+            try:
+                data = json.loads(OVERLAY_PATH.read_text())
+            except json.JSONDecodeError:
+                log.warning("overlay unreadable; starting a fresh one")
+        entries = data.setdefault("characters", [])
+        entries[:] = [e for e in entries if e.get("id") != char_id]
+        entries.append(entry)
+        OVERLAY_PATH.write_text(json.dumps(data, indent=2) + "\n")
+        reload()
+        log.info("catalog: added dynamic character %r (%s)", char_id, entry["name"])
+        return characters().get(char_id)
+    except Exception:  # noqa: BLE001 — persistence is a bonus, never a blocker
+        log.exception("could not persist dynamic character %r", member.name)
+        return None
+
+
+def set_reference_images(char_id: str, reference_paths: list[str]) -> None:
+    """Record generated stills for an overlay character. Never raises."""
+    try:
+        if not OVERLAY_PATH.exists():
+            return
+        data = json.loads(OVERLAY_PATH.read_text())
+        for entry in data.get("characters", []):
+            if entry.get("id") == char_id:
+                entry["reference_images"] = reference_paths
+        OVERLAY_PATH.write_text(json.dumps(data, indent=2) + "\n")
+        reload()
+    except Exception:  # noqa: BLE001
+        log.exception("could not record references for %r", char_id)
 
 
 # -------------------------------------------------------------------- lookup

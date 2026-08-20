@@ -131,7 +131,8 @@ class ImageProvider:
             return None, 0.0
         body: dict = {"model": self.model, "prompt": prompt, "aspect_ratio": "9:16"}
         if references:
-            body["image_urls"] = [_data_uri(p) for p in references if Path(p).exists()][:2]
+            # Up to three: two identity stills plus the scene-0 world anchor.
+            body["image_urls"] = [_data_uri(p) for p in references if Path(p).exists()][:3]
         try:
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.post(

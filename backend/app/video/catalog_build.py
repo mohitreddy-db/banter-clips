@@ -57,13 +57,22 @@ def build_character(char: catalog.Character, images) -> tuple[list[str], float]:
 
 
 def update_characters_json(char_id: str, reference_paths: list[str]) -> None:
-    """Point the catalog entry at its new stills, preserving everything else."""
-    path = catalog.CATALOG_DIR / "characters.json"
-    data = json.loads(path.read_text())
-    for entry in data.get("characters", []):
-        if entry.get("id") == char_id:
-            entry["reference_images"] = reference_paths
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    """Point the catalog entry at its new stills, preserving everything else.
+
+    Checks the curated file first, then the runtime overlay — dynamic
+    characters live only in the overlay."""
+    for path in (catalog.CATALOG_DIR / "characters.json", catalog.OVERLAY_PATH):
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text())
+        hit = False
+        for entry in data.get("characters", []):
+            if entry.get("id") == char_id:
+                entry["reference_images"] = reference_paths
+                hit = True
+        if hit:
+            path.write_text(json.dumps(data, indent=2) + "\n")
+            break
     catalog.reload()
 
 

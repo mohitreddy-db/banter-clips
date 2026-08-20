@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from dataclasses import replace
 
 from . import catalog, library, prompts
 from .defaults import ResolvedInput
@@ -168,7 +169,18 @@ def _prefer_library(member: CastMember, sport: str) -> CastMember:
     # resolve_member synthesises an entry for anyone off-roster; only override
     # when it actually matched something curated.
     on_roster = any(known.id == m.id for m in library.roster_for(sport))
-    return known if on_roster else member
+    if not on_roster:
+        return member
+    # Identity (id, look, reference stills) comes from the library — but
+    # wardrobe follows the STORY. This used to take the library entry whole,
+    # which re-dressed a planner's "Ronaldo in an Arsenal home shirt" back
+    # into his own club kit and made team stories visually incoherent.
+    story_kit = _clean(member.wardrobe)
+    if story_kit and story_kit.lower() != (known.wardrobe or "").lower():
+        if "legible" not in story_kit.lower():
+            story_kit += ", crisp legible lettering"
+        return replace(known, wardrobe=story_kit)
+    return known
 
 
 def _template(inp: ResolvedInput, roster, venues) -> VideoPlan:

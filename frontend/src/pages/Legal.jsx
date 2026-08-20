@@ -188,8 +188,9 @@ export function Terms() {
           them (including via the AI providers named in the Privacy Policy)
           solely to provide the service.</LI>
         <LI>You may use and publish the videos generated for you. The
-          AI/parody disclosure burned into every video must not be removed;
-          the BanterClips watermark is removed only on the paid plan.</LI>
+          BanterClips watermark is removed only on the paid plan. Present
+          generated videos as AI-generated content wherever the platform you
+          publish to requires it.</LI>
         <LI>Your videos stay private to your account unless you publish them.</LI>
       </UL>
 
@@ -200,7 +201,7 @@ export function Terms() {
         no real match footage or broadcast material, and they do not represent
         real events, statements, or endorsements. BanterClips is not
         affiliated with, sponsored by, or endorsed by any league, club, or
-        athlete. Every video carries an AI/parody disclosure, on every plan.
+        athlete.
       </P>
 
       <H>Acceptable use</H>

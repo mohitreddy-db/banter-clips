@@ -202,15 +202,37 @@ def _norm(value: str) -> str:
     return re.sub(r"[^a-z0-9 ]+", "", str(value or "").lower()).strip()
 
 
-_PREFIX = 4
-
-
 def _overlap(a: str, b: str) -> bool:
-    """True when two names plausibly refer to the same person."""
+    """True when two names plausibly refer to the same person.
+
+    Word equality, or a near-misspelling of a word. This used to be a shared
+    4-character prefix, which is how "Ronaldinho" would have resolved to
+    Ronaldo ("rona" == "rona") — DIFFERENT people must never merge. Edit
+    distance keeps the misspelling tolerance ("wembenyama" → "wembanyama",
+    one edit) while a genuinely different name ("ronaldinho", three inserts
+    away from "ronaldo") stays itself.
+    """
     aw = {w for w in a.split() if len(w) > 3}
     bw = {w for w in b.split() if len(w) > 3}
     if aw & bw:
         return True
-    # A shared opening, not a strict prefix: "wembanyama" and a misspelling
-    # like "wembenyama" both start "wemb".
-    return any(x[:_PREFIX] == y[:_PREFIX] for x in aw for y in bw)
+    return any(_near_misspelling(x, y) for x in aw for y in bw)
+
+
+def _near_misspelling(a: str, b: str) -> bool:
+    if abs(len(a) - len(b)) > 1 or min(len(a), len(b)) < 5:
+        return False
+    return _edit_distance(a, b) <= 1
+
+
+def _edit_distance(a: str, b: str) -> int:
+    """Plain Levenshtein; names are short, so O(len*len) is nothing."""
+    if a == b:
+        return 0
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        row = [i]
+        for j, cb in enumerate(b, 1):
+            row.append(min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = row
+    return prev[-1]

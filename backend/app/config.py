@@ -109,6 +109,13 @@ class Settings(BaseSettings):
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
+    # When a job casts a real person the catalog doesn't know (and web
+    # research confirms who they are), generate their two reference stills
+    # on the spot (~$0.10, charged to the job) so this character renders
+    # consistently in this job and every future one. "off" skips the stills;
+    # the character entry is still saved to the overlay catalog.
+    CATALOG_AUTOGEN_REFS: str = "on"
+
     # Text burned across the top of every frame. Empty means none.
     # Applies to every plan. Note that Instagram's own policy expects
     # realistic AI-generated content to be labelled, and these videos carry

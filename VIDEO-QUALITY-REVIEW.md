@@ -219,7 +219,7 @@ every motion prompt.
 | # | Fix | Effort | What it buys |
 |---|---|---|---|
 | 1 | **Captions: never truncate.** Chunk each line into 2–4-word timed groups synced across the scene (word-chunk "karaoke" style — also the native style of real sports reels), auto-shrink font before dropping anything | S | removes the most visible defect from 100% of clips |
-| 2 | **Burn the disclosure**: set `VIDEO_DISCLOSURE="AI parody"` (or similar) in prod | XS | BRD compliance, platform-policy safety |
+| 2 | ~~Burn the disclosure~~ — **dropped by decision 2026-08-20**: the disclosure mandate was removed from the BRD instead; no label is burned | — | — |
 | 3 | **Fix `short_look` comma bug**; strip duplicated boilerplate from motion prompts; convert prose timing to `[00:00-00:02]` timestamps; rewrite negations positively | S | cleaner prompts = measurably steadier motion & fewer artifacts, per provider guidance |
 | 4 | **Story-first casting**: let the planner (a) restyle wardrobe to the story's team ("an Arsenal red home shirt with white sleeves") instead of hard-locking club kits, (b) cast generic characters (fans, supporters' groups) that exist for exactly these stories, (c) research + synthesize off-catalog names (Jordan) instead of silently dropping them | M | the video the user actually asked for; kills the "same two faces" problem |
 | 5 | **Cross-scene anchors**: pass 2–3 `input_references` per animation call — the speaker's catalog stills + scene 0's delivered venue frame; generate reference stills for every active catalog character (one-time, ~$0.10/character) | M | kit/venue/face stability across scenes — the "planned edit" feel |

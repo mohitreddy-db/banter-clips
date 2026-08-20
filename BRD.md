@@ -71,10 +71,8 @@ Each requirement is satisfied when every bullet under it is true.
 **BR-06 — Video output**
 - 9:16 vertical MP4, 1080×1920, matching the chosen length (10/15/30s),
   with burned-in animated captions.
-- One curated cinematic style featuring real players and authentic kits as
-  AI-generated parody; no real match footage or broadcast material is ever
-  used.
-- Every video carries an AI/parody disclosure on every plan.
+- One curated cinematic style; no real match footage or broadcast material
+  is ever used.
 - (How the video is produced is defined in the companion technical spec,
   not in this document.)
 
@@ -137,7 +135,7 @@ Each requirement is satisfied when every bullet under it is true.
 | Video length | Up to 15s | Up to 30s |
 | Publish to Instagram | Yes — watermarked | Yes — no watermark |
 | Download MP4 | No | Yes — no watermark |
-| Watermark | Always | Removed (AI disclosure stays) |
+| Watermark | Always | Removed |
 | Render queue | Standard | Priority |
 
 - Free is deliberately publish-only: every free clip on social carries the
@@ -152,8 +150,7 @@ Each requirement is satisfied when every bullet under it is true.
 1. Usage is charged only when a valid video is produced.
 2. Failed jobs retry free.
 3. The user's opinion is never silently reversed.
-4. The watermark is removed only on the paid plan; the AI/parody disclosure
-   is removed on no plan.
+4. The watermark is removed only on the paid plan.
 5. Videos are private to their owners.
 6. All source media must have documented commercial-use rights.
 7. Never promise virality, and never promise "seconds" until measured.

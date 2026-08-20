@@ -200,17 +200,39 @@ def generate_video(
 
     # -------------------------------------- 3. characters and references
     stage(STAGE_CHARACTERS)
+    # The image provider and spend ledger exist from here (not stage 4):
+    # discovering a new character may buy its reference stills, and that
+    # spend must count against the same per-job ceiling as everything else.
+    images = providers.image_provider()
+    ledger = _Ledger(budget)
     references: dict[str, catalog.Character | None] = {}
     for member in plan.cast:
         if not member.wardrobe:
             member.wardrobe = "an authentic team kit with crest, name and number"
         char = catalog.get_character(member.id)
-        references[member.id] = char
         if char is None and research.enabled():
             # Off-catalog cast: one web-search call buys a real description
-            # before any image money is spent.
+            # before any image money is spent. Only a CONFIRMED real person
+            # (research found them) is persisted — a generic "die-hard fan"
+            # stays a one-off. Distinct people stay distinct: the entry is
+            # keyed by this member's own id, never merged into a lookalike.
             if research.enrich_member(member, plan.sport):
                 result.warn(f"cast '{member.id}' enriched via web research")
+                char = catalog.save_dynamic_character(member, plan.sport)
+                autogen = str(getattr(settings, "CATALOG_AUTOGEN_REFS", "on")).lower() == "on"
+                if (char is not None and autogen and not char.reference_paths()
+                        and not isinstance(images, providers.StubImageProvider)
+                        and not ledger.exhausted()):
+                    say(f"building reference stills for {member.name}",
+                        f"Studying {member.name}")
+                    from . import catalog_build
+
+                    ref_paths, ref_cost = catalog_build.build_character(char, images)
+                    ledger.charge(ref_cost)
+                    if ref_paths:
+                        catalog.set_reference_images(char.id, ref_paths)
+                        char = catalog.get_character(char.id)
+        references[member.id] = char
     _write(work_dir / "cast.json", [
         {**m.__dict__,
          "reference_images": [str(p) for p in catalog.select_references(references.get(m.id))]}
@@ -219,17 +241,20 @@ def generate_video(
 
     # ------------------------------------------------------ 4. keyframes
     stage(STAGE_SCENES)
-    images = providers.image_provider()
     reviewer = providers.review_client()
     reviewer = reviewer if getattr(reviewer, "available", False) else None
     if isinstance(images, providers.StubImageProvider):
         # Placeholder gradients are not photographs and never will be. Judging
         # them wastes a review call and all three attempts on every scene.
         reviewer = None
-    ledger = _Ledger(budget)
     done_count = threading.Lock()
     finished = [0]
     total = len(plan.scenes)
+    # Scene 0's delivered keyframe anchors every later scene's generation as
+    # an extra reference image. Reviewed clips drifted BETWEEN scenes — a kit
+    # changing clubs, a crowd changing colours — because scenes shared only
+    # prompt text; a picture of the actual rendered world pins them together.
+    venue_anchor: list[Path] = []
 
     def make_keyframe(scene) -> SceneAsset:
         """One scene's keyframe, start to finish. Runs on a worker thread."""
@@ -240,6 +265,8 @@ def generate_video(
         refs = catalog.select_references(
             references.get(speaker.id) if speaker else None, scene.camera
         )
+        if scene.index > 0 and venue_anchor:
+            refs = list(refs)[:2] + [venue_anchor[0]]
         best_path, best_hard = None, None
 
         for attempt in range(1, MAX_KEYFRAME_ATTEMPTS + 1):
@@ -295,8 +322,16 @@ def generate_video(
 
     say(f"designing {total} scenes, up to {MAX_PARALLEL_SCENES} at a time",
         f"Designing {total} scenes")
-    with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_SCENES, total)) as pool:
-        assets = list(pool.map(make_keyframe, plan.scenes))
+    # Scene 0 renders first, alone (~12s of extra wall-clock): its keyframe
+    # becomes the world-anchor reference for every other scene, which is
+    # worth far more than full parallelism ever was.
+    assets = [make_keyframe(plan.scenes[0])]
+    if assets[0].keyframe_path and "placeholder" not in Path(assets[0].keyframe_path).name:
+        venue_anchor.append(Path(assets[0].keyframe_path))
+    rest = plan.scenes[1:]
+    if rest:
+        with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_SCENES, len(rest))) as pool:
+            assets += list(pool.map(make_keyframe, rest))
 
     # ------------------------------------------------------ 5. animation
     stage(STAGE_ANIMATE)

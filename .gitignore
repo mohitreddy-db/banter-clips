@@ -37,3 +37,7 @@ backend/data/
 # ── Local-only docs & experiments (kept on disk, not in the repo) ──
 others/
 .claude/
+
+# Runtime-discovered catalog characters (curated via the future admin page);
+# their generated reference stills stay local too.
+backend/app/video/catalog/characters.local.json

@@ -453,7 +453,7 @@ export default function Studio() {
             {busy ? "Starting…" : "🪄 Generate BanterClip"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
-            Hot Take format · cinematic scenes · {duration}s vertical MP4 · {resolution} · AI-parody labeled
+            Hot Take format · cinematic scenes · {duration}s vertical MP4 · {resolution}
           </div>
 
           {/* recent clips strip */}
@@ -692,7 +692,6 @@ export default function Studio() {
                   ["Duration", `${clip.duration_seconds || 14}s`],
                   ["Format", "MP4 · H.264/AAC"],
                   ["Watermark", clip.watermarked ? "BanterClips (Free plan)" : "None (Creator)"],
-                  ["Labeling", "AI-parody disclosure"],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: "flex", fontSize: 13 }}>
                     <span style={{ color: "var(--app-muted)" }}>{k}</span>

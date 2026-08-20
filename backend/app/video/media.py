@@ -32,6 +32,13 @@ FPS = 30
 # fractions per call, so captions land in the same place at any delivery width.
 
 
+# What the generator actually delivers per resolution tier. Grok's "1080p" is
+# 1088x1920 (measured on every 1080p job — 1088 = 17×64, a model block-size
+# artefact). Targeting 1080 exactly would force a re-encode of every scene
+# that the stream-copy fast path otherwise avoids, for 8 invisible pixels.
+_TIER_DIMS = {"720p": (720, 1280), "1080p": (1088, 1920)}
+
+
 def dims(resolution: str | None) -> tuple[int, int]:
     """Frame size for a per-clip resolution ("720p"/"1080p").
 
@@ -39,6 +46,9 @@ def dims(resolution: str | None) -> tuple[int, int]:
     constants above are only the default; anything unrecognised falls back to
     them. Height is forced even — x264 rejects odd dimensions.
     """
+    known = _TIER_DIMS.get(str(resolution or "").lower())
+    if known:
+        return known
     try:
         width = int(str(resolution or "").lower().removesuffix("p"))
     except ValueError:
@@ -241,6 +251,13 @@ def concat(clips: list[Path], out: str | Path, work: Path) -> Path:
 
 CAPTION_WRAP_CHARS = 24
 CAPTION_MAX_LINES = 2
+# Captions are burned as short timed word-groups ("karaoke" style), not one
+# static block. The block style truncated: 2 lines × 24 chars dropped the
+# rest of the sentence SILENTLY, and every clip reviewed on 2026-08-20 shipped
+# with a punchline cut mid-word. Chunking also matches how real sports reels
+# caption speech.
+CAPTION_CHUNK_CHARS = 18
+CAPTION_MIN_CHUNK_SECONDS = 0.6
 
 
 def _caption_geometry(size: tuple[int, int]) -> tuple[int, int]:
@@ -270,15 +287,48 @@ def _text_source(text: str, scratch: Path, name: str) -> str:
     return f"textfile={path}"
 
 
+def caption_chunks(text: str, seconds: float) -> list[tuple[float, float, str]]:
+    """Split one spoken line into timed word-groups covering [0, seconds).
+
+    Every word survives — a chunk that would flash by too fast is merged into
+    wider chunks instead of dropped. Each chunk's window is proportional to
+    its word count, approximating speech pacing without a transcript.
+    """
+    words = str(text or "").split()
+    if not words or seconds <= 0:
+        return []
+    def paced_ok(parts: list[str]) -> bool:
+        total = sum(len(p.split()) for p in parts)
+        return all(
+            seconds * len(p.split()) / total >= CAPTION_MIN_CHUNK_SECONDS
+            for p in parts
+        )
+
+    width = CAPTION_CHUNK_CHARS
+    chunks = _wrap(" ".join(words), width)
+    while len(chunks) > 1 and not paced_ok(chunks):
+        width = int(width * 1.5)
+        chunks = _wrap(" ".join(words), width)
+    total_words = sum(len(c.split()) for c in chunks)
+    out, clock = [], 0.0
+    for chunk in chunks:
+        dur = seconds * len(chunk.split()) / total_words
+        out.append((clock, min(seconds, clock + dur), chunk))
+        clock += dur
+    return out
+
+
 def caption_filters(
     captions: list[tuple[float, float, str]], font: str, scratch: Path | None = None,
     size: tuple[int, int] | None = None,
 ) -> list[str]:
     """drawtext filters for timed captions.
 
-    Each caption is (start, end, text). Text is wrapped to short centred lines
-    and every line becomes its own drawtext — newlines inside one drawtext
-    render literally as "n" (measured), so multi-line means multi-filter.
+    Each caption is (start, end, text): one scene's spoken line over its
+    window. The line is burned as a sequence of short timed word-groups —
+    never as a truncated block (see CAPTION_CHUNK_CHARS). Every group becomes
+    its own drawtext, because newlines inside one drawtext render literally
+    as "n" (measured).
     """
     width, height = size or (WIDTH, HEIGHT)
     font_size, base_y = _caption_geometry((width, height))
@@ -287,17 +337,18 @@ def caption_filters(
     scratch.mkdir(parents=True, exist_ok=True)
     filters = []
     for index, (start, end, text) in enumerate(captions):
-        lines = _wrap(text, CAPTION_WRAP_CHARS)[:CAPTION_MAX_LINES]
-        for row, line in enumerate(lines):
-            y = base_y + row * int(font_size * 1.3)
-            source = _text_source(line, scratch, f"cap{index}_{row}")
-            filters.append(
-                f"drawtext=fontfile={font}:{source}:fontcolor=white"
-                f":fontsize={font_size}:borderw={max(2, round(4 * s))}"
-                f":bordercolor=black@0.85"
-                f":x=(w-text_w)/2:y={y}"
-                f":enable='between(t,{start:.2f},{end:.2f})'"
-            )
+        for part, (t0, t1, chunk) in enumerate(caption_chunks(text, max(0.0, end - start))):
+            lines = _wrap(chunk, CAPTION_WRAP_CHARS)[:CAPTION_MAX_LINES]
+            for row, line in enumerate(lines):
+                y = base_y + row * int(font_size * 1.3)
+                source = _text_source(line, scratch, f"cap{index}_{part}_{row}")
+                filters.append(
+                    f"drawtext=fontfile={font}:{source}:fontcolor=white"
+                    f":fontsize={font_size}:borderw={max(2, round(4 * s))}"
+                    f":bordercolor=black@0.85"
+                    f":x=(w-text_w)/2:y={y}"
+                    f":enable='between(t,{start + t0:.2f},{start + t1:.2f})'"
+                )
     return filters
 
 

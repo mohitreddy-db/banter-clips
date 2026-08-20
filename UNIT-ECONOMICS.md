@@ -1,13 +1,5 @@
 # Unit economics — video generation
 
-Last updated 2026-08-15. Two sources, cross-checked:
-
-- **Measured**: all 13 real production generations to date (every one 720p),
-  from `clips.cost_usd` — the exact amounts OpenRouter billed us, returned
-  per job by their API. Total $31.56 for 214.1 output-seconds.
-- **Listed online**: OpenRouter model pages and token prices, fetched
-  2026-08-15.
-
 ## Per-component pricing
 
 | Component | Model | Listed online | What we actually pay (measured) |
@@ -79,30 +71,3 @@ A Creator turns unprofitable at their **5th video of the month**. The plan
 only works if median paid usage stays low single-digits — which contradicts
 selling "30 videos". This is the economics gate in BRD §6 (`Creator margin
 positive`), currently failing on paper.
-
-### Levers, in order of impact
-
-1. **Price/limit rework** — e.g. $9.99 for ~8 videos, or ~$0.9–1.5/video
-   credit pricing above an included base; 1080p and 30s as per-video
-   premiums, since both scale cost directly.
-2. **Cheaper seconds** — 480p tier for drafts, fewer/shorter scenes,
-   provider bake-off (the "from $0.08/s" tier would cut video cost ~45%).
-3. **Caps as a backstop** — re-arm `MAX_DAILY_SPEND_USD` (now 0/disabled);
-   `MAX_JOB_COST_USD=$14` already bounds a single runaway job.
-
-## What costs nothing
-
-- `[mock]` / `[fail]` demo runs, and dummy/stub pipeline modes — $0.
-- Failed jobs stop billing at the point of failure (partial cost to us,
-  free retry to the user).
-- Caption suggestions, take enhancement, publishes: fractions of a cent
-  (text-only calls).
-
-## Funding note
-
-Generation is prepaid from the OpenRouter balance. **As of 2026-08-15 the
-balance is exhausted: −$1.95** ($260.00 total credits, $261.95 used — the
-five clips generated on the 15th finished it). Real generations will fail
-until it is topped up. Lifetime spend so far ≈ $262 ↔ 13 delivered prod clips
-plus pre-launch experimentation. With the daily cap disabled, top-up
-discipline is currently the only spend control besides the $14 per-job cap.
