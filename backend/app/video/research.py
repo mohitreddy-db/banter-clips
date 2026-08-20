@@ -36,6 +36,12 @@ We are going to render this person wearing their real kit, so the club, the
 squad number and the kit description have to be right — a confidently wrong
 number looks worse on screen than a vague one.
 
+Pick the kit people PICTURE when they hear the name. For an active player
+that is their current club; for a retired or legacy figure it is the team
+they are iconically associated with (e.g. Ronaldinho → the yellow Brazil 10
+or Barcelona years, never a minor later affiliation). Describe their
+appearance from that same era.
+
 Return ONLY a JSON object, no prose:
 
 {{"found": true/false,
