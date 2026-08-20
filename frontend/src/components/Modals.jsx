@@ -7,9 +7,9 @@ function Overlay({ children, onClose }) {
   return (
     <div
       onClick={onClose}
-      style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(4,6,12,.72)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 20, animation: "fadeUp .2s ease both" }}
+      style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(4,6,12,.72)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 16, animation: "fadeUp .2s ease both" }}
     >
-      <div onClick={(e) => e.stopPropagation()} className="card app-font" style={{ width: "100%", maxWidth: 440, padding: 28 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card app-font modal-card" style={{ width: "100%", maxWidth: 440, padding: 28 }}>
         {children}
       </div>
     </div>
@@ -186,7 +186,7 @@ export function PublishModal({ clip, onClose }) {
               onChange={(e) => setCaption(e.target.value)}
               rows={3}
               className="panel"
-              style={{ padding: "12px 14px", fontSize: 14, color: "var(--app-text)", resize: "vertical", background: "var(--app-panel)" }}
+              style={{ padding: "12px 14px", fontSize: 16, color: "var(--app-text)", resize: "vertical", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" }}
             />
             {(loadingSuggestions || suggestions.length > 0) && (
               <div style={{ display: "flex", flexDirection: "column", gap: 7, paddingTop: 2 }}>
@@ -244,7 +244,7 @@ export function PublishModal({ clip, onClose }) {
             Your Reel is uploading to Instagram{watermarked ? " (with watermark)" : ""}. Track live status in
             <b style={{ color: "var(--app-text)" }}> My Clips</b> — you can keep creating meanwhile.
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
             <button className="ghost-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => onClose()}>
               Done
             </button>

@@ -34,7 +34,7 @@ export default function Pricing() {
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", display: "flex", flexDirection: "column", gap: 28, paddingTop: 8 }}>
       <div style={{ textAlign: "center" }}>
-        <h2 style={{ fontSize: 30, fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>Pick your plan</h2>
+        <h2 style={{ fontSize: "clamp(24px, 6vw, 30px)", fontWeight: 800, color: "var(--app-text)", margin: "0 0 8px" }}>Pick your plan</h2>
         <div style={{ fontSize: 15, color: "var(--app-muted)" }}>
           Publish free — every share promotes you. Upgrade to download without the watermark.
         </div>
@@ -70,7 +70,7 @@ export default function Pricing() {
 
 function PlanCard({ name, price, tagline, features, popular, cta, current, onCta }) {
   return (
-    <div className="card" style={{ padding: 30, position: "relative", border: popular ? "1.5px solid var(--app-cyan)" : undefined, display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className="card" style={{ padding: "clamp(20px, 5vw, 30px)", position: "relative", border: popular ? "1.5px solid var(--app-cyan)" : undefined, display: "flex", flexDirection: "column", gap: 14 }}>
       {popular && (
         <span style={{ position: "absolute", top: -12, left: 26, background: "var(--app-grad)", color: "#06121a", fontSize: 10, fontWeight: 800, padding: "4px 12px", borderRadius: 999, letterSpacing: ".05em" }}>
           MOST POPULAR

@@ -16,11 +16,11 @@ const CONTACT = "support@banterclips.com";
 function Layout({ title, children }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
-      <div style={{ maxWidth: 760, margin: "0 auto", padding: "48px 24px 80px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "clamp(28px, 6vw, 48px) clamp(18px, 5vw, 24px) 80px" }}>
         <Link to="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "var(--muted)", fontSize: 14, textDecoration: "none", marginBottom: 28 }}>
           ← BanterClips
         </Link>
-        <h1 style={{ fontFamily: "var(--display)", fontSize: 34, fontWeight: 800, margin: "0 0 6px" }}>{title}</h1>
+        <h1 style={{ fontFamily: "var(--display)", fontSize: "clamp(26px, 6.5vw, 34px)", fontWeight: 800, margin: "0 0 6px" }}>{title}</h1>
         <div style={{ color: "var(--muted2)", fontSize: 13.5, marginBottom: 34 }}>Effective {EFFECTIVE}</div>
         <div className="legal-body" style={{ fontSize: 15, lineHeight: 1.7, color: "var(--muted)" }}>
           {children}

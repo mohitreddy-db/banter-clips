@@ -70,12 +70,12 @@ export default function Account() {
   return (
     <div style={{ maxWidth: 760, display: "flex", flexDirection: "column", gap: 20 }}>
       {/* profile */}
-      <div className="card" style={{ padding: "24px 28px", display: "flex", alignItems: "center", gap: 16 }}>
-        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700 }}>
+      <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, flexShrink: 0 }}>
           {(user?.display_name || user?.email || "?")[0].toUpperCase()}
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 16, color: "var(--app-text)" }}>{user?.email}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 16, color: "var(--app-text)", overflowWrap: "anywhere" }}>{user?.email}</div>
           <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 2 }}>
             Beta creator{profile.role ? ` · ${profile.role}` : ""}{joined ? ` · joined ${joined}` : ""}
           </div>
@@ -95,15 +95,15 @@ export default function Account() {
       )}
 
       {/* plan & usage */}
-      <div className="card" style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>PLAN & ALLOWANCE</span>
           <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: isCreator ? "rgba(52,226,122,.14)" : "#161e30", color: isCreator ? "var(--app-green)" : "var(--app-muted)", border: "1px solid var(--app-border)" }}>
             {isCreator ? "CREATOR · $9.99/mo" : "FREE"}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 34, color: "var(--app-text)" }}>{left} of {limit}</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 800, fontSize: "clamp(28px, 7vw, 34px)", color: "var(--app-text)" }}>{left} of {limit}</span>
           <span style={{ fontSize: 15, color: "var(--app-muted)" }}>videos remaining this month</span>
         </div>
         <div style={{ height: 10, borderRadius: 999, background: "var(--app-panel)", overflow: "hidden" }}>
@@ -113,7 +113,7 @@ export default function Account() {
           {used} used · only successful videos count — failed jobs and retries are free.
         </div>
         {!isCreator ? (
-          <div style={{ display: "flex", gap: 12, paddingTop: 4 }}>
+          <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
             <button className="grad-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
               Upgrade to Creator — $9.99/mo
             </button>
@@ -146,11 +146,11 @@ export default function Account() {
       </div>
 
       {/* connected accounts */}
-      <div className="card" style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>CONNECTED ACCOUNTS</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)" }} />
-          <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 180 }}>
             <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>
               Instagram {connected ? `— ${instagram.handle}` : ""}
             </div>
@@ -172,7 +172,7 @@ export default function Account() {
       </div>
 
       {/* preferences */}
-      <div className="card" style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>STUDIO PREFERENCES</span>
           <button onClick={() => nav("/onboarding")} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--app-cyan)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
@@ -190,12 +190,12 @@ export default function Account() {
       </div>
 
       {/* data & privacy */}
-      <div className="card" style={{ padding: "24px 28px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>DATA & PRIVACY</span>
         <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>
           Your videos are private to your account and are kept for 90 days during beta. They will never be made public without your consent.
         </div>
-        <div style={{ display: "flex", gap: 24, paddingTop: 4 }}>
+        <div style={{ display: "flex", gap: "14px 24px", paddingTop: 4, flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-cyan)", cursor: "pointer" }}>Download my data</span>
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-error)", cursor: "pointer" }}>Delete my account and videos</span>
         </div>
