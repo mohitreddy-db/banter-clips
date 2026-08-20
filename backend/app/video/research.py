@@ -63,6 +63,36 @@ def enabled() -> bool:
     )
 
 
+# Words that mark a planner-invented GENERIC character rather than a person.
+_GENERIC_WORDS = re.compile(
+    r"\b(?:random|generic|fan|fans|supporter|defender|goalkeeper|keeper|"
+    r"striker|midfielder|player|referee|umpire|official|coach|manager|"
+    r"reporter|announcer|commentator|steward|mascot|crowd|teammate|"
+    r"opponent|rival)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_real_person(name: str) -> bool:
+    """Is this name worth researching and persisting as a real person?
+
+    A planner may cast "random La Liga defender" or "a die-hard fan" — web
+    search will happily 'find' somebody for those, dressing a generic
+    character in a real player's kit and number (observed 2026-08-20).
+    Generic characters keep their planner-authored description instead.
+    """
+    name = str(name or "").strip()
+    words = name.split()
+    if not words or len(words) > 4:
+        return False
+    if _GENERIC_WORDS.search(name):
+        return False
+    if words[0].lower() in ("a", "an", "the", "some", "one"):
+        return False
+    # Real names arrive capitalised ("Ronaldinho", "Lamine Yamal").
+    return all(w[:1].isupper() or not w[:1].isalpha() for w in words)
+
+
 def enrich_member(member: CastMember, sport: str) -> bool:
     """Improve an off-catalog cast member's look in place.
 

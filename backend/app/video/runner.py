@@ -210,12 +210,13 @@ def generate_video(
         if not member.wardrobe:
             member.wardrobe = "an authentic team kit with crest, name and number"
         char = catalog.get_character(member.id)
-        if char is None and research.enabled():
+        if char is None and research.enabled() and research.looks_like_real_person(member.name):
             # Off-catalog cast: one web-search call buys a real description
-            # before any image money is spent. Only a CONFIRMED real person
-            # (research found them) is persisted — a generic "die-hard fan"
-            # stays a one-off. Distinct people stay distinct: the entry is
-            # keyed by this member's own id, never merged into a lookalike.
+            # before any image money is spent. Only names that read as a real
+            # person are researched or persisted — a generic "random La Liga
+            # defender" once came back dressed as an actual Barcelona player.
+            # Distinct people stay distinct: the entry is keyed by this
+            # member's own id, never merged into a lookalike.
             if research.enrich_member(member, plan.sport):
                 result.warn(f"cast '{member.id}' enriched via web research")
                 char = catalog.save_dynamic_character(member, plan.sport)

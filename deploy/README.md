@@ -86,7 +86,15 @@ crontab -e
 
 **Updates after a git push:**
 ```bash
-ssh root@<droplet-ip> 'cd /opt/banter-clips && git pull && backend/.venv/bin/pip install -q -r backend/requirements.txt && systemctl restart banterclips-api banterclips-worker'
+ssh root@<droplet-ip> 'cd /opt/banter-clips && git pull && backend/.venv/bin/pip install -q -r backend/requirements.txt && chown -R banterclips:banterclips backend/app/video/catalog && systemctl restart banterclips-api banterclips-worker'
+```
+
+The `chown` matters: `git pull` runs as root, and any directory it creates is
+root-owned — the worker (user `banterclips`) writes the dynamic-character
+overlay and generated reference stills into `backend/app/video/catalog/`, and
+a root-owned catalog dir silently disables that feature (observed 2026-08-20).
+
+```bash
 ```
 
 Restarting the worker is safe at any time: it finishes the render in flight

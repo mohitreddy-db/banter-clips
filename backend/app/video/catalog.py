@@ -195,6 +195,9 @@ def save_dynamic_character(member: CastMember, sport: str) -> Character | None:
     Never raises.
     """
     try:
+        from . import research
+        if not research.looks_like_real_person(member.name):
+            return None
         char_id = re.sub(r"[^a-z0-9]+", "_", (member.id or member.name).lower()).strip("_")[:40]
         if not char_id:
             return None

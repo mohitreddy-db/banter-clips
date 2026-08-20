@@ -319,6 +319,13 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
         ambience = scene.sfx or "crowd murmur and shuffling feet"
         parts.append(f"Ambient: {ambience}, under the dialogue. No music.")
         parts.append(f"Style: {style_for(plan)}.")
+    # In-shot drift is a real failure mode: a defender's kit faded from blue
+    # to white across one generated clip (observed 2026-08-20). Naming the
+    # constancy explicitly is the documented mitigation.
+    parts.append(
+        "Every kit, colour and prop stays EXACTLY as in the first frame for "
+        "the whole shot — clothing never changes colour or design."
+    )
     parts.append(f"{PHOTOREAL}.")
     if scene.transition and not scene.shot_prompt:
         parts.append(f"Ends on: {scene.transition}.")
@@ -394,6 +401,14 @@ requested on-screen text — those are REQUIREMENTS, not inspiration:
   does, state EXACTLY what it should say in short block capitals, because a
   model given specific short text renders it cleanly while a model left to
   invent text renders gibberish. A few words at most.
+- Props are REAL-WORLD SCALE and physically plausible, held or placed the
+  way a real person would. Never giant, shrunken, floating, or embedded-in-
+  the-ground objects — an impossible prop reads as an AI mistake, not a
+  joke. Stage a metaphor through human PERFORMANCE with normal props: a
+  player casually holding a normal game controller sells "demo mode"; a
+  knee-high controller planted in the turf kills the video's credibility.
+- A prop that appears in more than one scene is described with the SAME
+  words every time, like wardrobe — reworded props change model and colour.
 - Never present an invented score, result, injury, transfer or quote as real.
 - Mock performance, decisions and situations. Never mock a person's
   appearance, family, race or intelligence.
