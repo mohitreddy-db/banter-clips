@@ -109,6 +109,15 @@ class Settings(BaseSettings):
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
+    # Script approval: generation pauses after the script is written
+    # (status "script_ready") until the user approves it — no video money
+    # is spent on an unapproved script. "off" generates straight through.
+    SCRIPT_APPROVAL: str = "on"
+
+    # Storyline Packs: one cached web-search call per topic per day feeds the
+    # planner real current context (squad, storylines, kit, venues, personas).
+    STORYLINE_CONTEXT: str = "on"
+
     # Comma-separated emails with access to the admin panel (/admin/*).
     ADMIN_EMAILS: str = ""
 

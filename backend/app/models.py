@@ -5,6 +5,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -33,7 +34,9 @@ GENERATION_STAGES = (
     "assembling_video",
     "validating",
 )
-CLIP_STATUSES = ("queued", *GENERATION_STAGES, "ready", "failed")
+# "script_ready" = the script is written and awaiting the user's approval
+# before any generation money is spent (script approval flow).
+CLIP_STATUSES = ("queued", *GENERATION_STAGES, "script_ready", "ready", "failed")
 
 
 def _uuid() -> uuid.UUID:
@@ -199,6 +202,15 @@ class Clip(Base):
     # audience: publishing is refused and no allowance is consumed.
     is_simulated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
 
+    # The SCRIPT — the full detailed plan (shots, cast, every dialogue line)
+    # written before any pixel is generated. Kept on the row permanently so
+    # every video's script stays viewable ("Show script"). With script
+    # approval on, generation pauses at status "script_ready" until the user
+    # approves; rejected drafts accumulate in script_history.
+    script: Mapped[dict | None] = mapped_column(JSONB)
+    script_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    script_history: Mapped[list | None] = mapped_column(JSONB)
+
     publishes: Mapped[list["Publish"]] = relationship(
         back_populates="clip", cascade="all, delete-orphan", order_by="Publish.created_at.desc()"
     )
@@ -338,3 +350,18 @@ class CatalogStill(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (Index("catalog_stills_char", "character_id", "created_at"),)
+
+
+class StorylinePack(Base):
+    """Cached real-world context (see app/video/context.py) — one pack per
+    topic per day, so repeat takes about the same team cost ~nothing."""
+
+    __tablename__ = "storyline_packs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    topic_key: Mapped[str] = mapped_column(Text, nullable=False)
+    day: Mapped[datetime] = mapped_column(Date, nullable=False)
+    pack: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("topic_key", "day", name="storyline_topic_day"),)

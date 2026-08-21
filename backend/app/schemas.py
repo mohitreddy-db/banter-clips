@@ -174,6 +174,11 @@ class ClipOut(BaseModel):
     # the row, so it is correct whichever worker serves the poll.
     current_step: str | None = None
     is_simulated: bool = False
+    # The full script (shots, cast, dialogue), recorded for every video and
+    # shown by "Show script". With approval on, status "script_ready" holds
+    # generation until the user approves or regenerates it.
+    script: dict | None = None
+    script_approved: bool = False
     # A real frame from the clip, for thumbnails. None for clips made before
     # posters were stored, so the client keeps its gradient fallback.
     poster_url: str | None = None

@@ -26,11 +26,14 @@ DEFAULT_SECONDS = 15
 # Matches the clips_take_len check constraint in the database.
 MIN_TAKE_CHARS = 10
 GENERIC_TAKE = "This team is not as good as everyone thinks."
-# Duration -> scene count. Long shots, deliberately: the reference clip the
-# client shared runs 9 shots averaging 9.4s, and a gag needs room to land.
-# Fewer cuts also means fewer voice and ambience seams, which is the dominant
-# quality risk in multi-clip video.
-TARGET_SCENE_SECONDS = 10.0
+# Duration -> shot count. The Mourinho reference (analyzed frame-by-frame,
+# see VIDEO-REALISM-PLAN.md) mixes one long dialogue "anchor" shot with
+# short reaction cutaways in ONE persistent location — so shots are no
+# longer uniform: the planner gives the anchor 5-8s and cutaways 2.5-4s.
+# Grok's reliable window is 4-8s/generation, and rerolling a 3s cutaway is
+# cheap.
+SHOT_COUNTS = {10: 3, 15: 4, 30: 7}
+TARGET_SCENE_SECONDS = 4.5   # fallback for unmapped durations
 MIN_SCENES, MAX_SCENES = 2, 12
 
 # Only used when the sport is missing entirely — a cheap keyword vote.
@@ -83,7 +86,9 @@ def resolve(
     resolved_sport = _pick(sport, SPORTS) or _infer_sport(clean_take) or DEFAULT_SPORT
     resolved_tone = _pick(tone, TONES) or DEFAULT_TONE
     resolved_seconds = _seconds(seconds)
-    count = max(MIN_SCENES, min(MAX_SCENES, round(resolved_seconds / TARGET_SCENE_SECONDS)))
+    count = SHOT_COUNTS.get(resolved_seconds) or max(
+        MIN_SCENES, min(MAX_SCENES, round(resolved_seconds / TARGET_SCENE_SECONDS))
+    )
 
     # Focus (plan §7.1): player / team / matchup / generic. A focused team
     # supplies the default venue, so team takes open somewhere on-brand.

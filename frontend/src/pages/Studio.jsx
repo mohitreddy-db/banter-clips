@@ -4,6 +4,7 @@ import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
@@ -94,6 +95,9 @@ export default function Studio() {
   const [error, setError] = useState("");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [scriptOpen, setScriptOpen] = useState(false);      // "Show script" dialog
+  const [scriptFeedback, setScriptFeedback] = useState(""); // regenerate note
+  const [scriptBusy, setScriptBusy] = useState("");
   const pollRef = useRef(null);
   const tickRef = useRef(null);
 
@@ -116,6 +120,7 @@ export default function Studio() {
         setClip(c);
         if (c.status === "ready") setPhase("result");
         else if (c.status === "failed") setPhase("failed");
+        else if (c.status === "script_ready") setPhase("script");
         // Elapsed counts from when the job actually started, not from when
         // this page happened to open — reopening a running clip mid-render
         // used to restart the clock at 0:00.
@@ -156,6 +161,11 @@ export default function Studio() {
           } else if (c.status === "failed") {
             stopTimers();
             setPhase("failed");
+            refreshClips();
+          } else if (c.status === "script_ready") {
+            // The script is written; nothing renders until it's approved.
+            stopTimers();
+            setPhase("script");
             refreshClips();
           }
         } catch {
@@ -239,6 +249,8 @@ export default function Studio() {
     setChosen(-1);
     setRound(0);
     setError("");
+    setScriptOpen(false);
+    setScriptFeedback("");
   };
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -499,7 +511,7 @@ export default function Studio() {
         </>
       )}
 
-      {(phase === "generating" || phase === "failed") && clip && (
+      {(phase === "generating" || phase === "failed" || phase === "script") && clip && (
         <>
           {/* The take in full — this is the view My Clips links to, so it
               must not truncate the way a card does. */}
@@ -600,6 +612,77 @@ export default function Studio() {
             </>
           )}
 
+          {phase === "script" && clip.script && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderRadius: 12, background: "rgba(34,211,238,.08)", border: "1px solid rgba(34,211,238,.3)" }}>
+                <span style={{ fontSize: 20 }}>📝</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15.5, color: "var(--app-text)" }}>Your script is ready — review it</div>
+                  <div style={{ fontSize: 12.5, color: "var(--app-muted)" }}>
+                    Nothing is generated (and nothing is used up) until you approve.
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={{ padding: "clamp(14px, 3vw, 22px)" }}>
+                <ScriptView script={clip.script} />
+              </div>
+
+              {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
+
+              <button
+                className="grad-btn"
+                style={{ padding: 16, fontSize: 16, borderRadius: 14 }}
+                disabled={!!scriptBusy}
+                onClick={async () => {
+                  setScriptBusy("approve");
+                  setError("");
+                  try {
+                    const c = await api.approveScript(clip.id);
+                    setClip(c);
+                    watchClip(c.id, Date.now());
+                  } catch (e) {
+                    setError(e.message);
+                  } finally {
+                    setScriptBusy("");
+                  }
+                }}
+              >
+                {scriptBusy === "approve" ? "Starting…" : "✅ Approve script & generate video"}
+              </button>
+
+              <div className="panel" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                <input
+                  value={scriptFeedback}
+                  onChange={(e) => setScriptFeedback(e.target.value)}
+                  placeholder="Optional: what should change? e.g. “funnier, and set it in the press room”"
+                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13.5, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 9 }}
+                />
+                <button
+                  className="ghost-btn"
+                  style={{ padding: "11px 16px", fontSize: 14 }}
+                  disabled={!!scriptBusy}
+                  onClick={async () => {
+                    setScriptBusy("regen");
+                    setError("");
+                    try {
+                      const c = await api.regenerateScript(clip.id, scriptFeedback.trim());
+                      setClip(c);
+                      setScriptFeedback("");
+                      watchClip(c.id, Date.now());
+                    } catch (e) {
+                      setError(e.message);
+                    } finally {
+                      setScriptBusy("");
+                    }
+                  }}
+                >
+                  {scriptBusy === "regen" ? "Rewriting…" : "↻ Write a different script (free)"}
+                </button>
+              </div>
+            </>
+          )}
+
           {phase === "failed" && (
             <div className="card" style={{ padding: "30px 28px", display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -683,6 +766,11 @@ export default function Studio() {
                   🔒 Download HD — Creator feature
                 </button>
               )}
+              {clip.script && (
+                <button className="ghost-btn" style={{ padding: 14, fontSize: 15 }} onClick={() => setScriptOpen(true)}>
+                  📝 Show script
+                </button>
+              )}
               <button className="ghost-btn" style={{ padding: 14, fontSize: 15 }} onClick={reset}>
                 ↻ Generate another
               </button>
@@ -713,6 +801,7 @@ export default function Studio() {
 
       {upgradeOpen && <UpgradeModal reason={left <= 0 ? "limit" : "download"} onClose={() => setUpgradeOpen(false)} />}
       {publishOpen && clip && <PublishModal clip={clip} onClose={() => setPublishOpen(false)} />}
+      {scriptOpen && clip?.script && <ScriptDialog script={clip.script} onClose={() => setScriptOpen(false)} />}
     </div>
   );
 }

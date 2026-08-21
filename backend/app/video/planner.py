@@ -29,15 +29,22 @@ log = logging.getLogger("banter.video.planner")
 BEATS = ("hook", "escalation", "payoff")
 
 
-def build_plan(inp: ResolvedInput, client=None) -> VideoPlan:
-    """Never raises. Always returns a plan with >= 2 scenes and a full cast."""
+def build_plan(inp: ResolvedInput, client=None, storyline: str = "",
+               rejected_note: str = "") -> VideoPlan:
+    """Never raises. Always returns a plan with >= 2 scenes and a full cast.
+
+    `storyline` is the Storyline Pack context block (real current squad,
+    storylines, kit, places — see context.py). `rejected_note` carries the
+    user's feedback when a previous script was rejected, so the rewrite is
+    genuinely different."""
     roster = _ordered_roster(inp)
     venues = _venues(inp)
 
     raw: dict | None = None
     if client is not None and client.available:
         try:
-            raw = _ask_model(inp, roster, venues, client)
+            raw = _ask_model(inp, roster, venues, client,
+                             storyline=storyline, rejected_note=rejected_note)
         except Exception:  # noqa: BLE001 — planning must never fail the job
             log.exception("planner call failed; falling back to template")
 
@@ -105,17 +112,23 @@ def _focus_note(inp: ResolvedInput) -> str:
 
 # ---------------------------------------------------------------- model call
 
-def _ask_model(inp: ResolvedInput, roster, venues, client) -> dict | None:
-    scene_seconds = round(inp.seconds / inp.scene_count, 1)
+def _ask_model(inp: ResolvedInput, roster, venues, client,
+               storyline: str = "", rejected_note: str = "") -> dict | None:
     system = prompts.PLANNER_SYSTEM.format(
         scene_count=inp.scene_count,
-        max_words=int(scene_seconds * WORDS_PER_SECOND),
-        scene_seconds=scene_seconds,
+        total_seconds=inp.seconds,
     )
     user = prompts.planner_user_message(
-        inp.take, inp.sport, inp.tone, roster, venues, focus_note=_focus_note(inp)
+        inp.take, inp.sport, inp.tone, roster, venues,
+        focus_note=_focus_note(inp), storyline=storyline,
     )
-    text = client.complete_json(system, user)
+    if rejected_note:
+        user += (
+            f"\nIMPORTANT — the user REJECTED a previous script for this take."
+            f"\n{rejected_note}\nWrite a clearly different script: a different "
+            f"situation and a different gag, not a rewording."
+        )
+    text = client.complete_json(system, user, max_tokens=6000)
     return _loads(text)
 
 
@@ -264,7 +277,12 @@ def _repair(plan: VideoPlan, inp: ResolvedInput, roster, venues) -> VideoPlan:
             plan.source = "repaired"
 
     beats = _beat_sequence(target)
-    per_scene = round(inp.seconds / target, 1)
+    # Shots keep the lengths the model chose (long dialogue anchor, short
+    # cutaways — the reference edit's rhythm), clamped to the generator's
+    # reliable 2-10s window and scaled so the total hits the target.
+    raw_secs = [min(10.0, max(2.0, float(s.seconds or 0) or inp.seconds / target))
+                for s in scenes]
+    scale = inp.seconds / sum(raw_secs) if raw_secs else 1.0
     cast_ids = [m.id for m in plan.cast]
     previous_speaker = ""
 
@@ -279,7 +297,7 @@ def _repair(plan: VideoPlan, inp: ResolvedInput, roster, venues) -> VideoPlan:
         scene.camera_angle = scene.camera_angle or "eye level"
         scene.camera_move = scene.camera_move or "slow push-in"
         scene.lens = scene.lens or "35mm, shallow depth of field"
-        scene.seconds = per_scene
+        scene.seconds = round(raw_secs[i] * scale, 1)
 
         # Speaker must exist, and must differ from the previous scene so that
         # cross-clip voice drift never lands on the same character twice.
@@ -294,12 +312,21 @@ def _repair(plan: VideoPlan, inp: ResolvedInput, roster, venues) -> VideoPlan:
             scene.speaker_id = alternatives[i % len(alternatives)]
         previous_speaker = scene.speaker_id
 
-        if not scene.line:
-            scene.line = "Unbelievable."
-        scene.line = scene.trimmed_line()
+        # Silent cutaways are allowed — a wordless reaction is a real shot.
+        scene.line = scene.trimmed_line() if scene.line else ""
         if not scene.delivery:
             speaker = plan.speaker_for(scene)
             scene.delivery = speaker.voice if speaker else "deadpan"
+
+    # But a fully silent video is a bug, not a style: guarantee one line.
+    if scenes and not any(s.line for s in scenes):
+        scenes[0].line = "Unbelievable."
+
+    # ONE WORLD (the reference edit's defining trait): every shot happens in
+    # the same place, so every shot carries the same venue text verbatim.
+    world = next((s.venue for s in scenes if s.venue), venues[0] if venues else "")
+    for scene in scenes:
+        scene.venue = world
 
     plan.scenes = scenes
     return plan

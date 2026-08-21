@@ -110,6 +110,7 @@ def generate_video(
     on_progress=None,
     brief: "enhancer.Brief | None" = None,
     resolution: str | None = None,
+    plan: VideoPlan | None = None,
 ) -> Result:
     """Run the whole pipeline. Never raises.
 
@@ -161,11 +162,21 @@ def generate_video(
         resolved = defaults.resolve(take, sport, tone, seconds)
     else:
         resolved = enhancer.resolved_from(brief)
-    say(f"writing the script — {resolved.sport}, {resolved.tone}, "
-        f"{resolved.seconds}s in {resolved.scene_count} scenes",
-        "Writing your script")
-    plan = planner.build_plan(resolved, text)
-    say(f"script ready: \"{plan.title}\" ({plan.source}); "
+    if plan is not None:
+        # Script approval flow: the user already read and approved this exact
+        # plan — render it verbatim, never re-plan.
+        say(f"rendering the approved script \"{plan.title}\" "
+            f"({len(plan.scenes)} shots)", "Preparing your approved script")
+    else:
+        say(f"writing the script — {resolved.sport}, {resolved.tone}, "
+            f"{resolved.seconds}s in {resolved.scene_count} shots",
+            "Writing your script")
+        from . import context
+
+        plan = planner.build_plan(
+            resolved, text, storyline=context.summarize(context.get_pack(resolved.take, resolved.sport))
+        )
+    say(f"script: \"{plan.title}\" ({plan.source}); "
         f"cast {', '.join(m.name for m in plan.cast)}",
         f"Casting {', '.join(m.name for m in plan.cast[:2])}")
     if brief is not None and brief.style:
@@ -599,10 +610,53 @@ def _store_artifacts(clip, work: Path, result: Result) -> dict:
 
 # --------------------------------------------------------------- DB wrapper
 
+def _write_script(db, clip) -> None:
+    """Phase 1 of the approval flow: research context, write the detailed
+    script (every shot, every dialogue line), store it on the clip, and park
+    at `script_ready` for the user's approval. Spends only text pennies."""
+    from . import context as context_mod
+
+    clip.status = "planning_story"
+    clip.stage_index = 0
+    clip.current_step = "Researching the real storyline"
+    db.commit()
+
+    resolved = defaults.resolve(clip.take, clip.sport, clip.tone, clip.duration_target)
+    pack = context_mod.get_pack(resolved.take, resolved.sport)
+    clip.current_step = "Writing your script"
+    db.commit()
+
+    rejected_note = ""
+    history = clip.script_history or []
+    if history:
+        last = history[-1] if isinstance(history[-1], dict) else {}
+        prev_title = str((last.get("script") or {}).get("title") or "")
+        feedback = str(last.get("feedback") or "")
+        rejected_note = f'Previous script title: "{prev_title}".'
+        if feedback:
+            rejected_note += f' The user said: "{feedback}".'
+
+    plan = planner.build_plan(
+        resolved, providers.text_client(),
+        storyline=context_mod.summarize(pack), rejected_note=rejected_note,
+    )
+    script = plan.to_dict()
+    if pack:
+        # Kept with the script so "Show script" can show what it was built on.
+        script["_context"] = pack
+    clip.script = script
+    clip.status = "script_ready"
+    clip.current_step = None
+    db.commit()
+    log.info("clip %s: script ready (\"%s\", %d shots, context=%s)",
+             clip.id, plan.title, len(plan.scenes), bool(pack))
+
+
 def run_clip_job(clip_id: uuid.UUID) -> None:
     """Drive one Clip row through the pipeline. Never raises."""
     from ..db import SessionLocal
     from ..models import Clip, GENERATION_STAGES
+    from ..services import spend
 
     db = SessionLocal()
     started = time.time()
@@ -610,6 +664,32 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
         clip = db.get(Clip, clip_id)
         if clip is None:
             return
+
+        # ---- Phase 1: script (approval flow) --------------------------
+        approval_on = str(getattr(settings, "SCRIPT_APPROVAL", "on")).lower() == "on"
+        if approval_on and not clip.is_simulated and not clip.script_approved:
+            _write_script(db, clip)
+            return
+
+        # ---- Phase 2: render ------------------------------------------
+        # The daily spend gate applies to RENDERING only — writing a script
+        # costs pennies and must never be refused by the video budget.
+        may_spend, so_far, limit = spend.allowed(db)
+        if not may_spend:
+            log.error("daily spend ceiling reached ($%.2f of $%.2f); refusing clip %s",
+                      so_far, limit, clip_id)
+            clip.status = "failed"
+            clip.error = spend.OVER_BUDGET_MESSAGE
+            clip.current_step = None
+            db.commit()
+            return
+
+        approved_plan = None
+        if clip.script and clip.script_approved:
+            try:
+                approved_plan = VideoPlan.from_dict(clip.script)
+            except Exception:  # noqa: BLE001 — a broken stored script re-plans
+                log.exception("stored script unreadable for %s; re-planning", clip_id)
 
         def on_stage(name: str) -> None:
             clip.status = name
@@ -634,10 +714,15 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             on_stage=on_stage,
             on_progress=on_progress,
             resolution=getattr(clip, "resolution", None),
+            plan=approved_plan,
         )
 
         clip.cost_usd = round(result.cost_usd, 3)
         clip.provenance = _provenance(result)
+        # Every video keeps its script ("Show script"), whether or not the
+        # approval flow wrote one first.
+        if clip.script is None and result.plan is not None:
+            clip.script = result.plan.to_dict()
 
         if result.ok:
             stored = _store_artifacts(clip, work, result)

@@ -32,6 +32,9 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "is_simulated", "boolean NOT NULL DEFAULT false"),
     ("clips", "resolution", "text NOT NULL DEFAULT '720p'"),
     ("users", "is_blocked", "boolean NOT NULL DEFAULT false"),
+    ("clips", "script", "jsonb"),
+    ("clips", "script_approved", "boolean NOT NULL DEFAULT false"),
+    ("clips", "script_history", "jsonb"),
 )
 
 

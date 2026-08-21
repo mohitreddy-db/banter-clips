@@ -145,11 +145,21 @@ class Scene:
         return len(self.line.split()) <= self.seconds * WORDS_PER_SECOND + 1
 
     def trimmed_line(self) -> str:
-        """Hard-truncate an over-long line rather than letting it run past the cut."""
+        """Shorten an over-long line rather than letting it run past the cut.
+
+        The cut lands on a sentence or clause boundary when one exists near
+        the budget — a hard word-count chop produced spoken fragments like
+        "just like the." (observed 2026-08-21), which is worse out loud than
+        speech running slightly fast."""
         budget = int(self.seconds * WORDS_PER_SECOND)
         words = self.line.split()
         if len(words) <= budget:
             return self.line
+        # Search backwards from just past the budget for a natural stop.
+        for i in range(min(len(words), budget + 2), max(2, budget - 4), -1):
+            candidate = " ".join(words[:i])
+            if candidate.endswith((".", "!", "?", "—", ",")):
+                return candidate.rstrip(",—").strip() or candidate
         return " ".join(words[:budget]).rstrip(",;:") + "."
 
 
@@ -184,6 +194,21 @@ class VideoPlan:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "VideoPlan":
+        """Rebuild a plan stored as JSON (the script approval flow persists
+        plans on the clip row between the script and render phases)."""
+        raw = raw if isinstance(raw, dict) else {}
+        cast = [CastMember(**{k: v for k, v in c.items()
+                              if k in CastMember.__dataclass_fields__})
+                for c in raw.get("cast", []) if isinstance(c, dict)]
+        scenes = [Scene(**{k: v for k, v in s.items()
+                           if k in Scene.__dataclass_fields__})
+                  for s in raw.get("scenes", []) if isinstance(s, dict)]
+        fields_ = {k: v for k, v in raw.items()
+                   if k in cls.__dataclass_fields__ and k not in ("cast", "scenes")}
+        return cls(cast=cast, scenes=scenes, **fields_)
 
 
 @dataclass

@@ -373,12 +373,30 @@ requested on-screen text — those are REQUIREMENTS, not inspiration:
 <hard_rules>
 - Keep the user's stance. Sharpen and exaggerate it; never reverse or soften
   it. If they say a team is bad, the video says it harder.
-- Exactly {scene_count} scenes: hook, then escalation, then payoff.
-- Each scene has AT MOST ONE speaker, and consecutive scenes MUST use
-  different speakers. This is a technical constraint, not a style note: the
-  generator gives a character a different voice in every clip, so alternating
-  speakers is what stops one character audibly changing voice mid-video.
-- A line must be speakable inside its scene: at most {max_words} words.
+- Exactly {scene_count} SHOTS telling ONE story in ONE location, with the
+  arc hook → escalation → payoff across them. This is a film set, not a
+  slideshow: every shot happens in the same place, minutes apart at most.
+- ONE WORLD: every shot's `venue` is the SAME text, word for word. Props
+  that exist in one shot exist in all later shots, described with the same
+  words ("three black gym bags on the pavement"). Light and weather never
+  change. The video must feel like one continuous filmed moment.
+- Shot lengths vary like a real edit, and the total must be {total_seconds}
+  seconds: ONE anchor shot of 5-8 seconds carrying the main dialogue
+  moment, the rest cutaways of 2.5-4 seconds (reactions, the physical gag,
+  a detail). Set each shot's `seconds` yourself.
+- Each shot has AT MOST ONE speaker, and consecutive shots MUST use
+  different speakers (or a silent reaction shot between two lines from the
+  same person). This is a technical constraint: the generator gives a
+  character a different voice in every clip, so alternating speakers stops
+  one character audibly changing voice mid-video.
+- Cutaways may be SILENT (empty line) — a wordless reaction often lands
+  harder than a line.
+- A line must be speakable inside its shot: at most 2.2 words per second
+  of that shot's length. Long speech belongs in the anchor shot.
+- When real-world context is provided, USE it: real storylines beat
+  invented ones, real people beat generic characters, the real kit and a
+  real place beat any invention. Never contradict the context, and never
+  use anything its AVOID list mentions.
 - Casting: use roster members (by their exact `id`) when the story is about
   them — but the roster is NOT a limit. When the take names a real figure
   who is not on it, cast them anyway: invent a short id, and write their
@@ -463,24 +481,27 @@ Return ONLY JSON:
               "camera_move": "...", "lens": "...", "expression": "...",
               "blocking": "...", "lighting": "...", "sfx": "...",
               "transition": "...", "speaker_id": "...", "line": "...",
-              "delivery": "...", "seconds": {scene_seconds}}}]}}"""
+              "delivery": "...", "seconds": <this shot's length>}}]}}"""
 
 
 def planner_user_message(
     take: str, sport: str, tone: str, roster: list, venues: list,
-    focus_note: str = "",
+    focus_note: str = "", storyline: str = "",
 ) -> str:
     names = "\n".join(f"  - id={m.id!r} name={m.name!r} ({m.look})" for m in roster)
     places = "\n".join(f"  - {v}" for v in venues)
     context = f"\n{focus_note}\n" if focus_note else ""
+    world = f"\n{storyline}\n" if storyline else ""
     return (
         f"Sport: {sport}\n"
         f"Tone: {tone}\n"
         f"The opinion to dramatise: {take}\n"
+        f"{world}"
         f"{context}\n"
         f"Pre-described roster (use these ids when casting these people; the "
         f"roster is not a limit — see the casting rule):\n{names}\n\n"
-        f"Locations you may reuse:\n{places}\n"
+        f"Stock locations (prefer a REAL setting from the context above when "
+        f"one exists):\n{places}\n"
     )
 
 

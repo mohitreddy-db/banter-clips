@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -171,6 +172,53 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
 @router.get("/{clip_id}", response_model=ClipOut)
 def get_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return _serialize(_own_clip(clip_id, user, db))
+
+
+class ScriptRegenerate(BaseModel):
+    # Optional note telling the writer what was wrong ("less cringe",
+    # "make it about the derby") — folded into the rewrite prompt.
+    feedback: str = Field(default="", max_length=400)
+
+
+@router.post("/{clip_id}/script/approve", response_model=ClipOut)
+def approve_script(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The user has read the script — spend real money and render it."""
+    clip = _own_clip(clip_id, user, db)
+    if clip.status != "script_ready" or not clip.script:
+        raise HTTPException(409, "This clip has no script awaiting approval.")
+    clip.script_approved = True
+    clip.status = "queued"
+    clip.stage_index = 0
+    db.commit()
+    record_event(db, "script_approved", user, clip_id=str(clip.id))
+    start_generation(clip.id)
+    return _serialize(clip)
+
+
+@router.post("/{clip_id}/script/regenerate", response_model=ClipOut)
+def regenerate_script(
+    clip_id: uuid.UUID,
+    body: ScriptRegenerate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reject the current script and write a different one. Free — only the
+    render costs real money, and it hasn't started."""
+    clip = _own_clip(clip_id, user, db)
+    if clip.status != "script_ready" or not clip.script:
+        raise HTTPException(409, "This clip has no script awaiting approval.")
+    history = list(clip.script_history or [])
+    history.append({"script": clip.script, "feedback": body.feedback.strip()})
+    clip.script_history = history[-10:]   # rejected drafts, capped
+    clip.script = None
+    clip.script_approved = False
+    clip.status = "queued"
+    clip.stage_index = 0
+    db.commit()
+    record_event(db, "script_regenerated", user, clip_id=str(clip.id),
+                 with_feedback=bool(body.feedback.strip()))
+    start_generation(clip.id)
+    return _serialize(clip)
 
 
 @router.post("/{clip_id}/retry", response_model=ClipOut)

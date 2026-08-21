@@ -78,6 +78,10 @@ export const api = {
   captionSuggestions: (id, avoid = []) =>
     request(`/clips/${id}/captions${avoid.length ? `?avoid=${encodeURIComponent(avoid.join("\n"))}` : ""}`),
   retryClip: (id) => request(`/clips/${id}/retry`, { method: "POST" }),
+  // Script approval: nothing renders (or costs) until the script is approved.
+  approveScript: (id) => request(`/clips/${id}/script/approve`, { method: "POST" }),
+  regenerateScript: (id, feedback = "") =>
+    request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback } }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),
 
   // publishing

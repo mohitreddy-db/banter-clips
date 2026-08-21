@@ -13,6 +13,7 @@ const STATUS_LABEL = {
   animating_scenes: "Animating scenes…",
   assembling_video: "Assembling video…",
   validating: "Validating…",
+  script_ready: "📝 Script ready — tap to review",
 };
 
 export default function Clips() {
@@ -31,7 +32,9 @@ export default function Clips() {
 
   // Keep in-flight generations AND in-flight publishes live while this page
   // is open (publishing is async — the modal doesn't wait for it).
-  const generating = clips.some((c) => c.status !== "ready" && c.status !== "failed");
+  const generating = clips.some(
+    (c) => !["ready", "failed", "script_ready"].includes(c.status)
+  );
   const publishing = clips.some((c) =>
     ["queued", "uploading"].includes(c.publishes?.[0]?.status)
   );

@@ -86,16 +86,23 @@ def _plan(**kw) -> VideoPlan:
 def test_plan_without_a_model_is_still_complete():
     plan = _plan(take="Seven foot four and he still can't find Brunson", seconds=15)
     assert plan.source == "fallback"
-    assert len(plan.scenes) == 2
+    assert len(plan.scenes) == 4          # shot-list structure: anchor + cutaways
     assert plan.cast
-    assert all(s.line and s.action and s.venue for s in plan.scenes)
+    assert all(s.action and s.venue for s in plan.scenes)
+    assert any(s.line for s in plan.scenes)   # silent cutaways allowed, silent video not
+    # ONE WORLD: every shot shares the same venue text verbatim.
+    assert len({s.venue for s in plan.scenes}) == 1
 
 
 def test_scene_count_follows_duration():
-    """Longer shots than before: the reference clip averages 9.4s a shot."""
-    assert len(_plan(take="x" * 20, seconds=10).scenes) == 2
-    assert len(_plan(take="x" * 20, seconds=15).scenes) == 2
-    assert len(_plan(take="x" * 20, seconds=30).scenes) == 3
+    """Shot-list structure (VIDEO-REALISM-PLAN): anchor + short cutaways."""
+    assert len(_plan(take="x" * 20, seconds=10).scenes) == 3
+    assert len(_plan(take="x" * 20, seconds=15).scenes) == 4
+    assert len(_plan(take="x" * 20, seconds=30).scenes) == 7
+    # Shot lengths always sum to the requested duration (within rounding).
+    for secs in (10, 15, 30):
+        total = _plan(take="x" * 20, seconds=secs).total_seconds
+        assert abs(total - secs) < 1.0, (secs, total)
 
 
 def test_beats_are_hook_then_escalation_then_payoff():
@@ -128,7 +135,8 @@ def test_repair_fills_a_half_empty_model_response():
     plan = planner._repair(planner._from_raw(raw, inp, roster), inp, roster,
                            library.venues_for(inp.sport))
     assert len(plan.scenes) == inp.scene_count
-    assert all(s.line and s.venue and s.camera for s in plan.scenes)
+    assert all(s.venue and s.camera for s in plan.scenes)
+    assert any(s.line for s in plan.scenes)
 
 
 def test_planner_survives_garbage_from_the_model():
