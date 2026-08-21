@@ -37,6 +37,19 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "script_history", "jsonb"),
 )
 
+# Idempotent statements beyond ADD COLUMN. The production schema (applied
+# via schema.sql) carries a clips_status_check that predates "script_ready";
+# rebuilding it from CLIP_STATUSES keeps the constraint in lockstep with the
+# model — a status added in code but not here silently fails every write.
+def _statements() -> tuple[str, ...]:
+    from .models import CLIP_STATUSES
+
+    return (
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_status_check",
+        f"ALTER TABLE clips ADD CONSTRAINT clips_status_check "
+        f"CHECK (status IN {CLIP_STATUSES!r})",
+    )
+
 
 def apply() -> None:
     """Bring an existing database up to the current model. Never raises.
@@ -50,5 +63,7 @@ def apply() -> None:
                 conn.execute(
                     text(f'ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "{column}" {ddl}')
                 )
+            for statement in _statements():
+                conn.execute(text(statement))
     except Exception:  # noqa: BLE001 — boot must survive a migration problem
         log.exception("additive migrations failed; continuing with the existing schema")
