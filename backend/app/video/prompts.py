@@ -45,8 +45,8 @@ PHOTOREAL = (
 
 # Appended to every image and motion prompt.
 NEGATIVES = (
-    "No burned-in captions, subtitles or watermarks — those are added later. "
-    "No split screen, panels or collage"
+    "No captions, subtitles or watermarks (added later); no split screen, "
+    "panels or collage"
 )
 
 # Every clip reviewed on 2026-08-20 carried invented lettering somewhere the
@@ -65,17 +65,24 @@ CLEAN_TEXT = (
 # lower quarter. Measured — bodies terminated at ~78% of frame height, legs cut
 # at mid-thigh, dead floor below. Constrain the clutter, not the subject.
 FULL_FIGURE = (
-    "Whole bodies in frame, heads and feet included, nobody cropped at the "
-    "knees, a little headroom above; plain uncluttered ground along the "
-    "bottom edge."
+    "Whole bodies in frame, heads and feet included, never cropped at the "
+    "knees; a little headroom; plain uncluttered ground at the bottom edge."
 )
 
 # Stills only. A camera direction like "wide shot, then a close-up" describes a
 # sequence, and an image model renders a sequence as stacked panels — which is
 # exactly how a keyframe came back as a three-panel collage. Say "one frame".
 SINGLE_FRAME = (
-    "ONE continuous photograph from ONE camera position — a single frozen "
-    "instant, never two moments or two angles in the same image"
+    "ONE photograph from ONE camera position — a single frozen instant, "
+    "never two moments or two angles in one image"
+)
+
+# Cross-shot drift: within one video, Arteta rendered in a plain shirt, a
+# retro O2-era shirt, then beside a fan in an "ARTETA 9" jersey (observed
+# 2026-08-21). Every shot's keyframe states the continuity contract.
+WORLD_LOCK = (
+    "Continuity: one filmed video — same location, light and wardrobe in "
+    "every shot"
 )
 
 # A shot list joined by any of these is two shots, not one.
@@ -208,10 +215,11 @@ def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
         parts.append(f"Lighting: {scene.lighting}.")
     parts.append(f"Style: {style_for(plan)}.")
     parts.append(SINGLE_FRAME + ".")
+    parts.append(f"{WORLD_LOCK}.")
     parts.append(FULL_FIGURE)
     parts.append(f"{CLEAN_TEXT}.")
     parts.append(f"{NEGATIVES}.")
-    parts.append("Remember: a real photograph of real people, never an illustration.")
+    parts.append("Remember: a real photograph, never an illustration.")
     return " ".join(parts)
 
 
@@ -408,6 +416,11 @@ requested on-screen text — those are REQUIREMENTS, not inspiration:
 - Wardrobe follows the STORY, not the roster entry: a player acting in an
   Arsenal story wears the Arsenal kit described in the team context, not
   their own club's kit.
+- Managers, coaches and staff wear STAFF clothing — a touchline jacket,
+  club quarter-zip or suit — never a player's numbered shirt.
+- Each person wears EXACTLY ONE outfit for the whole video, described with
+  the same words in every shot — a kit that changes era or sponsor between
+  shots breaks the video.
 - When the take targets a team, cast that team's players and use their colour
   palette and venues.
 - Describe ONE continuous take per scene: one camera setup, one action. Never

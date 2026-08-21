@@ -414,7 +414,7 @@ def test_image_prompt_asks_for_whole_bodies_not_a_calm_lower_quarter():
     image = prompts.build_image_prompt(plan, plan.scenes[0])
     assert "heads and feet included" in image
     assert "lower quarter" not in image
-    assert "nobody cropped at the knees" in image
+    assert "cropped at the knees" in image
 
 
 def test_planner_prefers_full_figure_framings():

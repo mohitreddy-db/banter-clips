@@ -6,7 +6,12 @@
 
 const label = { fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: "var(--app-muted2)" };
 
-export default function ScriptView({ script }) {
+/**
+ * `editable` + `onEdit(sceneIndex, field, value)` turn the action and
+ * dialogue of every shot into inputs (the approval step); omit them for the
+ * read-only "Show script" view.
+ */
+export default function ScriptView({ script, editable = false, onEdit }) {
   if (!script) return null;
   const cast = script.cast || [];
   const scenes = script.scenes || [];
@@ -66,7 +71,16 @@ export default function ScriptView({ script }) {
                 {s.camera_move ? ` · ${s.camera_move}` : ""}
               </span>
             </div>
-            <div style={{ fontSize: 13.5, color: "var(--app-text)", lineHeight: 1.5 }}>{s.action}</div>
+            {editable ? (
+              <textarea
+                value={s.action || ""}
+                rows={2}
+                onChange={(e) => onEdit(i, "action", e.target.value)}
+                style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13.5, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 8, lineHeight: 1.5, resize: "vertical" }}
+              />
+            ) : (
+              <div style={{ fontSize: 13.5, color: "var(--app-text)", lineHeight: 1.5 }}>{s.action}</div>
+            )}
             {s.beats && (
               <div style={{ fontSize: 12, color: "var(--app-muted)", lineHeight: 1.45 }}>
                 <span style={label}>TIMING&nbsp;&nbsp;</span>{s.beats}
@@ -77,7 +91,21 @@ export default function ScriptView({ script }) {
                 <span style={label}>EXPRESSION&nbsp;&nbsp;</span>{s.expression}
               </div>
             )}
-            {s.line ? (
+            {editable ? (
+              <div style={{ borderLeft: "3px solid var(--app-cyan)", padding: "6px 10px", background: "rgba(34,211,238,.06)", borderRadius: "0 8px 8px 0" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--app-cyan)" }}>
+                  {(speaker?.name || s.speaker_id || "VOICE").toUpperCase()}
+                  {s.delivery ? <span style={{ color: "var(--app-muted2)", fontWeight: 600 }}> · {s.delivery}</span> : null}
+                  <span style={{ color: "var(--app-muted2)", fontWeight: 600 }}> · ~{Math.max(2, Math.floor((s.seconds || 4) * 2.2))} words fit</span>
+                </div>
+                <input
+                  value={s.line || ""}
+                  placeholder="(silent reaction — leave empty)"
+                  onChange={(e) => onEdit(i, "line", e.target.value)}
+                  style={{ width: "100%", boxSizing: "border-box", marginTop: 4, padding: "8px 10px", fontSize: 14, fontWeight: 600, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 8 }}
+                />
+              </div>
+            ) : s.line ? (
               <div style={{ borderLeft: "3px solid var(--app-cyan)", padding: "6px 10px", background: "rgba(34,211,238,.06)", borderRadius: "0 8px 8px 0" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--app-cyan)" }}>
                   {(speaker?.name || s.speaker_id || "VOICE").toUpperCase()}

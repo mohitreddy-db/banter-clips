@@ -45,10 +45,11 @@ appearance from that same era.
 Return ONLY a JSON object, no prose:
 
 {{"found": true/false,
+  "role": "player" | "manager" | "other",
   "look": "one detailed sentence on physical appearance: build, height impression, hair, facial hair, skin tone, distinctive features",
   "team": "their current club or franchise, or empty string",
-  "number": "their current squad number as digits, or empty string",
-  "kit": "one clause describing their club's current home kit: colours, pattern, and the crest — e.g. 'pink Inter Miami home shirt with the heron crest'",
+  "number": "their current squad number as digits, or empty string (always empty for managers)",
+  "kit": "what THIS person actually wears on duty. A player: their club's current home kit — colours, pattern, crest. A MANAGER or coach: their touchline look — club training quarter-zip/jacket with the crest, or the suit they're known for — NEVER a player's shirt",
   "team_colors": ["primary", "colours"],
   "voice_style": "three or four words describing how they speak"}}
 
@@ -116,6 +117,10 @@ def enrich_member(member: CastMember, sport: str) -> bool:
     # what the image model renders as legible lettering.
     kit = _clean(data.get("kit"))
     number = re.sub(r"[^0-9]", "", str(data.get("number") or ""))[:2]
+    # A manager in a squad-numbered shirt reads instantly as wrong (observed:
+    # Arteta rendered as a player). Staff wear carries no number.
+    if _clean(data.get("role")).lower() in ("manager", "coach", "other"):
+        number = ""
     colors = data.get("team_colors")
     palette = ""
     if isinstance(colors, list) and colors:

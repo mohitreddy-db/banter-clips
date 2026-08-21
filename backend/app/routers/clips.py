@@ -174,6 +174,54 @@ def get_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Ses
     return _serialize(_own_clip(clip_id, user, db))
 
 
+class SceneEdit(BaseModel):
+    index: int = Field(ge=0, le=20)
+    line: str | None = Field(default=None, max_length=220)
+    action: str | None = Field(default=None, max_length=400)
+
+
+class ScriptEdit(BaseModel):
+    title: str | None = Field(default=None, max_length=80)
+    scenes: list[SceneEdit] = Field(default_factory=list, max_length=20)
+
+
+@router.patch("/{clip_id}/script", response_model=ClipOut)
+def edit_script(
+    clip_id: uuid.UUID,
+    body: ScriptEdit,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The user's own words win: edit dialogue lines and shot actions before
+    approving. Lines are trimmed to what fits the shot's seconds — an edit
+    must not silently break the video's timing."""
+    from ..video.types import Scene
+
+    clip = _own_clip(clip_id, user, db)
+    if clip.status != "script_ready" or not clip.script:
+        raise HTTPException(409, "This clip has no script awaiting approval.")
+    script = dict(clip.script)
+    scenes = [dict(s) for s in script.get("scenes", [])]
+    for edit in body.scenes:
+        if edit.index >= len(scenes):
+            continue
+        scene = scenes[edit.index]
+        if edit.action is not None and edit.action.strip():
+            scene["action"] = edit.action.strip()
+        if edit.line is not None:
+            fitted = Scene(seconds=float(scene.get("seconds") or 4.0),
+                           line=edit.line.strip())
+            scene["line"] = fitted.trimmed_line() if fitted.line else ""
+    script["scenes"] = scenes
+    if body.title is not None and body.title.strip():
+        script["title"] = body.title.strip()
+    script["edited"] = True
+    clip.script = script
+    db.commit()
+    record_event(db, "script_edited", user, clip_id=str(clip.id))
+    return _serialize(clip)
+
+
 class ScriptRegenerate(BaseModel):
     # Optional note telling the writer what was wrong ("less cringe",
     # "make it about the derby") — folded into the rewrite prompt.

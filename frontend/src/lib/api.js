@@ -80,6 +80,8 @@ export const api = {
   retryClip: (id) => request(`/clips/${id}/retry`, { method: "POST" }),
   // Script approval: nothing renders (or costs) until the script is approved.
   approveScript: (id) => request(`/clips/${id}/script/approve`, { method: "POST" }),
+  // Edit dialogue/actions before approving; lines are fitted server-side.
+  updateScript: (id, body) => request(`/clips/${id}/script`, { method: "PATCH", body }),
   regenerateScript: (id, feedback = "") =>
     request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback } }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),

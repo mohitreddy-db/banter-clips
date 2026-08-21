@@ -98,6 +98,35 @@ export default function Studio() {
   const [scriptOpen, setScriptOpen] = useState(false);      // "Show script" dialog
   const [scriptFeedback, setScriptFeedback] = useState(""); // regenerate note
   const [scriptBusy, setScriptBusy] = useState("");
+  // Editable working copy of the script: the user can rewrite any dialogue
+  // line or action before approving; diffs are saved on approve.
+  const [draft, setDraft] = useState(null);
+
+  useEffect(() => {
+    if (clip?.status === "script_ready" && clip.script) {
+      setDraft(JSON.parse(JSON.stringify(clip.script)));
+    }
+  }, [clip?.status, clip?.script]);
+
+  const editDraft = (sceneIndex, field, value) =>
+    setDraft((d) => {
+      if (!d) return d;
+      const next = { ...d, scenes: d.scenes.map((s, i) => (i === sceneIndex ? { ...s, [field]: value } : s)) };
+      return next;
+    });
+
+  const draftEdits = () => {
+    if (!draft || !clip?.script) return [];
+    return draft.scenes
+      .map((s, i) => {
+        const orig = clip.script.scenes[i] || {};
+        const edit = { index: i };
+        if ((s.line || "") !== (orig.line || "")) edit.line = s.line || "";
+        if ((s.action || "") !== (orig.action || "")) edit.action = s.action || "";
+        return edit;
+      })
+      .filter((e) => "line" in e || "action" in e);
+  };
   const pollRef = useRef(null);
   const tickRef = useRef(null);
 
@@ -625,7 +654,10 @@ export default function Studio() {
               </div>
 
               <div className="card" style={{ padding: "clamp(14px, 3vw, 22px)" }}>
-                <ScriptView script={clip.script} />
+                <ScriptView script={draft || clip.script} editable onEdit={editDraft} />
+              </div>
+              <div style={{ fontSize: 12, color: "var(--app-muted2)", marginTop: -12 }}>
+                ✏️ Every line and action above is editable — your words are what gets performed.
               </div>
 
               {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
@@ -638,6 +670,8 @@ export default function Studio() {
                   setScriptBusy("approve");
                   setError("");
                   try {
+                    const edits = draftEdits();
+                    if (edits.length) await api.updateScript(clip.id, { scenes: edits });
                     const c = await api.approveScript(clip.id);
                     setClip(c);
                     watchClip(c.id, Date.now());
@@ -648,7 +682,11 @@ export default function Studio() {
                   }
                 }}
               >
-                {scriptBusy === "approve" ? "Starting…" : "✅ Approve script & generate video"}
+                {scriptBusy === "approve"
+                  ? "Starting…"
+                  : draftEdits().length
+                    ? "✅ Save edits & generate video"
+                    : "✅ Approve script & generate video"}
               </button>
 
               <div className="panel" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", flexDirection: "column", gap: 8 }}>
