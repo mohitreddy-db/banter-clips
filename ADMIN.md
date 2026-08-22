@@ -19,8 +19,9 @@ to what the MVP's data can actually power. Figma frames 15–23 in the
 - **One operator, real data.** Every widget reads from tables that exist
   (users, clips, jobs, events, catalog, Stripe) — no vanity metrics.
   Sample numbers in designs use realistic MVP scale (~1.3K users,
-  ~$1.2K MRR, ~44% gross margin on consumed credits per
-  `UNIT-ECONOMICS.md`), not the prototype's aspirational figures.
+  ~$1.2K MRR, ~35–40% gross margin on consumed credits per
+  `PRICING.md` §9 / `UNIT-ECONOMICS.md` — ~30% net after payment fees
+  and retries we eat), not the prototype's aspirational figures.
 - **Replace SSH, not Stripe.** The panel replaces what we do today by
   SSH + SQL (block a user, comp a plan, retry a job, change spend caps).
   Stripe's dashboard stays the money source of truth; we deep-link out.
@@ -82,8 +83,9 @@ Real-time operating picture with a time-range switch (Today / 7d / 30d):
   reported / generating), take, sport · tone · duration · resolution ·
   user, cost + credits charged.
 - Per-clip detail: play video, full provenance (per-scene costs,
-  prompts, review verdicts, warnings), publish history; actions retry /
-  delete (removes files).
+  prompts, review verdicts, warnings), publish history, and the
+  **credit receipt with line items** (video + paid extras like Enhance,
+  per `PRICING.md` §6); actions retry / delete (removes files).
 
 ### 3.4 Generation Jobs (AI ENGINE)
 
@@ -92,7 +94,10 @@ Real-time operating picture with a time-range switch (Today / 7d / 30d):
   header; **Pause queue** button top-right.
 - Live queue table: job, take/user, pipeline status (queued →
   generating → quality check → complete / failed), elapsed, cost so
-  far; retry / cancel.
+  far, **credits reserved**; retry / cancel. Per `PRICING.md` rule 3,
+  credits are reserved when a job starts and released in full on
+  failure — failed rows show provider $ eaten as COGS, never a user
+  charge.
 - **Spend controls panel:** `MAX_DAILY_SPEND_USD` and
   `MAX_JOB_COST_USD` become DB-backed runtime settings with an audit
   trail (no more SSH-editing `.env`), plus the **kill switch** ("pause
@@ -125,9 +130,12 @@ The unit-economics page — "the number that decides the business":
 - KPI strip: issued, consumed (+% of issued), purchased, expired,
   top-up revenue, AI cost per credit.
 - **Ledger table:** user, type (consumed / purchased / granted /
-  expired), amount, running balance, reason, time.
+  reserved / released / expired), amount, running balance, reason,
+  time. Expiry applies only to plan credits past their one-month
+  rollover — top-up credits never expire.
 - Actions: **grant credits** (reason required — feeds audit),
-  adjust balance.
+  adjust balance. Comped accounts get 1,100/month like Creator with
+  no billing (`PRICING.md` §10).
 - Credits-by-plan card + read-only video price list (prices are code
   constants for MVP; editable pricing table is phase 2, per
   `PRICING.md`).
