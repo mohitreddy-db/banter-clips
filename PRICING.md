@@ -31,8 +31,10 @@ no pricing redesign needed.
    starts and charged only when the video completes. A failed job releases
    the full reservation. Retries charge like a normal run (so a video is
    never charged twice).
-4. **Every video shows its receipt.** Each clip displays the credits it
-   used, with line items (video + any paid extras).
+4. **Every video shows its receipt.** Each clip permanently displays how
+   many credits it used and where they went, line by line (video + any
+   paid extras used on it). The user can always answer "what did this
+   video cost me and why" from the clip itself.
 5. **Credit prices are admin-tunable.** Per-action credit costs live in
    config the admin panel can change (per model, per feature) without a
    release — the feedback doc's requirement, and how the router lands later
@@ -127,11 +129,15 @@ unchanged.
   under it that follows the selected mode — "≈ 2 videos at 15s Standard",
   "≈ 1 video at 15s HD" (feedback doc §10; replaces "5 of 30 monthly
   videos left" everywhere).
-- **Before generating:** the exact price of the configured video ("This
-  video: 60 credits") next to the generate button. Generation can't start
+- **Before generating:** the price of the configured video ("This video:
+  60 credits") next to the generate button. This is **exact, not an
+  estimate** — a fixed menu lookup on duration × mode. Internal retries,
+  shot counts, or research never change it. Generation can't start
   without the full amount in the wallet.
-- **After generating:** the receipt on the clip — "Used 62 credits ·
-  Video 15s Standard 60 · Enhance ×2 2".
+- **After generating:** the receipt, kept on the clip forever — "Used 62
+  credits · Video 15s Standard 60 · Enhance ×2 2". A successful video
+  always charges exactly its quoted price; the total only grows by other
+  itemized actions on that clip, each quoted exactly when used.
 - **Never shown:** dollars remaining, videos remaining, our costs, model
   names, or any upgrade nag tied to the balance.
 
