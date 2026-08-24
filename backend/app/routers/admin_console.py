@@ -759,7 +759,16 @@ def costs(days: int = Query(7, ge=1, le=90),
         .where(Clip.created_at >= since)
     ).all()
     video_cost = 0.0
-    reasons: dict[str, int] = {}
+    # reason text -> [count, source]; source explains where the signal came
+    # from: "review" (automated quality check rejected a scene), "fallback"
+    # (pipeline degraded but delivered), "failure" (whole run failed).
+    reasons: dict[str, list] = {}
+
+    def add_reason(raw, source: str) -> None:
+        key = str(raw)[:60]
+        entry = reasons.setdefault(key, [0, source])
+        entry[0] += 1
+
     attempts_total = 0
     scenes_total = 0
     scenes_flagged = 0
@@ -773,14 +782,11 @@ def costs(days: int = Query(7, ge=1, le=90),
             if hard:
                 scenes_flagged += 1
             for reason in hard:
-                key = str(reason)[:60]
-                reasons[key] = reasons.get(key, 0) + 1
+                add_reason(reason, "review")
         for warning in prov.get("warnings") or []:
-            key = str(warning)[:60]
-            reasons[key] = reasons.get(key, 0) + 1
+            add_reason(warning, "fallback")
         if clip_status == "failed" and clip_error:
-            key = str(clip_error)[:60]
-            reasons[key] = reasons.get(key, 0) + 1
+            add_reason(clip_error, "failure")
     other_cost = max(total - video_cost, 0.0)
 
     ready = db.scalar(select(func.count(Clip.id)).where(
@@ -790,8 +796,8 @@ def costs(days: int = Query(7, ge=1, le=90),
     retries = db.scalar(select(func.count(Event.id)).where(
         Event.created_at >= since, Event.name == "generation_retried")) or 0
 
-    top_reasons = sorted(reasons.items(), key=lambda kv: kv[1], reverse=True)[:8]
-    reasons_total = sum(n for _, n in top_reasons) or 1
+    top_reasons = sorted(reasons.items(), key=lambda kv: kv[1][0], reverse=True)[:8]
+    reasons_total = sum(entry[0] for _, entry in top_reasons) or 1
 
     return {
         "range_days": days,
@@ -813,8 +819,9 @@ def costs(days: int = Query(7, ge=1, le=90),
             "scenes_flagged": scenes_flagged,
             "retries": retries,
             "failure_reasons": [
-                {"reason": r, "count": n, "pct": round(n / reasons_total * 100)}
-                for r, n in top_reasons
+                {"reason": r, "count": n, "source": source,
+                 "pct": round(n / reasons_total * 100)}
+                for r, (n, source) in top_reasons
             ],
         },
     }

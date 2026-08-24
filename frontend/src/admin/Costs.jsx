@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { api } from "../lib/api.js";
 import {
-  BarRow, Card, ChipRow, Kpi, LoadingOrError, PageHead, T,
+  Badge, BarRow, Card, ChipRow, HBar, Kpi, LoadingOrError, PageHead, T,
   fmtMoney, fmtPct, useFetch,
 } from "./ui.jsx";
+
+const SOURCE_LABELS = {
+  failure: { label: "FAILED RUN", color: T.error },
+  fallback: { label: "FALLBACK", color: T.amber },
+  review: { label: "QUALITY CHECK", color: T.cyan },
+};
 
 export default function AdminCosts() {
   const [days, setDays] = useState(7);
@@ -74,12 +80,28 @@ export default function AdminCosts() {
         <Kpi label="USER RETRIES" value={q.retries} note="generation_retried events" />
       </div>
 
-      <Card title="Top failure & warning reasons" sub="aggregated from review verdicts (provenance.scenes[].hard), pipeline warnings and clip errors">
+      <Card title="What went wrong" sub="every problem from recent generations, most common first">
         {q.failure_reasons.length === 0 && <div style={{ fontSize: 12.5, color: T.muted2 }}>Nothing flagged in this period. 🎉</div>}
-        {q.failure_reasons.map((r, i) => (
-          <BarRow key={r.reason} label={r.reason} pct={r.pct} value={`×${r.count}`}
-                  color={[T.error, T.amber, T.cyan, T.purple, T.green, T.muted][i % 6]} />
-        ))}
+        {q.failure_reasons.map((r) => {
+          const src = SOURCE_LABELS[r.source] || SOURCE_LABELS.fallback;
+          return (
+            <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <span style={{ width: 110, flexShrink: 0 }}>
+                <Badge color={src.color}>{src.label}</Badge>
+              </span>
+              <span style={{ width: 260, fontSize: 12.5, color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.reason}>
+                {r.reason}
+              </span>
+              <HBar pct={r.pct} color={src.color} />
+              <span style={{ width: 44, textAlign: "right", fontSize: 12.5, fontWeight: 600, color: T.text, flexShrink: 0 }}>×{r.count}</span>
+            </div>
+          );
+        })}
+        <div style={{ fontSize: 11, color: T.muted2, marginTop: 12 }}>
+          <b style={{ color: T.error }}>Failed run</b> — the whole video failed · {" "}
+          <b style={{ color: T.amber }}>Quality fallback</b> — video delivered, but a scene degraded (e.g. still image instead of animation) · {" "}
+          <b style={{ color: T.cyan }}>Quality check</b> — the automatic reviewer rejected a scene and it was regenerated
+        </div>
       </Card>
     </>
   );
