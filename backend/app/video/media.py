@@ -113,6 +113,8 @@ def probe(path: str | Path) -> dict:
         "height": int(video.get("height") or 0),
         "vcodec": video.get("codec_name") or "",
         "acodec": (audio or {}).get("codec_name") or "",
+        "sample_rate": int((audio or {}).get("sample_rate") or 0),
+        "channels": int((audio or {}).get("channels") or 0),
         "has_audio": audio is not None,
         "fps": _ratio(video.get("avg_frame_rate") or video.get("r_frame_rate")),
         # ffprobe omits this entirely when the pixels are already square.
@@ -413,6 +415,83 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
         _run(args, "brand")
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
+    return Path(out)
+
+
+# The outro card: dark frame, "made with BanterClips" pops in with a short
+# rising chime, holding ~2s — the TikTok-outro pattern, with our own art and
+# a synthesized sound (nothing sampled from anyone else's jingle).
+END_CARD_SECONDS = float(os.environ.get("END_CARD_SECONDS", "1.8"))
+# Three-note ascending arpeggio (C5-G5-C6), each note struck then left to
+# ring with an exponential decay — reads as a friendly "ta-da-da" sting.
+_CHIME = (
+    "0.35*(sin(2*PI*523.25*t)*exp(-7*t)"
+    "+gte(t,0.16)*sin(2*PI*783.99*t)*exp(-7*(t-0.16))"
+    "+gte(t,0.34)*sin(2*PI*1046.5*t)*exp(-5.5*(t-0.34)))"
+)
+
+
+def end_card(video: str | Path, out: str | Path, work: Path) -> Path:
+    """Append the branded outro to a finished video.
+
+    The card is rendered at the video's own measured size and frame rate with
+    the same codec settings, so the join is a stream copy — no re-encode of
+    the paid content. Raises MediaError; callers treat the outro as cosmetic
+    (a job never fails because of it).
+    """
+    info = probe(video)
+    width, height = int(info.get("width") or 0), int(info.get("height") or 0)
+    fps = float(info.get("fps") or FPS)
+    # A stream copy needs the audio specs to agree exactly — a 44.1k source
+    # spliced to a 48k card plays the tail at the wrong clock (measured).
+    rate = int(info.get("sample_rate") or 48000)
+    channels = max(1, int(info.get("channels") or 2))
+    font = font_path()
+    if not (width and height and font):
+        raise MediaError("end card needs a readable frame and a font")
+    s = width / 1080.0
+    d = END_CARD_SECONDS
+    # Timing mirrors the reference outro: small line fades in, wordmark pops
+    # up and settles, site line arrives last. All beats in seconds from cut.
+    wordmark_y = (
+        f"(h-text_h)/2-{round(20 * s)}"
+        f"+{round(70 * s)}*pow(1-min(1,max(0,(t-0.15)/0.35)),2)"
+    )
+    filters = ",".join([
+        f"drawtext=fontfile={font}:text=made with:fontcolor=white"
+        f":fontsize={round(42 * s)}:x=(w-text_w)/2:y=(h-text_h)/2-{round(130 * s)}"
+        f":alpha='0.75*min(1,max(0,(t-0.10)/0.30))'",
+        f"drawtext=fontfile={font}:text=BanterClips:fontcolor=white"
+        f":fontsize={round(104 * s)}:x=(w-text_w)/2:y='{wordmark_y}'"
+        f":alpha='min(1,max(0,(t-0.15)/0.30))'",
+        f"drawtext=fontfile={font}:text=banterclips.com:fontcolor=0x22D3EE"
+        f":fontsize={round(38 * s)}:x=(w-text_w)/2:y=(h-text_h)/2+{round(105 * s)}"
+        f":alpha='min(1,max(0,(t-0.55)/0.30))'",
+        "setsar=1,format=yuv420p",
+    ])
+    card = Path(work) / "end_card.mp4"
+    _run([
+        "ffmpeg", "-v", "error", "-y",
+        "-f", "lavfi", "-i", f"color=c=0x0A1020:s={width}x{height}:r={fps:g}:d={d:.2f}",
+        "-f", "lavfi", "-i", f"aevalsrc='{_CHIME}':s={rate}:d={d:.2f}",
+        "-vf", filters,
+        "-af", (f"pan={'stereo|c0=c0|c1=c0' if channels == 2 else 'mono|c0=c0'},"
+                f"afade=t=out:st={d - 0.35:.2f}:d=0.35"),
+        "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-ar", str(rate), "-ac", str(channels),
+        "-t", f"{d:.2f}", str(card),
+    ], "end_card")
+    listing = Path(work) / "end_card_concat.txt"
+    listing.write_text(f"file '{Path(video).resolve()}'\nfile '{card.resolve()}'\n")
+    _run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
+          "-i", str(listing), "-c", "copy", "-movflags", "+faststart",
+          str(out)], "end_card concat")
+    # A bad splice shows up as lost duration; catch it here so the caller
+    # can ship the card-less cut instead of a corrupt file.
+    want = (info.get("duration") or 0.0) + d
+    got = probe(out).get("duration") or 0.0
+    if abs(got - want) > 1.0:
+        raise MediaError(f"spliced duration {got:.1f}s != expected {want:.1f}s")
     return Path(out)
 
 

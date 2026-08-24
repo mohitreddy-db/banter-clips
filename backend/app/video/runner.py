@@ -492,6 +492,13 @@ def generate_video(
         result.warn(f"branding failed ({exc}); delivering unbranded")
         shutil.copyfile(joined, out_path)
 
+    # The outro card is cosmetic too: on any failure the video ships without.
+    try:
+        carded = media.end_card(out_path, work_dir / "with_outro.mp4", work_dir)
+        shutil.copyfile(carded, out_path)
+    except media.MediaError as exc:
+        result.warn(f"end card failed ({exc}); delivering without outro")
+
     # ------------------------------------------------------- 7. validate
     stage(STAGE_VALIDATE)
     info = media.probe(out_path)
