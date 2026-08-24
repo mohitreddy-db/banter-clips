@@ -352,6 +352,46 @@ class CatalogStill(Base):
     __table_args__ = (Index("catalog_stills_char", "character_id", "created_at"),)
 
 
+class AdminAction(Base):
+    """Append-only audit log of every mutating admin-console action.
+
+    ADMIN.md §5.1: who, action, target, reason, timestamp. Rows are written
+    by the admin router only and never updated or deleted from the app.
+    """
+
+    __tablename__ = "admin_actions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    admin_email: Mapped[str] = mapped_column(Text, nullable=False)
+    # Short verb slug, e.g. "block_user", "set_daily_cap", "delete_clip".
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    # Human-readable object, e.g. "user someone@x.com", "clip 8f2a…".
+    target: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    reason: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (Index("admin_actions_time", "created_at"),)
+
+
+class RuntimeSetting(Base):
+    """Small key/value store for operator-editable runtime settings.
+
+    Replaces SSH-editing .env for the spend caps and holds the generation
+    kill switch plus the worker heartbeat. Values are stored as text and
+    parsed by services.runtime_settings; env vars remain the fallback so a
+    fresh database behaves exactly as before.
+    """
+
+    __tablename__ = "runtime_settings"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_by: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class StorylinePack(Base):
     """Cached real-world context (see app/video/context.py) — one pack per
     topic per day, so repeat takes about the same team cost ~nothing."""

@@ -47,6 +47,15 @@ async function request(path, { method = "GET", body } = {}) {
   return data;
 }
 
+// Build a querystring, dropping empty/undefined values.
+const qs = (params = {}) => {
+  const pairs = Object.entries(params).filter(
+    ([, v]) => v !== undefined && v !== null && v !== ""
+  );
+  if (!pairs.length) return "";
+  return `?${new URLSearchParams(pairs).toString()}`;
+};
+
 export const api = {
   // auth
   exchangeSupabase: (access_token) =>
@@ -114,6 +123,36 @@ export const api = {
   adminApproveStills: (id, still_ids) =>
     request(`/admin/catalog/${id}/references`, { method: "PUT", body: { still_ids } }),
   adminResearch: (id) => request(`/admin/catalog/${id}/research`, { method: "POST" }),
+
+  // admin console — aggregate + action endpoints (see backend admin_console.py)
+  adminOverview: (days = 7) => request(`/admin/overview${qs({ days })}`),
+  adminUsers: (params = {}) => request(`/admin/users${qs(params)}`),
+  adminUserDetail: (id) => request(`/admin/users/${id}`),
+  adminBlockUser: (id, blocked, reason = "") =>
+    request(`/admin/users/${id}/block`, { method: "POST", body: { blocked, reason } }),
+  adminDeleteUser: (id, confirm_email, reason = "") =>
+    request(`/admin/users/${id}/delete`, { method: "POST", body: { confirm_email, reason } }),
+  adminRetention: (weeks = 5) => request(`/admin/retention${qs({ weeks })}`),
+  adminVideos: (params = {}) => request(`/admin/videos${qs(params)}`),
+  adminVideoDetail: (id) => request(`/admin/videos/${id}`),
+  adminVideoRetry: (id, reason = "") =>
+    request(`/admin/videos/${id}/retry`, { method: "POST", body: { reason } }),
+  adminVideoDelete: (id, reason = "") =>
+    request(`/admin/videos/${id}/delete`, { method: "POST", body: { reason } }),
+  adminJobs: () => request("/admin/jobs"),
+  adminJobRetry: (id, reason = "") =>
+    request(`/admin/jobs/${id}/retry`, { method: "POST", body: { reason } }),
+  adminJobCancel: (id, reason = "") =>
+    request(`/admin/jobs/${id}/cancel`, { method: "POST", body: { reason } }),
+  adminSpendSettings: () => request("/admin/settings/spend"),
+  adminSaveSpendSettings: (body) => request("/admin/settings/spend", { method: "PUT", body }),
+  adminCosts: (days = 7) => request(`/admin/costs${qs({ days })}`),
+  adminRevenue: () => request("/admin/revenue"),
+  adminPublishing: () => request("/admin/publishing"),
+  adminPublishRetry: (id, reason = "") =>
+    request(`/admin/publishes/${id}/retry`, { method: "POST", body: { reason } }),
+  adminAudit: (params = {}) => request(`/admin/audit${qs(params)}`),
+  adminCredits: () => request("/admin/credits"),
 
   // analytics (fire-and-forget)
   track: (name, props = {}) =>

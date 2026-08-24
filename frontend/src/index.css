@@ -608,3 +608,23 @@ video:-webkit-full-screen {
     border-radius: 0 !important;
   }
 }
+
+/* Admin console shell: sidebar collapses to a horizontal nav strip on
+   phones, same 860px breakpoint as the app shell. */
+@media (max-width: 860px) {
+  .admin-console-sidebar {
+    display: none;
+  }
+  .admin-console-mobilenav {
+    display: flex !important;
+  }
+  .admin-console-live {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-two-col {
+    grid-template-columns: 1fr !important;
+  }
+}

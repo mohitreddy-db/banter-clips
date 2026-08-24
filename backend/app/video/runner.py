@@ -111,6 +111,7 @@ def generate_video(
     brief: "enhancer.Brief | None" = None,
     resolution: str | None = None,
     plan: VideoPlan | None = None,
+    budget: float | None = None,
 ) -> Result:
     """Run the whole pipeline. Never raises.
 
@@ -127,7 +128,8 @@ def generate_video(
     size = media.dims(resolution)
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
-    budget = float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
+    if budget is None:
+        budget = float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
 
     def stage(name: str) -> None:
         if on_stage:
@@ -662,6 +664,16 @@ def _write_script(db, clip) -> None:
              clip.id, plan.title, len(plan.scenes), bool(pack))
 
 
+def _job_budget(db) -> float:
+    """Per-job cost ceiling — the DB-backed runtime setting wins over env."""
+    try:
+        from ..services import runtime_settings
+
+        return runtime_settings.job_cap(db)
+    except Exception:  # noqa: BLE001 — a settings problem must not kill a job
+        return float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
+
+
 def run_clip_job(clip_id: uuid.UUID) -> None:
     """Drive one Clip row through the pipeline. Never raises."""
     from ..db import SessionLocal
@@ -725,6 +737,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             on_progress=on_progress,
             resolution=getattr(clip, "resolution", None),
             plan=approved_plan,
+            budget=_job_budget(db),
         )
 
         clip.cost_usd = round(result.cost_usd, 3)
