@@ -1,124 +1,214 @@
-# BanterClips — Admin Panel (MVP scope)
+# BanterClips — Admin Console (MVP scope)
 
-Version 1.0 · 2026-08-21 · Companion to `PRICING.md` (credits) and the
-existing `/admin` catalog page. The client's prototype shows a ~30-section
-enterprise console; this doc cuts it to what an MVP with one operator
-actually needs, and maps every section to data we already have.
+Version 2.0 · 2026-08-22 · Companion to `PRICING.md` (credits) and the
+existing `/admin` catalog page. Supersedes v1.0's flat 6-section panel.
+
+Reference: the client's prototype console (Claude artifact
+`6fb99753-d9c7-45b7-98af-5d9a37a8acfa`, "BanterClips admin panel
+prototype") shows a ~30-section enterprise console. This doc keeps its
+**information architecture** — a KPI dashboard where every widget is a
+summary that drills into its own detail tab — and cuts the section list
+to what the MVP's data can actually power. Figma frames 15–23 in the
+"Phase 1 MVP" file implement this spec in the app's navy/cyan theme.
 
 ## 1. Principles
 
-- **One operator, real data.** Every widget must read from tables that exist
+- **Summary → detail.** The Dashboard is the operating picture; every
+  widget on it links to a tab that shows the full data behind it. No
+  dead-end numbers.
+- **One operator, real data.** Every widget reads from tables that exist
   (users, clips, jobs, events, catalog, Stripe) — no vanity metrics.
-- **Replace SSH, not Stripe.** The panel replaces the things we do today by
-  SSH + SQL (block a user, comp a plan, retry a job, check spend). Stripe's
-  own dashboard stays the money source of truth; we link out to it.
-- **Same auth as today:** `ADMIN_EMAILS` allow-list, 404 to everyone else,
-  admin-only nav. Every admin action is logged.
+  Sample numbers in designs use realistic MVP scale (~1.3K users,
+  ~$1.2K MRR, ~35–40% gross margin on consumed credits per
+  `PRICING.md` §9 / `UNIT-ECONOMICS.md` — ~30% net after payment fees
+  and retries we eat), not the prototype's aspirational figures.
+- **Replace SSH, not Stripe.** The panel replaces what we do today by
+  SSH + SQL (block a user, comp a plan, retry a job, change spend caps).
+  Stripe's dashboard stays the money source of truth; we deep-link out.
+- **Same auth as today:** `ADMIN_EMAILS` allow-list, 404 to everyone
+  else, admin-only nav. Every mutating action is logged.
 
-## 2. MVP sections (6)
+## 2. Navigation (grouped sidebar)
 
-### 2.1 Dashboard (home)
-
-The operating picture on one screen. All numbers computable today:
-
-| Widget | Source |
+| Group | Tabs |
 |---|---|
-| Users: total / new (7d) / active (7d) | `users`, `events` |
-| Videos: generated, success rate, publish rate | `clips`, `publishes` |
-| AI spend today / 7d, cost per video | `clips.cost_usd` |
-| **Provider balance** (OpenRouter credits left) | OpenRouter credits API |
-| Spend caps status (daily cap, per-job cap) | settings |
-| Revenue: MRR, paying users | Stripe (cached) |
-| Credits issued vs consumed (after credits ship) | credit ledger |
-| Alert strip: failure-rate spike, balance low, cap tripped, worker down | computed |
+| OVERVIEW | Dashboard |
+| GROWTH | Users |
+| CONTENT | All Videos |
+| AI ENGINE | Generation Jobs · AI Costs & Quality |
+| MONETIZATION | Revenue · Credits |
+| SOCIAL | Publishing |
+| SYSTEM | Catalog (existing page) · Audit Log |
 
-The alert strip is the point of the page: today the OpenRouter balance
-going negative was invisible until generation broke.
+Global top bar: search (users / videos / jobs), "updated Xs ago" pill,
+admin avatar.
 
-### 2.2 Users
+## 3. Pages
 
-- Search/list: email, plan, credits balance, videos, spend, last login,
-  blocked?
-- Per-user drawer: their clips (with costs), publishes, Stripe customer
-  link, credit history.
-- Actions: **block / unblock** (silent blocklist — exists), **grant
-  credits / comp plan**, **delete user** (full erasure — the delete-user
-  script becomes a button with a typed confirmation).
+### 3.1 Dashboard (Overview)
 
-### 2.3 Videos
+Real-time operating picture with a time-range switch (Today / 7d / 30d):
 
-- All clips across users: thumbnail, take, user, status, duration,
-  resolution, cost, credits charged, created.
-- Filters: status (failed first), user, sport, date.
-- Per-clip: play the video, full provenance (per-scene costs, review
-  verdicts, warnings, prompts), publish history.
-- Actions: **retry failed**, **delete** (removes files too). This is the
-  quality-triage surface — it's how bad outputs get found and diagnosed.
+- **Alert strip** (the point of the page): provider balance low,
+  failure-rate spike, cap tripped, worker down — each with a "View →"
+  link into the owning tab.
+- **KPI grid** (each card links to its tab): total / new / active
+  users, videos generated & published, credits consumed, revenue, MRR,
+  paying users, AI cost, gross margin, provider balance.
+- **Activation funnel:** signups → first video → 2+ videos → published
+  → paid (events table).
+- **AI economics mini-card:** margin, cost/video, spend today by stage.
+- **Top sports · tone → publish-rate · top takes** (content signals).
 
-### 2.4 Generation Jobs (queue + spend control)
+### 3.2 Users (GROWTH)
 
-- Live queue: queued / running / recently failed jobs, per-job elapsed and
-  cost so far, worker heartbeat (is the worker alive?).
-- Actions: retry job, cancel job.
-- **Spend controls editable here**: daily cap (`MAX_DAILY_SPEND_USD`) and
-  per-job cap (`MAX_JOB_COST_USD`) become DB-backed runtime settings with
-  an audit trail — no more SSH-editing `.env` to open/close generation.
-- Kill switch: "pause all generation" toggle (sets the daily cap to ~0,
-  the mechanism we already used in an incident).
+- Search + filter chips (plan, active/churned/blocked, high usage),
+  CSV export.
+- Table: user, plan, signup, last active, videos, credits, revenue,
+  status.
+- **Retention cohorts** card: weekly cohorts × D1/D7/D14/D30 from the
+  `events` table (small volume is fine — it's one query, not a BI
+  suite).
+- Per-user drawer: balance, spend, clips with costs, Stripe link, and
+  actions — **grant credits**, **mark comped**, **block/unblock**,
+  **delete** (typed-email confirmation; replaces `delete-user.py`).
 
-### 2.5 Catalog (already live — folded in)
+### 3.3 All Videos (CONTENT)
 
-The existing character catalog page becomes a tab of the admin panel:
-tile grid, edit dialog, stills history + approval, research auto-fill,
-generate-with-notes. Documented here as part of admin, not separately.
-Additions when the context pipeline ships: per-character "storyline notes"
-freshness and the venue/branding pack (see VIDEO realism plan).
+- Grid/List toggle; filter chips: sport, Failed, **Reported**,
+  Published. Failed & reported sort first — this is the quality-triage
+  surface (a dedicated moderation queue stays deferred; the Reported
+  filter covers MVP volume).
+- Card: thumbnail, status badge (published / failed w/ reason /
+  reported / generating), take, sport · tone · duration · resolution ·
+  user, cost + credits charged.
+- Per-clip detail: play video, full provenance (per-scene costs,
+  prompts, review verdicts, warnings), publish history, and the
+  **credit receipt with line items** (video + paid extras like Enhance,
+  per `PRICING.md` §6); actions retry / delete (removes files).
 
-### 2.6 Billing & Credits
+### 3.4 Generation Jobs (AI ENGINE)
 
-- Read view: transactions (subscriptions, top-ups), per-user credit
-  ledger entries, refunds — with deep links into Stripe for anything
-  money-touching.
-- Actions: grant promo credits (logged, with reason), mark account comped.
-- Per `PRICING.md`: credit price list shown read-only with a "prices are
-  code constants" note for MVP; editable pricing table is phase 2.
+- KPI strip: live jobs, queued, success rate (24h), avg generation
+  time, failed (24h), spend today. Worker heartbeat shown in the page
+  header; **Pause queue** button top-right.
+- Live queue table: job, take/user, pipeline status (queued →
+  generating → quality check → complete / failed), elapsed, cost so
+  far, **credits reserved**; retry / cancel. Per `PRICING.md` rule 3,
+  credits are reserved when a job starts and released in full on
+  failure — failed rows show provider $ eaten as COGS, never a user
+  charge.
+- **Spend controls panel:** `MAX_DAILY_SPEND_USD` and
+  `MAX_JOB_COST_USD` become DB-backed runtime settings with an audit
+  trail (no more SSH-editing `.env`), plus the **kill switch** ("pause
+  all generation" = daily cap → $0, the incident mechanism).
 
-## 3. Deliberately deferred (from the client prototype)
+### 3.5 AI Costs & Quality (AI ENGINE)
+
+The unit-economics page — "the number that decides the business":
+
+- KPI strip: total spend, cost/video, cost/active user,
+  failed-generation cost, **provider balance** (OpenRouter credits API).
+- Spend trend (daily) and breakdown by stage: video scenes, reference
+  images, script LLM, voice, storage.
+- **Quality section** (powered by the existing review pipeline):
+  generation success rate, avg review score, character & wardrobe
+  consistency, regeneration rate; top failure reasons ranked from
+  review verdicts. This is where failure spikes get diagnosed.
+
+### 3.6 Revenue (MONETIZATION)
+
+- KPI strip: total revenue, MRR, top-ups, gross profit after AI cost,
+  paying users, churn.
+- Weekly revenue trend; MRR by plan (Free / Creator) with movement
+  counts (new subs, cancels, conversion, top-up buyers).
+- **Transactions table** (read-only): subscriptions, top-ups, refunds —
+  every row deep-links into Stripe.
+
+### 3.7 Credits (MONETIZATION)
+
+- KPI strip: issued, consumed (+% of issued), purchased, expired,
+  top-up revenue, AI cost per credit.
+- **Ledger table:** user, type (consumed / purchased / granted /
+  reserved / released / expired), amount, running balance, reason,
+  time. Expiry applies only to plan credits past their one-month
+  rollover — top-up credits never expire.
+- Actions: **grant credits** (reason required — feeds audit),
+  adjust balance. Comped accounts get 1,100/month like Creator with
+  no billing (`PRICING.md` §10).
+- Credits-by-plan card + read-only video price list (prices are code
+  constants for MVP; editable pricing table is phase 2, per
+  `PRICING.md`).
+
+### 3.8 Publishing (SOCIAL)
+
+- KPI strip: posts today, success rate, failed, scheduled, connected
+  accounts, avg time-to-live.
+- **By platform:** Instagram (live) with posts/success/API status;
+  TikTok / YouTube / X shown as "coming soon" rows so the page grows
+  with the roadmap instead of being rebuilt.
+- **OAuth health:** token freshness, expiring-token count, error rate —
+  expired tokens surface in the queue as "Failed — OAuth expired" with
+  a re-auth link.
+- Publish queue: video, account, status (publishing / scheduled /
+  failed w/ reason / published + permalink), retry.
+
+### 3.9 Audit Log (SYSTEM)
+
+Read view of the `admin_actions` table: when/who, action, target,
+reason, filters by admin and action type. Append-only; every mutating
+action on any page writes here.
+
+### Catalog (SYSTEM)
+
+The existing character catalog page slots in unchanged as a sidebar
+item. Additions when the context pipeline ships: per-character
+"storyline notes" freshness and the venue/branding pack (see
+VIDEO-REALISM-PLAN).
+
+## 4. Deliberately deferred (from the client prototype)
 
 | Prototype section | Why deferred |
 |---|---|
-| Analytics suite (funnels, cohorts, retention curves) | needs event volume we don't have; `events` table + a BI tool later |
-| Acquisition / Retention / Referrals | no referral system exists |
-| Remix Library, Viral Presets, Prompt Library, Repurpose | features that don't exist yet (BRD §8) |
+| Analytics suite (funnels/cohorts beyond the Users tab & dashboard funnel) | needs event volume; BI tool later |
+| Acquisition / Referrals | no channels tracking or referral system exists |
+| Remix Library, Viral Presets, Prompt Library, Repurpose | features that don't exist yet (BRD §8); Prompt Library joins CONTENT when curated take-templates ship |
 | AI Models / Model Routing | single video model today; add with multi-model routing (roadmap Oct) |
 | Autonomous Agents | not a thing in this product yet |
-| Content Moderation queue | MVP: flagged/refused takes appear in Videos with a filter; a dedicated queue needs volume |
+| Content Moderation queue | "Reported" filter in All Videos covers MVP volume |
+| Feedback inbox | user count too small; email works |
 | Feature Flags / Experiments | premature at this user count |
 | Organizations / Enterprise Accounts | no teams feature |
-| Notifications center | journal + alert strip cover it |
+| Notifications center | alert strip covers it |
 | Admin Users management UI | `ADMIN_EMAILS` env list is fine at 2 admins |
+| Settings page | caps live in Jobs; the rest stays in env/code for MVP |
 
 Nothing here is rejected forever — each unlocks when its feature ships.
 
-## 4. Cross-cutting requirements
+## 5. Cross-cutting requirements
 
-1. **Audit log (lightweight, MVP-in):** one `admin_actions` table — who,
-   action, target, reason, timestamp. Every mutating admin action writes
-   to it. The prototype's "Audit Logs" page is just a read view of this.
+1. **Audit log (MVP-in):** one `admin_actions` table — who, action,
+   target, reason, timestamp. Every mutating admin action writes to it;
+   §3.9 is just its read view.
 2. **Mobile-usable:** same responsive treatment as the catalog page
    (tiles + full-page dialogs). Incidents happen on phones.
-3. **No dangerous defaults:** delete/block/cap actions require typed
-   confirmation; grants require a reason string (feeds the audit log).
+3. **No dangerous defaults:** delete/block/cap/kill-switch actions
+   require typed confirmation; grants require a reason string.
 4. **Read fast, mutate rarely:** lists paginate at 50; dashboards cache
-   for 60s; nothing polls faster than the data changes.
+   for 60s; the jobs page may poll faster since it is the live view.
+5. **Honest numbers:** margins shown on consumed credits, failed-gen
+   cost surfaced, publish rate against generated — no vanity framing.
 
-## 5. Build order
+## 6. Build order
 
-1. Dashboard (alert strip + spend/balance first — it's the incident pager)
-2. Users (block/grant/delete replace today's scripts)
-3. Videos (quality triage)
-4. Jobs + runtime spend controls (kills the .env-editing workflow)
-5. Billing & credits view (after the credit ledger ships)
-6. Audit log read view
+1. Dashboard (alert strip + KPI grid — it's the incident pager)
+2. Users (+ retention card; block/grant/delete replace today's scripts)
+3. Generation Jobs + runtime spend controls (kills the .env workflow)
+4. All Videos (quality triage)
+5. AI Costs & Quality (balance + failure diagnosis)
+6. Credits + Revenue (after the credit ledger ships)
+7. Publishing health view
+8. Audit log read view
 
-Catalog is already live; it slots in as a tab whenever the shell exists.
+Catalog is already live; it slots into the sidebar whenever the shell
+exists.

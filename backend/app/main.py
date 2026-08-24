@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db_migrate
 from .config import settings
 from .db import Base, engine
-from .routers import admin, auth, billing, clips, events, me, socials
+from .routers import admin, admin_console, auth, billing, clips, events, me, socials
 
 
 @asynccontextmanager
@@ -46,6 +46,7 @@ app.include_router(socials.router)
 app.include_router(billing.router)
 app.include_router(events.router)
 app.include_router(admin.router)
+app.include_router(admin_console.router)
 
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 

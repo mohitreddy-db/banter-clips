@@ -58,6 +58,9 @@ class Worker:
         try:
             while not self._job_done.wait(jobs.HEARTBEAT_SECONDS):
                 jobs.heartbeat(db, job_id)
+                # The main loop is blocked on the render, so worker liveness
+                # is kept fresh from here during long jobs.
+                self._beat_liveness(db)
         finally:
             db.close()
 
@@ -88,9 +91,20 @@ class Worker:
             self.current_job_id = None
             db.close()
 
+    def _beat_liveness(self, db) -> None:
+        """Record worker liveness for the admin dashboard. Never raises."""
+        try:
+            from .services import runtime_settings
+
+            runtime_settings.beat_worker_heartbeat(db, self.name)
+            db.commit()
+        except Exception:  # noqa: BLE001 — liveness is best-effort telemetry
+            db.rollback()
+
     def loop(self, once: bool = False) -> int:
         db = SessionLocal()
         last_reclaim = 0.0
+        last_beat = 0.0
         handled = 0
         log.info("worker %s ready", self.name)
         try:
@@ -99,6 +113,9 @@ class Worker:
                 if now - last_reclaim > RECLAIM_EVERY:
                     jobs.reclaim_stale(db)
                     last_reclaim = now
+                if now - last_beat > jobs.HEARTBEAT_SECONDS:
+                    self._beat_liveness(db)
+                    last_beat = now
 
                 job = jobs.claim(db, self.name)
                 if job is None:

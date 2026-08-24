@@ -119,7 +119,7 @@ export default function AppShell() {
         </NavLink>
         {user?.is_admin && (
           <NavLink to="/admin" style={navItem}>
-            <Icon d={icons.catalog} /> Catalog
+            <Icon d={icons.catalog} /> Admin
           </NavLink>
         )}
 

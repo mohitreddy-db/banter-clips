@@ -39,8 +39,13 @@ def spent_last_day(db: Session) -> float:
     return float(total or 0.0)
 
 
-def ceiling() -> float:
-    return float(getattr(settings, "MAX_DAILY_SPEND_USD", 0) or 0)
+def ceiling(db: Session | None = None) -> float:
+    env_value = float(getattr(settings, "MAX_DAILY_SPEND_USD", 0) or 0)
+    if db is None:
+        return env_value
+    from . import runtime_settings
+
+    return runtime_settings.get_float(db, runtime_settings.KEY_DAILY_CAP, env_value)
 
 
 def allowed(db: Session) -> tuple[bool, float, float]:
@@ -48,8 +53,14 @@ def allowed(db: Session) -> tuple[bool, float, float]:
 
     A database problem returns True: refusing every generation because a
     counting query failed would be a worse outcome than briefly overspending.
+    The operator kill switch (runtime setting ``generation_paused``) refuses
+    outright, before the cap arithmetic.
     """
-    limit = ceiling()
+    from . import runtime_settings
+
+    if runtime_settings.generation_paused(db):
+        return False, 0.0, 0.0
+    limit = ceiling(db)
     if limit <= 0:
         return True, 0.0, 0.0
     try:
