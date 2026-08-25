@@ -158,37 +158,38 @@ unchanged.
 | Chargeback / refund | credits from that payment are clawed back (floor 0); account flagged for review |
 | Blocked user | silent blocklist as built — no credit interaction |
 
-## 9. Unit economics — the one table
+## 9. Unit economics (measured, not assumed)
 
-The two numbers everything hangs on:
+Measured production cost with the current single-model pipeline
+(UNIT-ECONOMICS.md): **~$0.148/second at 720p, ~$0.256/second at 1080p**,
+all-in (keyframes + animation + audio), plus ~$0.03 of script + live
+context per clip. LLM work is economically irrelevant, exactly as the
+feedback doc says — video generation is ~93% of the cost.
 
-- **1 credit sells for ≈ $0.10** ($0.065 in the biggest pack, up to
-  $0.127 inside the Creator plan).
-- **1 credit costs us ≈ $0.04** of AI compute today (measured:
-  ~$0.148/sec at 720p, ~$0.256/sec at 1080p, all-in).
+Margin per video at the two retail extremes (starter-pack rate $0.12/cr
+vs biggest-pack rate $0.065/cr):
 
-| What | Credits | User pays (≈$0.10/cr) | Our cost | Margin |
+| Video | Credits | Our cost | Margin @ $0.12/cr | Margin @ $0.065/cr |
 |---|---|---|---|---|
-| 1 credit | 1 | $0.10 | $0.04 | ~60% |
-| 10s Standard video | 40 | $4.00 | $1.58 | 60% |
-| 15s Standard video | 60 | $6.00 | $2.39 | 60% |
-| 30s Standard video | 120 | $12.00 | $4.41 | 63% |
-| 10s HD video | 70 | $7.00 | $2.69 | 62% |
-| 15s HD video | 105 | $10.50 | $4.15 | 60% |
-| 30s HD video | 210 | $21.00 | $7.79 | 63% |
-| Enhance take | 1 | $0.10 | <$0.01 | ~95% |
-| Creator month, all 150 spent | 150 | $19.00 | $7.15¹ | 62% |
-| Free signup grant | 60 | $0 | ≤$2.39 | (acquisition cost) |
+| 10s Standard | 40 | ~$1.58 | 67% | 39% |
+| 15s Standard | 60 | ~$2.39 | 67% | 38% |
+| 30s Standard | 120 | ~$4.41 | 69% | 43% |
+| 10s HD | 70 | ~$2.69 | 68% | 40% |
+| 15s HD | 105 | ~$4.15 | 67% | 39% |
+| 30s HD | 210 | ~$7.79 | 69% | 43% |
 
-¹ AI $6.00 + Stripe $0.85 + infra $0.30. Typical months (credits not
-fully spent) land 70%+.
+Plan-level worst case (Creator burns all 150 credits on video): AI ~$6.00
++ Stripe ~$0.85 + infra ~$0.30 = **$7.15 → 62% gross margin**. Typical
+months (partial utilization) land 70%+. Free user worst case: $2.39
+one-time acquisition cost per signup.
 
-Range: at the cheapest pack rate ($0.065/cr) video margins bottom out at
-**38–43%**; at plan/starter rates they reach **~67%**. Every row is
-positive today. The feedback doc's 85% target arrives with the AI router
-(roadmap P2): cheap routes cut our cost per credit from ~$0.04 toward
-~$0.02, which lifts every margin in this table without changing a single
-price.
+**The honest gap vs the feedback doc:** the doc targets 85%+ margins,
+which assume a blended ~$0.02/credit AI cost via multi-model routing
+(70% cheap / 20% mid / 10% premium). On today's single premium-ish model
+we are at ~$0.04/credit, so MVP floor margin is ~40–60%, not 85%. The
+credit system is what makes the 85% reachable *without repricing*: when
+the router (roadmap P2) lands, cheap routes cut COGS per credit roughly
+in half and every table above improves in place.
 
 ## 10. Migration from today's plans
 
