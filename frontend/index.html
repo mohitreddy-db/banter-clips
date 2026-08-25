@@ -3,28 +3,178 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Defaults for the home page. Every route overrides title/description/
+         canonical/robots at runtime via the useSeo hook (src/lib/seo.js);
+         these values are what a crawler sees before React boots, and what a
+         social scraper — which never runs JS at all — sees full stop. -->
     <title>BanterClips — Turn any sports opinion into a viral video</title>
-    <meta name="description" content="BanterClips turns your written sports take into a short, AI-generated parody video with voice, captions and cinematic scenes — ready to publish to Instagram." />
+    <meta name="description" content="BanterClips turns a written sports take into a short AI-generated parody video with voiceover, animated captions and cinematic scenes — ready to publish to Instagram Reels, TikTok and YouTube Shorts." />
+    <link rel="canonical" href="https://www.banterclips.com/" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="application-name" content="BanterClips" />
+    <meta name="theme-color" content="#0b0d13" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
     <meta property="og:site_name" content="BanterClips" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="BanterClips — Turn any sports opinion into a viral video" />
-    <meta property="og:description" content="Type a sports take, get a post-ready AI parody video. No editing." />
+    <meta property="og:description" content="Type a sports take, get a post-ready AI parody video with voiceover and captions. No editing." />
     <meta property="og:url" content="https://www.banterclips.com/" />
+    <meta property="og:image" content="https://www.banterclips.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="BanterClips — turn any sports opinion into a viral video" />
+
+    <!-- Twitter/X. summary_large_image is what gets the full-width card. -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BanterClips — Turn any sports opinion into a viral video" />
+    <meta name="twitter:description" content="Type a sports take, get a post-ready AI parody video with voiceover and captions. No editing." />
+    <meta name="twitter:image" content="https://www.banterclips.com/og.png" />
+    <meta name="twitter:image:alt" content="BanterClips — turn any sports opinion into a viral video" />
+
+    <!-- Icons. The .ico is the one Google fetches for the search-result icon:
+         it needs a real crawlable URL (a data: URI does not qualify) and at
+         least 48px, which this file carries alongside 16 and 32. The inline
+         SVG stays because it stays crisp on any tab-bar density. -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%2334e27a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='34' height='34' rx='9' fill='url(%23g)'/%3E%3Cpath d='M13 10.5 L25 17 L13 23.5 Z' fill='%23fff'/%3E%3C/svg%3E" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%2334e27a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='34' height='34' rx='9' fill='url(%23g)'/%3E%3Cpath d='M13 10.5 L25 17 L13 23.5 Z' fill='%23fff'/%3E%3C/svg%3E" />
+
+    <!-- Structured data. `WebSite.name` is the field Google reads to decide
+         the site name printed above a result, and `Organization.logo` feeds
+         the brand entity — neither is inferable from the page copy, which is
+         why an SPA that ships without them gets a domain string instead of a
+         name. Claims here must stay true to the product: no ratings, no
+         review counts, no offers that are not really on sale.
+
+         Note: JSON-LD is strict JSON — a // or /* */ comment anywhere inside
+         the block invalidates it and Google silently drops the whole graph.
+         Keep notes out here, in HTML comments.
+
+         TODO: add "sameAs": [ official Instagram / TikTok / X / YouTube URLs ]
+         to the Organization node once those profiles exist. sameAs is the
+         strongest signal Google has for tying this domain to a brand entity,
+         so it is the single highest-value line still missing. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://www.banterclips.com/#organization",
+          "name": "BanterClips",
+          "url": "https://www.banterclips.com/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://www.banterclips.com/logo.png",
+            "width": 512,
+            "height": 512
+          },
+          "image": "https://www.banterclips.com/og.png",
+          "description": "BanterClips turns a written sports opinion into a cinematic, post-ready vertical video using AI.",
+          "email": "support@banterclips.com"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://www.banterclips.com/#website",
+          "url": "https://www.banterclips.com/",
+          "name": "BanterClips",
+          "description": "AI sports video studio — turn any sports take into a short vertical video.",
+          "inLanguage": "en-US",
+          "publisher": { "@id": "https://www.banterclips.com/#organization" }
+        },
+        {
+          "@type": "WebApplication",
+          "@id": "https://www.banterclips.com/#app",
+          "name": "BanterClips",
+          "url": "https://www.banterclips.com/",
+          "applicationCategory": "MultimediaApplication",
+          "applicationSubCategory": "AI video generator",
+          "operatingSystem": "Any — runs in a web browser",
+          "browserRequirements": "Requires JavaScript",
+          "description": "Type a sports opinion and BanterClips generates a 9:16 AI parody video with voiceover, lip-sync, animated captions and cinematic scenes, then publishes it straight to Instagram.",
+          "screenshot": "https://www.banterclips.com/og.png",
+          "publisher": { "@id": "https://www.banterclips.com/#organization" },
+          "featureList": [
+            "AI sports video generation from a written take",
+            "AI voiceover with lip-sync",
+            "Burned-in animated captions",
+            "Tone control — funny, savage, hype or bold",
+            "One-click publishing to Instagram",
+            "9:16 vertical export for Reels, TikTok and Shorts"
+          ],
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Free",
+              "price": "0",
+              "priceCurrency": "USD",
+              "description": "5 successful videos per month, 720p, publishes with a BanterClips watermark."
+            },
+            {
+              "@type": "Offer",
+              "name": "Creator",
+              "price": "9.99",
+              "priceCurrency": "USD",
+              "description": "30 successful videos per month, 1080p, watermark-free downloads and a priority render queue.",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "9.99",
+                "priceCurrency": "USD",
+                "billingDuration": 1,
+                "billingIncrement": 1,
+                "unitCode": "MON"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
-    <!-- Static placeholder so the app name is present before (or without) JS —
-         crawlers and Google's brand checker read this; React replaces it. -->
+    <!-- Server-rendered fallback. React clears and replaces this on boot, so
+         nobody with JS ever sees it — but Google's first-pass crawl, Bing, and
+         every LLM/social scraper that does not execute JS see only this. It
+         therefore carries the real headline and copy, not a spinner. -->
     <div id="root">
-      <div style="font-family: system-ui, sans-serif; padding: 40px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box">
-        <h1 style="margin: 0 0 8px">BanterClips</h1>
-        <p style="margin: 0; color: #98a1b5">Turn any sports opinion into a viral video. Loading…</p>
+      <div style="font-family: system-ui, sans-serif; padding: 48px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box; max-width: 720px; margin: 0 auto">
+        <h1 style="margin: 0 0 16px; font-size: 32px; line-height: 1.15">
+          BanterClips — turn any sports opinion into a viral video
+        </h1>
+        <p style="margin: 0 0 20px; color: #98a1b5; font-size: 17px; line-height: 1.55">
+          BanterClips is an AI sports video studio. Type a take — &ldquo;Lakers won&rsquo;t make
+          the playoffs&rdquo; — and it writes the script, casts the scene, generates the
+          voiceover and burns in animated captions, then hands you a finished 9:16
+          video ready for Instagram Reels, TikTok and YouTube Shorts.
+        </p>
+        <ul style="margin: 0 0 20px; padding-left: 20px; color: #98a1b5; font-size: 16px; line-height: 1.7">
+          <li>AI video generation from a written sports opinion</li>
+          <li>AI voiceovers, lip-synced, with crowd noise underneath</li>
+          <li>Animated captions timed to the dialogue</li>
+          <li>Tone control — funny, savage, hype or bold</li>
+          <li>One-click publishing to Instagram</li>
+        </ul>
+        <p style="margin: 0 0 24px; color: #98a1b5; font-size: 16px">
+          Free plan: 5 videos a month, no credit card. Creator: $9.99 a month for
+          1080p and watermark-free downloads.
+        </p>
+        <p style="margin: 0; color: #6b7488; font-size: 14px">
+          <a href="/privacy" style="color: #98a1b5">Privacy</a> ·
+          <a href="/terms" style="color: #98a1b5">Terms</a> ·
+          All videos are AI-generated parody.
+        </p>
       </div>
     </div>
     <noscript>BanterClips needs JavaScript — please enable it to continue.</noscript>

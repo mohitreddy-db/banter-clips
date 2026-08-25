@@ -41,3 +41,8 @@ others/
 # Runtime-discovered catalog characters (curated via the future admin page);
 # their generated reference stills stay local too.
 backend/app/video/catalog/characters.local.json
+
+# Brand fonts fetched to render the OG card / icons. Google Fonts are OFL and
+# redistributable, but they are a build input, not source — gen-brand-assets.py
+# falls back to a system face when they are absent. See SEO.md.
+frontend/scripts/fonts/

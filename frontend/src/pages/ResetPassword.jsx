@@ -3,11 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { supabase, supabaseEnabled } from "../lib/supabase.js";
 
+import { useSeo } from "../lib/seo.js";
 const label = { fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" };
 // 16px minimum — anything smaller makes iOS Safari zoom the page on focus.
 const inputStyle = { padding: "14px 16px", fontSize: 16, color: "var(--app-text)", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" };
 
 export default function ResetPassword() {
+  useSeo({
+    title: "Reset your password — BanterClips",
+    description: "Choose a new password for your BanterClips account.",
+    // Explicit path: this route arrives carrying a recovery token in the URL,
+    // which must never end up in a canonical tag.
+    path: "/reset-password",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const { updatePassword, signedIn } = useApp();
   const [phase, setPhase] = useState("checking"); // checking | form | done | invalid

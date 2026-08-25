@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 
+import { useSeo } from "../lib/seo.js";
 function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -25,6 +26,13 @@ const label = { fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--a
 const input = { padding: "14px 16px", fontSize: 16, color: "var(--app-text)", background: "var(--app-panel)", width: "100%", boxSizing: "border-box" };
 
 export default function SignIn() {
+  useSeo({
+    title: "Sign in — BanterClips",
+    description: "Sign in to BanterClips to turn your sports takes into AI-generated vertical videos.",
+    path: "/signin",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const { supabaseEnabled, signedIn, user: sessionUser, signUp, signInPassword, signInWithGoogle, sendMagicLink, resetPassword, devSignIn } = useApp();
   const [mode, setMode] = useState("signin"); // signin | signup
