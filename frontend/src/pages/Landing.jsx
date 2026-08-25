@@ -564,7 +564,12 @@ export default function Landing() {
       {/* pricing preview — two-plan model */}
       <div id="pricing" style={{ maxWidth: 1200, margin: "0 auto", padding: "30px 28px 20px", textAlign: "center" }}>
         <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(26px, 6vw, 34px)", letterSpacing: "-.02em", margin: "0 0 8px" }}>Simple, creator-friendly pricing</h2>
-        <p style={{ color: "var(--muted)", fontSize: 16, margin: "0 0 34px" }}>Publish free. Upgrade to download without the watermark.</p>
+        <p style={{ color: "var(--muted)", fontSize: 16, margin: "0 0 34px" }}>
+          Publish free. Upgrade to download without the watermark.{" "}
+          {/* Real <a>, not nav(): crawlers only follow anchors, and this is the
+              home page's one internal link to the public pricing page. */}
+          <a href="/pricing" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>See full plan details →</a>
+        </p>
         <div className="plan-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,340px))", justifyContent: "center", gap: 16, textAlign: "left" }}>
           {plansMini.map((p) => (
             <div key={p.name} style={{ background: "var(--card)", border: `1px solid ${p.popular ? "var(--accent)" : "var(--border)"}`, borderRadius: 18, padding: 24, position: "relative" }}>

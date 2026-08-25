@@ -60,7 +60,11 @@ const icons = {
   ),
 };
 
-export default function AppShell() {
+// Usually a layout route (renders <Outlet />). Pages that live OUTSIDE the
+// gated route group but still want the app chrome when a session exists —
+// today just /pricing, which must stay public for SEO — pass content as
+// `children` instead.
+export default function AppShell({ children }) {
   const nav = useNavigate();
   const loc = useLocation();
   const { plan, left, limit, booted, signedIn, apiDown, user } = useApp();
@@ -168,7 +172,7 @@ export default function AppShell() {
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", cursor: "pointer", flexShrink: 0 }} onClick={() => nav("/account")} />
         </header>
         <main className="app-content" style={{ padding: "16px 32px 40px", flex: 1, minWidth: 0 }}>
-          <Outlet />
+          {children ?? <Outlet />}
         </main>
       </div>
 
