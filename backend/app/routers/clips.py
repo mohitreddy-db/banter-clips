@@ -111,6 +111,23 @@ def enhance_take_variations(
     )
 
 
+@router.get("/trending")
+def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
+    """The trending feed for the create page.
+
+    Shared 20-minute cache per sport (see app/video/trending.py), so this is
+    cheap to call on every page open. Free — trending exists to drive
+    generation (PRICING.md §11). Returns an empty feed when web research is
+    off; the client hides the section.
+
+    Declared before GET /{clip_id}: "trending" must match this route, not
+    the uuid path.
+    """
+    from ..video import trending as trending_feed
+
+    return trending_feed.get_feed(sport)
+
+
 @router.post("", response_model=ClipOut, status_code=201)
 def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # A demo run costs nothing and produces nothing publishable, so it must

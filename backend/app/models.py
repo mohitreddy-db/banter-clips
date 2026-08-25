@@ -405,3 +405,15 @@ class StorylinePack(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (UniqueConstraint("topic_key", "day", name="storyline_topic_day"),)
+
+
+class TrendingPack(Base):
+    """Cached create-page trending feed (see app/video/trending.py) — one
+    row per sport, shared by all users, refreshed when older than the TTL."""
+
+    __tablename__ = "trending_packs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    sport: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    pack: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

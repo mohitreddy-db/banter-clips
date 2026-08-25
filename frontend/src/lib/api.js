@@ -80,6 +80,9 @@ export const api = {
   // only widens the search so repeat presses give new ideas.
   enhanceTakeVariations: (take, sport, tone, round = 0) =>
     request("/clips/enhance-take", { method: "POST", body: { take, sport, tone, round } }),
+  // Trending feed for the create page. Cheap: served from a shared
+  // 20-minute server cache per sport.
+  trending: (sport) => request(`/clips/trending?sport=${encodeURIComponent(sport)}`),
   createClip: (take, sport, tone, duration = 15, resolution = "720p") =>
     request("/clips", { method: "POST", body: { take, sport, tone, duration, resolution } }),
   getClip: (id) => request(`/clips/${id}`),
