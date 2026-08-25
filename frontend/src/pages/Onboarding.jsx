@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 
+import { useSeo } from "../lib/seo.js";
 const SPORTS = [
   ["NBA", "🏀"], ["NFL", "🏈"], ["Soccer", "⚽"], ["MLB", "⚾"],
   ["F1", "🏎"], ["Tennis", "🎾"], ["College Sports", "🎓"], ["Combat Sports", "🥊"],
@@ -55,6 +56,13 @@ function Glyph({ kind }) {
 const TOTAL = 5;
 
 export default function Onboarding() {
+  useSeo({
+    title: "Get started — BanterClips",
+    description: "Set up your BanterClips account and make your first sports video.",
+    path: "/onboarding",
+    noindex: true,
+  });
+
   const { booted, signedIn } = useApp();
   // Selections initialize from the saved profile, so don't mount the flow
   // until the session (and profile) have loaded — critical when returning

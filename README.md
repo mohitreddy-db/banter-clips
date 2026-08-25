@@ -14,6 +14,7 @@ publish it to social without leaving the app.
 | Backend — stack, local setup, API, env | [`backend/README.md`](backend/README.md) |
 | Frontend — stack, local setup, env | [`frontend/README.md`](frontend/README.md) |
 | Deploying from scratch (runbook) | [`deploy/README.md`](deploy/README.md) |
+| Search presence — crawling, metadata, structured data | [`SEO.md`](SEO.md) |
 | **Production state & secrets** (droplet, keys, Supabase, Vercel, DNS, Meta) | `infra/PROD.md` — **gitignored**, lives only on this machine |
 
 ## Repository layout

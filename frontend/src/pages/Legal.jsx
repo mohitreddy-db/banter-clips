@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useSeo } from "../lib/seo.js";
 
 /**
  * Privacy policy and terms of service.
@@ -46,6 +47,13 @@ const UL = ({ children }) => <ul style={{ margin: "0 0 12px", paddingLeft: 22 }}
 const B = ({ children }) => <b style={{ color: "var(--text)", fontWeight: 600 }}>{children}</b>;
 
 export function Privacy() {
+  useSeo({
+    title: "Privacy Policy — BanterClips",
+    description:
+      "How BanterClips collects, uses and stores your data — what we keep, which subprocessors we use, and how to delete your account.",
+    path: "/privacy",
+  });
+
   return (
     <Layout title="Privacy Policy">
       <P>
@@ -166,6 +174,13 @@ export function Privacy() {
 }
 
 export function Terms() {
+  useSeo({
+    title: "Terms of Service — BanterClips",
+    description:
+      "The terms covering your use of BanterClips, including plan limits, acceptable use and the AI-generated parody nature of every video.",
+    path: "/terms",
+  });
+
   return (
     <Layout title="Terms of Service">
       <P>

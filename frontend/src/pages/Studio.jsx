@@ -6,6 +6,7 @@ import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 
+import { useSeo } from "../lib/seo.js";
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
   { key: "Funny", icon: "😄", sub: "Playful roast" },
@@ -72,6 +73,13 @@ function TakeOption({ selected, onClick, label, text, hint, badge }) {
 }
 
 export default function Studio() {
+  useSeo({
+    title: "Studio — BanterClips",
+    description: "Write a sports take and generate a video.",
+    path: "/studio",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const { search } = useLocation();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();

@@ -3,7 +3,15 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 
+import { useSeo } from "../lib/seo.js";
 export default function Account() {
+  useSeo({
+    title: "Account — BanterClips",
+    description: "Manage your BanterClips plan, credits and connected accounts.",
+    path: "/account",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const {
     user, plan, used, limit, left, profile, signOut, cancelPlan, refreshUser,

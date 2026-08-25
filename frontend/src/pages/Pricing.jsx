@@ -3,6 +3,7 @@ import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { UpgradeModal } from "../components/Modals.jsx";
 
+import { useSeo } from "../lib/seo.js";
 const FREE = [
   [true, "5 successful videos / month"],
   [true, "One-click publish to Instagram"],
@@ -23,6 +24,16 @@ const CREATOR = [
 ];
 
 export default function Pricing() {
+  useSeo({
+    title: "Plans & pricing — BanterClips",
+    description: "Compare the Free and Creator plans.",
+    // noindex despite being a pricing page: this route lives behind the auth
+    // gate (AppShell), so a crawler only ever reaches a redirect to /signin.
+    // The public pricing story is the #pricing section on the landing page.
+    path: "/pricing",
+    noindex: true,
+  });
+
   const { plan } = useApp();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const isCreator = plan === "creator";

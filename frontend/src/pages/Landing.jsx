@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 
+import { useSeo } from "../lib/seo.js";
 /* Faithful port of the client's landing page (slim MVP prototype).
    Layout, copy, colors and animations preserved; only the pricing
    preview reflects the real two-plan model (client non-negotiable #1). */
@@ -312,6 +313,13 @@ function Logo({ size = 30 }) {
 const WAVE_DELAYS = [0, 0.1, 0.2, 0.3, 0.15, 0.25, 0.05, 0.35];
 
 export default function Landing() {
+  useSeo({
+    title: "BanterClips — Turn any sports opinion into a viral video",
+    description:
+      "Type a sports take and get a post-ready 9:16 AI video with voiceover, lip-sync and animated captions. Publish straight to Instagram Reels, TikTok or Shorts.",
+    path: "/",
+  });
+
   const nav = useNavigate();
   const [typed, setTyped] = useState("");
   const [phase, setPhase] = useState(0);

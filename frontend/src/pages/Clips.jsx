@@ -4,6 +4,7 @@ import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
 
+import { useSeo } from "../lib/seo.js";
 const STATUS_LABEL = {
   queued: "Queued…",
   planning_story: "Planning story…",
@@ -17,6 +18,13 @@ const STATUS_LABEL = {
 };
 
 export default function Clips() {
+  useSeo({
+    title: "Your clips — BanterClips",
+    description: "Every video you have generated, ready to publish or download.",
+    path: "/clips",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const { clips, canDownload, refreshClips } = useApp();
   const [upgradeOpen, setUpgradeOpen] = useState(false);

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Public, indexable URLs only. Everything behind the auth gate (/studio,
+  /clips, /account, /pricing, /onboarding) is noindex and belongs nowhere
+  near this file — listing a noindex URL in a sitemap is a contradiction
+  Search Console reports as an error.
+
+  Update <lastmod> when a page's content actually changes; bumping it on
+  every deploy trains Google to ignore it.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://www.banterclips.com/</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://www.banterclips.com/privacy</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://www.banterclips.com/terms</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>
