@@ -638,3 +638,15 @@ video:-webkit-full-screen {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Public showcase clip page: player beside the copy on desktop, stacked on
+   phones (where a 340px 9:16 player would fill the viewport anyway). */
+@media (max-width: 760px) {
+  .showcase-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .showcase-grid video {
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}

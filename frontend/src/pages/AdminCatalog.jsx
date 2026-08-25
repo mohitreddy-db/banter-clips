@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, API_BASE, getToken } from "../lib/api.js";
 
+import { useSeo } from "../lib/seo.js";
 /**
  * Admin · character catalog.
  *
@@ -382,6 +383,13 @@ function AddDialog({ onCreated, onClose }) {
 }
 
 export default function AdminCatalog() {
+  useSeo({
+    title: "Catalog admin — BanterClips",
+    description: "Internal catalog administration.",
+    path: "/admin",
+    noindex: true,
+  });
+
   const { user, booted } = useApp();
   const [chars, setChars] = useState(null);
   const [error, setError] = useState("");

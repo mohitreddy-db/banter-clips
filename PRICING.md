@@ -1,211 +1,237 @@
-# BanterClips — Credit-Based Pricing
+# BanterClips — Pricing (MVP)
 
-Version 1.0 · 2026-08-21 · Replaces the "5 videos / 30 videos" model in
-BRD BR-09/BR-15 once approved.
+Version 2.0 · 2026-08-23 · Rewritten around the client's pricing & economics
+feedback doc ("BanterClips Update — Feedback"), scoped to **current MVP
+features only**: two plans (Free, Creator), 720p/1080p, 10/15/30-second
+videos, enhance, script approval, Instagram publishing. Replaces v1.0.
 
 ---
 
-## 1. Why credits
+## 1. The model in one paragraph
 
-Today we sell "videos per month". That breaks in three ways:
+BanterClips is a **subscription + credits** business. The plan buys
+*capabilities* (resolution, length, watermark-free, downloads, queue
+priority) and a monthly credit allowance; **credits are the fuel** every AI
+action burns. We never sell or display "videos per month" — a 10-second
+720p clip and a 30-second 1080p clip differ ~5× in what they cost us, so
+"1 video" is not a unit. Credits are, and when models get cheaper (the AI
+router on the roadmap), the same credit prices simply buy us better margin —
+no pricing redesign needed.
 
-1. A 10-second 720p video costs us ~$1.55 and a 30-second 1080p video costs
-   us ~$7.75 — but both count as "1 video". Users are pushed to always pick
-   the most expensive option because it costs them the same.
-2. When a user runs out, their only option is "upgrade your plan" — which
-   forces them onto a higher monthly price forever, just because they had
-   one busy week.
-3. Adding any new AI feature (enhance, re-roll a scene, remix) has no way
-   to be priced.
+## 2. Core rules (non-negotiable)
 
-Credits fix all three: every AI action costs credits in proportion to what
-it costs us, users buy more only when they need more, and new features just
-get a credit price.
+1. **One wallet, credits only.** Every user has one credit balance. We show
+   credits — never dollars, never "videos left", never our costs. A credit
+   is an internal compute unit; we do not publicly state what it costs us.
+2. **Out of credits → top up, never upgrade.** The only path shown for an
+   empty balance is "Top up credits". No screen, prompt, or email ever says
+   "upgrade your plan to get more credits". A top-up never changes the
+   monthly price. Plans are capability choices; credits are fuel.
+3. **You only pay for success.** Credits are reserved when a generation
+   starts and charged only when the video completes. A failed job releases
+   the full reservation. Retries charge like a normal run (so a video is
+   never charged twice).
+4. **Every video shows its receipt.** Each clip permanently displays how
+   many credits it used and where they went, line by line (video + any
+   paid extras used on it). The user can always answer "what did this
+   video cost me and why" from the clip itself.
+5. **Credit prices are admin-tunable.** Per-action credit costs live in
+   config the admin panel can change (per model, per feature) without a
+   release — the feedback doc's requirement, and how the router lands later
+   without repricing.
 
-This is also simply how the market works now — see §7.
+## 3. What a credit is
 
-## 2. The core rules (non-negotiable)
+A **Banter Credit** is an abstract unit of AI compute. Internal anchors
+(never user-facing):
 
-1. **One wallet.** Every user has one credit balance. All AI actions draw
-   from it. We show credits only — never "videos left", never money left.
-2. **Out of credits → top up, never upgrade.** When the balance is too low,
-   the app shows exactly one path: "Top up credits". We never show "upgrade
-   your plan" as the answer to an empty balance, we never move anyone to a
-   higher plan, and a top-up never changes what they pay next month. The
-   plan is a capability + allowance choice; credits are fuel.
-3. **Failures are free.** Credits are reserved when a generation starts and
-   only kept when it succeeds. A failed job releases the full reservation.
-   Retries charge like a normal run (and refund the same way if they fail).
-4. **Every video shows its receipt.** Each clip displays the credits it
-   used, with its line items (video + any paid extras used on it).
+- **Today (MVP, single video model):** 1 credit ≈ **$0.04 of AI cost**.
+  This is measured, not aspirational — see §9.
+- **Target (after multi-model routing):** 1 credit ≈ $0.02 of AI cost,
+  which is where the feedback doc's 85% margin goal becomes reachable.
 
-## 3. What a credit is worth
+Retail value of a credit ranges **$0.065–$0.127** depending on how it was
+bought (big pack → plan/small pack). Prices below are set so every action
+is margin-positive even at the cheapest pack rate.
 
-**1 credit = $0.01 of face value.** (Same convention as Runway, Kling and
-Pika — it keeps mental math easy: 500 credits ≈ $5.)
+## 4. Credit price list (MVP)
 
-We price AI actions at roughly **2.5× our measured provider cost**, rounded
-to friendly numbers. That yields a ~35–40% gross margin after payment fees —
-sustainable, and it means when provider prices drop we widen margin or cut
-credit prices, without ever changing what a credit is.
+The rule everything derives from: **Standard (720p) = 4 credits/second,
+HD (1080p) = 7 credits/second.** Script, live-context research, keyframes,
+animation, and audio are all baked in — one number per video.
 
-## 4. What things cost (launch price list)
+### Video generation
 
-Measured basis: $0.148/second at 720p, $0.256/second at 1080p (real
-production clips), plus ~$0.10–0.15 of images/script per video.
-
-### Video generation (the main spend)
-
-| Length | 720p | 1080p |
+| Length | ⚡ Standard (720p) | ✨ HD (1080p) |
 |---|---|---|
-| 10s | **250 credits** | **425 credits** |
-| 15s | **375 credits** | **650 credits** |
-| 30s | **700 credits** | **1,200 credits** |
+| 10s | **40 credits** | **70 credits** |
+| 15s | **60 credits** | **105 credits** |
+| 30s | **120 credits** | **210 credits** |
+
+HD and 30s require the Creator plan (capability, not price).
+We use the mode names **Standard / HD** in the UI, not raw resolutions —
+so future model tiers (Cinematic, Ultra) slot in without relabeling.
 
 ### Everything else
 
 | Action | Credits | Note |
 |---|---|---|
-| ✨ Enhance take (2 new angles) | **2** | per press |
-| Caption suggestions + regenerate | **0** | free — helps publishing |
-| Publish to Instagram | **0** | free — it's the product's point |
-| Retry a failed video | **0 net** | see rule 3 |
-| Download (Creator) | **0** | plan capability, not a credit item |
+| ✨ Enhance take (2 new angles) | **1** | per press |
+| Script writing + approval + edits | **0** | included in the video price |
+| Regenerate script with feedback | **0** | capped at 10 rounds per clip |
+| Caption suggestions + regenerate | **0** | helps publishing |
+| Publish to Instagram | **0** | it's the product's point |
+| Retry a failed video | **0 net** | rule 3 |
+| Download (Creator) | **0** | plan capability |
 
-Internal cost split per video, for our own accounting (users see only the
-total): script ~1% · scene images ~4% · animation+audio ~93% · review ~2%.
-This split is why almost every future price derives from *seconds of video
-generated*.
+## 5. Plans (MVP: only these two)
 
-## 5. Plans, free credits, and top-ups
+### Free — $0
 
-### Free (on signup)
+- **60 credits, one-time on signup** — exactly one 15-second Standard
+  video (the full wow: script approval, real context, audio), or a
+  10-second one with credits left for enhances.
+- One-time, not monthly, so throwaway accounts can't farm generations
+  (feedback doc's rule). Referral/promo/streak credits can be added later.
+- Capabilities: Standard (720p) only, up to 15s, watermark on, no
+  downloads, standard queue.
+- Free users **can top up** — top-ups buy fuel, never capabilities: they
+  stay 720p/15s/watermarked.
 
-- **500 credits, one-time.** Enough for 2 short videos or 1 mid-length one,
-  with room for enhances. One-time (not monthly) so throwaway accounts
-  can't farm free generations. Watermark on, 720p, up to 15s — unchanged.
+### Creator — $19/month
 
-### Creator — $9.99/month
-
-- **1,100 credits added every month** (a 10% bonus over face value — the
-  reason to subscribe rather than only top up).
-- Capabilities: 1080p, 30s videos, watermark-free publishing, downloads,
-  priority queue. Capabilities come from the plan; fuel comes from credits.
-- **Rollover:** unused plan credits carry over one extra month (HeyGen's
-  model). Top-up credits never expire.
+- **150 credits added every month.**
+- Capabilities: HD (1080p), 30-second videos, watermark-free publishing,
+  downloads, priority queue.
+- **Rollover:** unused plan credits carry one extra month. Top-up credits
+  never expire.
 - Cancelling stops future monthly credits; the remaining balance stays
-  spendable.
+  spendable; capabilities revert to Free at period end.
+- Annual (later, per feedback doc): $190/year ≈ 2 months free. Not in MVP.
 
-### Top-ups (available to everyone, Free included)
+## 6. Top-up packs (everyone, Free included)
 
-| Pack | Credits | Bonus |
-|---|---|---|
-| $5 | 500 | — |
-| $10 | 1,050 | +5% |
-| $25 | 2,750 | +10% |
-| $50 | 5,750 | +15% |
-
-Top-ups are the only thing we offer when a balance runs out. A Free user
-who tops up stays Free (their capability limits stay — 720p/15s/watermark);
-a Creator who tops up stays on $9.99. No prompt, screen, or email ever says
-"upgrade to get more credits".
-
-## 6. What the user sees
-
-- **Balance:** one number, in the header/credits bar: "⚡ 1,240 credits".
-- **Before generating:** the price of the exact video they configured
-  ("This video: 375 credits") so there are no surprises.
-- **After generating:** the receipt on the clip — e.g.
-  "Used 379 credits · Video 15s/720p 375 · Enhance ×2 4".
-- **Never shown:** dollars remaining, videos remaining, our costs, or any
-  upgrade nag tied to the balance.
-
-## 7. How others do it (research, 2026)
-
-| Platform | Model | Notes |
-|---|---|---|
-| Runway | credits/second, ~$0.01/credit | 5–12 credits/s depending on model tier |
-| Kling | credits/second | 6–8/s at 720–1080p, 9–12/s with audio; $10/mo = 660 credits |
-| Pika | monthly credit plans | $10/mo = 700 credits; 1080p 5s clip = 40 credits |
-| HeyGen | plan credits + top-ups | top-ups at $0.05/credit (min $5); unused monthly credits roll one month; annual plans accrue all year |
-| Luma | monthly credits | no rollover |
-
-Takeaways we adopted: $0.01 face value and per-second pricing (Runway/
-Kling), audio-inclusive generation priced higher than silent (Kling — ours
-always includes audio), top-ups + one-month rollover (HeyGen). Takeaway we
-deliberately rejected: pushing plan upgrades as the answer to an empty
-balance.
-
-## 8. Fitting future features into this system
-
-One rule decides everything: **if it calls a paid model, it costs credits
-(priced at ~2.5× our cost, rounded); if it's our own software, it's a plan
-capability or free.** Never both for the same thing.
-
-| Future feature | How it fits |
-|---|---|
-| Re-roll one scene | video price ÷ number of scenes (e.g. 125 credits for one scene of a 15s/720p video) |
-| Remix an existing video (new script, reuse the look) | ~75% of a fresh video's price |
-| "Enhance video" / polish pass | credits by seconds re-processed, same formula |
-| More voices / delivery styles | free choice; a premium cloned-voice tier would be +10% on the video price |
-| Upscale an old 720p video to 1080p | the price difference between the two tiers |
-| New video models (multi-model routing) | each model gets its own credits/second rate — exactly how Runway prices tiers |
-| Trending-topic suggestions | free (it drives generation volume) |
-| API access | same credit prices, larger top-up packs with bigger bonuses |
-| Teams | one shared wallet, per-member usage visible to the owner |
-
-The Creator plan stays lean on AI *inclusions* (it's an allowance + a
-capability set). New AI features never get "unlimited on Creator" — they
-get a credit price, so heavy users pay for what they use and the margin
-can't go negative again (the old plan lost up to $60/user/month at full
-usage).
-
-## 9. Sanity check: margins at these prices
-
-| Item | Price | Our cost | Gross margin |
+| Pack | Credits | Price | Effective $/credit |
 |---|---|---|---|
-| 10s 720p | $2.50 | ~$1.55 | ~38% |
-| 15s 720p | $3.75 | ~$2.36 | ~37% |
-| 30s 720p | $7.00 | ~$4.38 | ~37% |
-| 15s 1080p | $6.50 | ~$4.12 | ~37% |
-| 30s 1080p | $12.00 | ~$7.76 | ~35% |
-| Creator month, fully spent | $9.99 | ≤ ~$6.20 | positive in all cases |
+| Starter | 100 | **$12** | $0.120 |
+| Creator Pack | 300 | **$29** | $0.097 |
+| Pro Pack | 750 | **$59** | $0.079 |
+| Studio Pack | 2,000 | **$129** | $0.065 |
 
-Every row is margin-positive — the first pricing we've had where that's
-true. Payment fees (~3%) and retries-we-eat (~5% of jobs) come out of the
-margin above and still leave ~30%.
+Bigger packs are cheaper per credit; the smallest pack absorbs Stripe's
+fixed fee (30¢ is 5.4% of $12 — a $5 pack would give fees ~9%, so no pack
+below $12). Sold as one-time Stripe Checkout payments; subscription
+unchanged.
+
+## 7. What the user sees
+
+- **Balance:** "⚡ 150 credits" in the header, with a dynamic estimate
+  under it that follows the selected mode — "≈ 2 videos at 15s Standard",
+  "≈ 1 video at 15s HD" (feedback doc §10; replaces "5 of 30 monthly
+  videos left" everywhere).
+- **Before generating:** the price of the configured video ("This video:
+  60 credits") next to the generate button. This is **exact, not an
+  estimate** — a fixed menu lookup on duration × mode. Internal retries,
+  shot counts, or research never change it. Generation can't start
+  without the full amount in the wallet.
+- **After generating:** the receipt, kept on the clip forever — "Used 62
+  credits · Video 15s Standard 60 · Enhance ×2 2". A successful video
+  always charges exactly its quoted price; the total only grows by other
+  itemized actions on that clip, each quoted exactly when used.
+- **Never shown:** dollars remaining, videos remaining, our costs, model
+  names, or any upgrade nag tied to the balance.
+
+## 8. Every charging scenario, decided
+
+| Scenario | What happens |
+|---|---|
+| Generation starts | full video price **reserved** (balance drops immediately, marked "in progress") |
+| Video completes | reservation becomes a charge; receipt attached |
+| Job fails | reservation fully released; retry is a fresh reserve→charge/release |
+| User abandons at script stage (deletes clip / never approves) | reservation released; the few cents of script cost are ours |
+| Script regenerated with feedback | free (cap 10); cost is ours, baked into video margin |
+| Balance too low to start | one message, one button: price shown + "Top up credits" — never "upgrade" |
+| Balance runs out mid-month (Creator) | same: top up; next month's 150 arrive on the billing date regardless |
+| Free user tops up | stays Free — 720p/15s/watermark limits unchanged |
+| Creator cancels | keeps balance, loses monthly drops + capabilities at period end |
+| Provider balance empty on our side | low-balance guard fails the job honestly ("temporarily unavailable"), reservation released — never a silently degraded video |
+| Chargeback / refund | credits from that payment are clawed back (floor 0); account flagged for review |
+| Blocked user | silent blocklist as built — no credit interaction |
+
+## 9. Unit economics (measured, not assumed)
+
+Measured production cost with the current single-model pipeline
+(UNIT-ECONOMICS.md): **~$0.148/second at 720p, ~$0.256/second at 1080p**,
+all-in (keyframes + animation + audio), plus ~$0.03 of script + live
+context per clip. LLM work is economically irrelevant, exactly as the
+feedback doc says — video generation is ~93% of the cost.
+
+Margin per video at the two retail extremes (starter-pack rate $0.12/cr
+vs biggest-pack rate $0.065/cr):
+
+| Video | Credits | Our cost | Margin @ $0.12/cr | Margin @ $0.065/cr |
+|---|---|---|---|---|
+| 10s Standard | 40 | ~$1.58 | 67% | 39% |
+| 15s Standard | 60 | ~$2.39 | 67% | 38% |
+| 30s Standard | 120 | ~$4.41 | 69% | 43% |
+| 10s HD | 70 | ~$2.69 | 68% | 40% |
+| 15s HD | 105 | ~$4.15 | 67% | 39% |
+| 30s HD | 210 | ~$7.79 | 69% | 43% |
+
+Plan-level worst case (Creator burns all 150 credits on video): AI ~$6.00
++ Stripe ~$0.85 + infra ~$0.30 = **$7.15 → 62% gross margin**. Typical
+months (partial utilization) land 70%+. Free user worst case: $2.39
+one-time acquisition cost per signup.
+
+**The honest gap vs the feedback doc:** the doc targets 85%+ margins,
+which assume a blended ~$0.02/credit AI cost via multi-model routing
+(70% cheap / 20% mid / 10% premium). On today's single premium-ish model
+we are at ~$0.04/credit, so MVP floor margin is ~40–60%, not 85%. The
+credit system is what makes the 85% reachable *without repricing*: when
+the router (roadmap P2) lands, cheap routes cut COGS per credit roughly
+in half and every table above improves in place.
 
 ## 10. Migration from today's plans
 
-- Free users: balance set to 500 credits minus 250 per video already used
-  this month (floor 0).
-- Creator subscribers: 1,100 credits on their next billing date; plan price
-  unchanged. Their old "30 videos" wording disappears from the UI.
-- Comped accounts (beta testers): granted 1,100/month like Creator, marked
-  comped, no billing.
-- BRD updates needed on adoption: BR-09 (limits → credits), BR-15 (plan
-  table), §5 business rule 1 (usage charged per successful *generation*,
-  measured in credits).
+- Free users: balance set to **60 minus 40 per video already generated**
+  (floor 0); "X of 5 videos" UI removed.
+- Existing $9.99 Creator subscribers: **grandfathered at $9.99 with 75
+  credits/month** until they cancel; new subscriptions are $19/150. (Open
+  decision §12.1 — alternative is a 2-month courtesy at 150 then notify.)
+- Comped/beta accounts: 150 credits/month, marked comped, no billing.
+- BRD updates on adoption: BR-09 (limits → credits), BR-15 (plan table),
+  §5 business rule 1 (usage = credits charged per successful generation).
 
-## 11. Open decisions before build
+## 11. From the feedback doc, deliberately deferred (not MVP)
 
-1. Confirm the four top-up pack sizes and bonuses (§5).
-2. Rollover: one month (proposed) vs none — one month is friendlier and
-   costs little.
-3. Whether Free gets a small monthly trickle (e.g. 100 credits) after the
-   one-time 500 — good for retention, small farming risk. Proposed: revisit
-   after abuse controls (the blocklist plus a device/IP check) are in.
-4. Stripe mechanics: top-ups as one-time Checkout payments (new products),
-   subscription unchanged at $9.99.
+Pro $49 / Studio $99 / Business $299 / Enterprise tiers · premium model
+modes (Cinematic 🔥, Ultra 👑) and the AI router that powers them ·
+reference photos ("put yourself in") · remix + Remix Library · Story Mode
+and 45/60-second videos · annual billing · referral & streak credits ·
+prompt-length gating by plan · scheduled publishing, analytics, teams,
+Repurpose. Each already has its slot: new tiers add a price + credit pool;
+new models add a credits/second rate; new features get a credit price
+(if they call a paid model) or a plan capability (if they're our
+software) — never both.
+
+## 12. Open decisions before build
+
+1. Grandfathering: $9.99/75cr forever vs 2-month courtesy at 150cr (§10).
+2. Creator pool: keep the doc's 150, or 250 so one 30s HD video (210cr)
+   fits inside a monthly pool without a top-up. Recommendation: keep 150 —
+   a Creator wanting the maximum video topping up is the intended
+   power-user mechanic, and the pool grows naturally when the router
+   halves per-credit cost.
+3. Free signup grant: 60 (one flagship 15s) vs 40 (one 10s, ~$1.60 CAC).
+4. Whether the enhance charge (1cr) is worth the friction vs free-with-
+   rate-limit. Proposed: charge — it's the doc's number and stops farming.
 
 ---
 
 ### Sources
 
-- [Apiframe — AI video API pricing 2026](https://apiframe.ai/blog/ai-video-api-pricing-2026)
-- [Rangy — AI video pricing explained](https://rangy.ai/blog/ai-video-pricing-explained/)
-- [UlazAI — Runway/Kling/Luma/Pika comparison](https://ulazai.com/ai-video-models-guide-2025/)
-- [eesel — HeyGen pricing](https://www.eesel.ai/blog/heygen-pricing)
-- [HeyGen Help — credit-based plans](https://help.heygen.com/en/articles/15125761-heygen-credit-based-pricing-plans-explained)
-- [HeyGen — pricing page](https://www.heygen.com/pricing)
-- Internal: `UNIT-ECONOMICS.md` (measured per-second costs from production clips)
+- Client feedback doc: "BanterClips Update — Feedback" (Google Doc,
+  pricing & economics tab, 2026-08) — credit system, plan prices, pack
+  prices, router strategy, margin targets.
+- Internal: `UNIT-ECONOMICS.md` (measured per-second production costs),
+  `ADMIN.md` (credit-price config surface), `ROADMAP.md` (router = P2).

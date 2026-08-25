@@ -5,7 +5,9 @@ import { api, downloadClip } from "../lib/api.js";
 import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
+import Trending from "../components/Trending.jsx";
 
+import { useSeo } from "../lib/seo.js";
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
   { key: "Funny", icon: "😄", sub: "Playful roast" },
@@ -72,6 +74,13 @@ function TakeOption({ selected, onClick, label, text, hint, badge }) {
 }
 
 export default function Studio() {
+  useSeo({
+    title: "Studio — BanterClips",
+    description: "Write a sports take and generate a video.",
+    path: "/studio",
+    noindex: true,
+  });
+
   const nav = useNavigate();
   const { search } = useLocation();
   const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
@@ -282,6 +291,21 @@ export default function Studio() {
     setScriptFeedback("");
   };
 
+  // A trending suggestion fills the take like the user typed it (real flow),
+  // and nudges tone/length to the suggestion's fit — without ever selecting
+  // a locked length on the Free plan.
+  const useTrending = (p) => {
+    setTake(p.take);
+    setVariations([]);
+    setChosen(-1);
+    if (TONES.some((t) => t.key === p.tone)) setTone(p.tone);
+    if (DURATIONS.includes(p.seconds) && (p.seconds <= FREE_MAX_DURATION || plan === "creator")) {
+      setDuration(p.seconds);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    api.track("trending_take_used", { sport, tone: p.tone, seconds: p.seconds });
+  };
+
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   const stageIdx = clip ? clip.stage_index : 0;
   const latestStep = clip?.current_step || null;
@@ -375,6 +399,9 @@ export default function Studio() {
               </div>
             )}
           </div>
+
+          {/* trending — real topics from today's internet, per sport */}
+          <Trending sport={sport} onUse={useTrending} />
 
           {/* sport */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
