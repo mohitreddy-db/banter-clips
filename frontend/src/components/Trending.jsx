@@ -74,21 +74,25 @@ export default function Trending({ sport, onUse }) {
 
   useEffect(() => {
     setOpen(-1);
+    // Bump the sequence on EVERY sport change — including into the cached
+    // branch — so an in-flight fetch for the previous sport can never write
+    // its results (or its spinner) over the sport now on screen.
+    const mySeq = ++seq.current;
     const cached = readCache(sport);
     if (cached) {
       setFeed(cached);
       setFailed(false);
+      setLoading(false);
       return;
     }
-    const mySeq = ++seq.current;
     setFeed(null);
     setFailed(false);
     setLoading(true);
     api
       .trending(sport)
       .then((data) => {
+        writeCache(sport, data); // valid for its own sport even if stale for the UI
         if (seq.current !== mySeq) return; // sport changed mid-flight
-        writeCache(sport, data);
         setFeed(data);
       })
       .catch(() => seq.current === mySeq && setFailed(true))
