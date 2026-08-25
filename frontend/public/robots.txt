@@ -1,7 +1,7 @@
 # www.banterclips.com
 #
-# Note on the signed-in app routes (/studio, /clips, /account, /pricing,
-# /onboarding): they are deliberately NOT disallowed here. They serve
+# Note on the signed-in app routes (/studio, /clips, /account, /onboarding):
+# they are deliberately NOT disallowed here. They serve
 # <meta name="robots" content="noindex"> instead — see src/lib/seo.js.
 # A Disallow rule would stop Google fetching those pages, and a noindex it
 # never fetches is a noindex it never honours, so anything already indexed

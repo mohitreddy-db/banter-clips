@@ -41,7 +41,7 @@ consequences drive every decision below:
 
 ## Why the app routes are `noindex` rather than `Disallow`
 
-`/studio`, `/clips`, `/account`, `/pricing` and `/onboarding` sit behind the
+`/studio`, `/clips`, `/account` and `/onboarding` sit behind the
 `AppShell` auth gate. They emit `noindex, follow` via `useSeo()` and are
 deliberately **not** disallowed in `robots.txt`.
 
@@ -51,9 +51,11 @@ there. Let Google crawl them, read the `noindex`, and drop them. Once Search
 Console shows them gone from the index, moving them to `Disallow` lines saves
 crawl budget. Only `/admin` and `/reset-password` are disallowed outright.
 
-Note `/pricing` is `noindex` **because it is gated**, not because pricing pages
-are low value — a crawler only ever gets a redirect to `/signin`. The public
-pricing story is the `#pricing` section on the landing page.
+`/pricing` is the exception: it is a **public, indexable** top-level route.
+Signed-out visitors (and crawlers) get a standalone marketing layout; a
+signed-in session gets the same plan cards wrapped back in the app chrome via
+`AppShell`'s children mode. It was originally gated + noindex, which forfeited
+the highest-intent commercial query a SaaS gets.
 
 ## Never block `/assets/`
 
@@ -150,16 +152,13 @@ Ranking for the terms the product actually serves — *AI sports video generator
 *turn sports takes into videos*, *AI Reels for sports content* — needs indexable
 pages that answer those queries. The cheapest first moves, in order:
 
-1. **A public, ungated `/pricing` marketing page.** The gated one cannot rank.
-   This is the highest-intent commercial query a SaaS gets and the site
-   currently forfeits it entirely.
-2. **Public showcase pages, one per clip** (`/clips/wemby-roof`). The videos
+1. ~~A public, ungated `/pricing` marketing page.~~ **Done** — `/pricing` is now
+   a public top-level route (see above).
+2. **Public showcase pages, one per clip** (`/showcase/wemby-roof` — NOT
+   `/clips/:slug`, which collides with the gated user library). The videos
    already exist in Supabase storage with posters and captions, and
    `Landing.jsx` already carries the metadata — this is mostly a routing and
    `VideoObject` markup exercise, not new content work. It also turns every
    shared clip into an indexable landing page.
 3. **A handful of use-case pages** — one per sport or per creator type — built
    from copy that already exists in the BRD.
-
-Until at least (1) ships, expect near-zero organic traffic no matter how clean
-the metadata is.

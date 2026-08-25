@@ -30,11 +30,15 @@ export default function App() {
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      {/* Public on purpose: pricing is the highest-intent search query a SaaS
+          gets, and inside the AppShell gate a crawler only ever saw a redirect
+          to /signin. The page itself puts the app chrome back for signed-in
+          users (AppShell children mode). */}
+      <Route path="/pricing" element={<Pricing />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
         <Route path="/clips" element={<Clips />} />
         <Route path="/account" element={<Account />} />
-        <Route path="/pricing" element={<Pricing />} />
       </Route>
       {/* Admin console — its own shell + grouped sidebar (ADMIN.md §2). */}
       <Route path="/admin" element={<AdminShell />}>
