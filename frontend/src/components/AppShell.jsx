@@ -184,6 +184,9 @@ export default function AppShell({ children }) {
           ["/clips", "My Clips", icons.clips],
           ["/pricing", "Pricing", icons.pricing],
           ["/account", "Account", icons.account],
+          // Same conditional entry as the sidebar — without it, a phone has
+          // no way into the console at all.
+          ...(user?.is_admin ? [["/admin", "Admin", icons.catalog]] : []),
         ].map(([to, label, ic]) => (
           <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "active" : undefined)}>
             <Icon d={ic} size={20} />
