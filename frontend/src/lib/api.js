@@ -152,6 +152,11 @@ export const api = {
   adminPublishRetry: (id, reason = "") =>
     request(`/admin/publishes/${id}/retry`, { method: "POST", body: { reason } }),
   adminAudit: (params = {}) => request(`/admin/audit${qs(params)}`),
+  adminAdmins: () => request("/admin/admins"),
+  adminAddAdmin: (email, reason) =>
+    request("/admin/admins/add", { method: "POST", body: { email, reason } }),
+  adminRemoveAdmin: (email, reason) =>
+    request("/admin/admins/remove", { method: "POST", body: { email, reason } }),
   adminCredits: () => request("/admin/credits"),
 
   // analytics (fire-and-forget)

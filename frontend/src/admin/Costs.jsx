@@ -89,7 +89,7 @@ export default function AdminCosts() {
               <span style={{ width: 110, flexShrink: 0 }}>
                 <Badge color={src.color}>{src.label}</Badge>
               </span>
-              <span style={{ width: 260, fontSize: 12.5, color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.reason}>
+              <span style={{ width: "clamp(120px, 34vw, 260px)", fontSize: 12.5, color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.reason}>
                 {r.reason}
               </span>
               <HBar pct={r.pct} color={src.color} />

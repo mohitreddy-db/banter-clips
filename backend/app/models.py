@@ -65,11 +65,12 @@ class User(Base):
 
     @property
     def is_admin(self) -> bool:
-        """Admin = allow-listed email (ADMIN_EMAILS). Deliberately not a DB
-        column: the list is tiny, and env config can't be escalated by SQL."""
-        from .config import settings
+        """Admin = allow-listed email. The env list (ADMIN_EMAILS) is the
+        bootstrap and can never be removed from the console; the admin page
+        manages additions on top (services/admin_allowlist)."""
+        from .services import admin_allowlist
 
-        return self.email in settings.admin_emails
+        return admin_allowlist.is_admin_email(self.email)
 
     preferences: Mapped["UserPreferences | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

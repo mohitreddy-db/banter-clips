@@ -32,6 +32,7 @@ const GROUPS = [
     label: "SYSTEM",
     items: [
       { to: "/admin/catalog", label: "Catalog" },
+      { to: "/admin/admins", label: "Admins" },
       { to: "/admin/audit", label: "Audit Log" },
     ],
   },
@@ -114,10 +115,12 @@ export default function AdminShell() {
             borderBottom: `1px solid ${T.border}`,
           }}
         >
-          {/* Mobile nav — the sidebar hides on small screens (index.css) */}
-          <nav className="admin-console-mobilenav" style={{ display: "none", gap: 6, overflowX: "auto" }}>
+          {/* Mobile nav — visibility is CSS-only (index.css): hidden ≥860px,
+              a scrollable strip below. No inline display so the media query
+              always wins. */}
+          <nav className="admin-console-mobilenav" style={{ gap: 6, overflowX: "auto", flex: 1, minWidth: 0, WebkitOverflowScrolling: "touch" }}>
             {GROUPS.flatMap((g) => g.items).map((it) => (
-              <NavLink key={it.to} to={it.to} end={it.end} style={navStyle}>
+              <NavLink key={it.to} to={it.to} end={it.end} style={(s) => ({ ...navStyle(s), whiteSpace: "nowrap", flexShrink: 0 })}>
                 {it.label}
               </NavLink>
             ))}
@@ -126,7 +129,7 @@ export default function AdminShell() {
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: T.green }} />
             live · 60s cache
           </span>
-          <NavLink to="/studio" className="ghost-btn" style={{ padding: "7px 14px", fontSize: 12, textDecoration: "none" }}>
+          <NavLink to="/studio" className="ghost-btn admin-console-backlink" style={{ padding: "7px 14px", fontSize: 12, textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}>
             ← Back to app
           </NavLink>
         </header>

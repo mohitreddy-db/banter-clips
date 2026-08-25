@@ -20,6 +20,7 @@ import AdminRevenue from "./admin/Revenue.jsx";
 import AdminCredits from "./admin/Credits.jsx";
 import AdminPublishing from "./admin/Publishing.jsx";
 import AdminAudit from "./admin/Audit.jsx";
+import AdminAdmins from "./admin/Admins.jsx";
 
 export default function App() {
   return (
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="credits" element={<AdminCredits />} />
         <Route path="publishing" element={<AdminPublishing />} />
         <Route path="catalog" element={<AdminCatalog />} />
+        <Route path="admins" element={<AdminAdmins />} />
         <Route path="audit" element={<AdminAudit />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

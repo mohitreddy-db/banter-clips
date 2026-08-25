@@ -94,11 +94,11 @@ export function HBar({ pct, color = T.cyan, height = 10, track = true, style }) 
 export function BarRow({ label, pct, value, color }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-      <span style={{ width: 150, fontSize: 12.5, color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>
+      <span style={{ width: "clamp(90px, 26vw, 150px)", fontSize: 12.5, color: T.muted, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={label}>
         {label}
       </span>
       <HBar pct={pct} color={color} />
-      <span style={{ width: 70, textAlign: "right", fontSize: 12.5, fontWeight: 600, color: T.text, flexShrink: 0 }}>{value}</span>
+      <span style={{ width: "clamp(44px, 12vw, 70px)", textAlign: "right", fontSize: 12.5, fontWeight: 600, color: T.text, flexShrink: 0 }}>{value}</span>
     </div>
   );
 }

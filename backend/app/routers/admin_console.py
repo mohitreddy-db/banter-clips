@@ -39,6 +39,7 @@ from ..models import (
     StripeEvent,
     User,
 )
+from ..services import admin_allowlist
 from ..services import jobs as jobsvc
 from ..services import provider_balance, runtime_settings, spend, storage
 from ..services.generation import start_generation
@@ -995,6 +996,67 @@ def audit_log(page: int = Query(1, ge=1), action: str = "", admin_email: str = "
             for a in rows
         ],
     }
+
+
+# ------------------------------------------------------------------- admins
+
+
+@router.get("/admins")
+def list_admins(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    env = admin_allowlist.env_admins()
+    managed = admin_allowlist.db_admins(fresh=True)
+    entries = [{"email": e, "source": "env"} for e in sorted(env)]
+    entries += [{"email": e, "source": "console"} for e in sorted(managed - env)]
+    return {
+        "admins": entries,
+        "you": admin.email.lower(),
+        "note": "env admins come from ADMIN_EMAILS and cannot be removed here — "
+                "that keeps the bootstrap operator un-lockout-able.",
+    }
+
+
+class AdminEmailBody(BaseModel):
+    email: str
+    reason: str = ""
+
+
+@router.post("/admins/add")
+def add_admin(body: AdminEmailBody, admin: User = Depends(get_admin_user),
+              db: Session = Depends(get_db)):
+    email = body.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or " " in email:
+        raise HTTPException(422, "That does not look like an email address.")
+    if not body.reason.strip():
+        raise HTTPException(422, "A reason is required — it feeds the audit log.")
+    if email in admin_allowlist.env_admins() or email in admin_allowlist.db_admins(fresh=True):
+        raise HTTPException(409, f"{email} is already an admin.")
+    managed = admin_allowlist.db_admins(fresh=True)
+    managed.add(email)
+    admin_allowlist.save_db_admins(db, managed, admin.email)
+    _audit(db, admin, "add_admin", f"admin {email}", body.reason)
+    db.commit()
+    return list_admins(admin, db)
+
+
+@router.post("/admins/remove")
+def remove_admin(body: AdminEmailBody, admin: User = Depends(get_admin_user),
+                 db: Session = Depends(get_db)):
+    email = body.email.strip().lower()
+    if not body.reason.strip():
+        raise HTTPException(422, "A reason is required — it feeds the audit log.")
+    if email == admin.email.lower():
+        raise HTTPException(409, "You cannot remove yourself.")
+    if email in admin_allowlist.env_admins():
+        raise HTTPException(409, "This admin is pinned by ADMIN_EMAILS (env) and "
+                                 "can only be removed by changing the server config.")
+    managed = admin_allowlist.db_admins(fresh=True)
+    if email not in managed:
+        raise HTTPException(404, f"{email} is not a console-managed admin.")
+    managed.discard(email)
+    admin_allowlist.save_db_admins(db, managed, admin.email)
+    _audit(db, admin, "remove_admin", f"admin {email}", body.reason)
+    db.commit()
+    return list_admins(admin, db)
 
 
 # ------------------------------------------------------------------ credits

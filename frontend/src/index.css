@@ -610,16 +610,26 @@ video:-webkit-full-screen {
 }
 
 /* Admin console shell: sidebar collapses to a horizontal nav strip on
-   phones, same 860px breakpoint as the app shell. */
+   phones, same 860px breakpoint as the app shell. Visibility lives HERE
+   only — the components carry no inline display, so these rules always
+   apply. */
+.admin-console-mobilenav {
+  display: none;
+  scrollbar-width: none;
+}
+.admin-console-mobilenav::-webkit-scrollbar {
+  display: none;
+}
 @media (max-width: 860px) {
   .admin-console-sidebar {
     display: none;
   }
   .admin-console-mobilenav {
-    display: flex !important;
+    display: flex;
   }
-  .admin-console-live {
-    display: none !important;
+  .admin-console-live,
+  .admin-console-backlink {
+    display: none;
   }
 }
 
