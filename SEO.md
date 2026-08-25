@@ -154,11 +154,12 @@ pages that answer those queries. The cheapest first moves, in order:
 
 1. ~~A public, ungated `/pricing` marketing page.~~ **Done** — `/pricing` is now
    a public top-level route (see above).
-2. **Public showcase pages, one per clip** (`/showcase/wemby-roof` — NOT
-   `/clips/:slug`, which collides with the gated user library). The videos
-   already exist in Supabase storage with posters and captions, and
-   `Landing.jsx` already carries the metadata — this is mostly a routing and
-   `VideoObject` markup exercise, not new content work. It also turns every
-   shared clip into an indexable landing page.
+2. ~~Public showcase pages, one per clip.~~ **Done** — `/showcase` (index) and
+   `/showcase/:slug`, one `VideoObject` per clip via the `useJsonLd` hook in
+   `src/lib/seo.js`. The catalog (slugs, captions, durations, upload dates,
+   blurbs) lives in `src/lib/showcase.js`, shared with the landing strip; add
+   new clips there and in `public/sitemap.xml`. Durations came from `ffprobe`,
+   upload dates from the storage objects' `Last-Modified` — keep both true for
+   new clips, `uploadDate` is required by Google.
 3. **A handful of use-case pages** — one per sport or per creator type — built
    from copy that already exists in the BRD.

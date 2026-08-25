@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
+import { showcaseClips, SHOWCASE_BASE } from "../lib/showcase.js";
 
 import { useSeo } from "../lib/seo.js";
 /* Faithful port of the client's landing page (slim MVP prototype).
@@ -145,61 +146,12 @@ function FeatureVisual({ f }) {
   );
 }
 
-// Real clips this pipeline produced, served from public storage. Poster images
-// load immediately; the video itself only downloads when someone hovers or
-// taps, so six seconds of curiosity does not cost twelve megabytes on arrival.
-//
-// To add one: upload final.mp4 and poster.jpg under showcase/<slug>/ in the
-// clips bucket, then add a row here with the take it was generated from.
-const SHOWCASE_BASE =
-  "https://taphbakizdagamimbhjh.supabase.co/storage/v1/object/public/clips/showcase";
-
-const examples = [
-  {
-    // Leads the strip: the first clip made after kits stopped being banned,
-    // and the only one showing legible "RONALDO 7" and a readable sign.
-    slug: "ronaldo-penalties",
-    sport: "Soccer",
-    cap: "He takes penalties so the camera has somewhere to point.",
-    c1: "#facc15",
-    c2: "#1d4ed8",
-  },
-  {
-    slug: "wemby-hide-and-seek",
-    sport: "NBA",
-    cap: "Seven foot four and Wemby still couldn't find Brunson.",
-    c1: "#0f172a",
-    c2: "#334155",
-  },
-  {
-    slug: "wemby-roof",
-    sport: "NBA",
-    cap: "Wemby's so tall the Spurs just pass him the roof.",
-    c1: "#2563eb",
-    c2: "#0ea5e9",
-  },
-  {
-    slug: "goat-debate",
-    sport: "Soccer",
-    cap: "Messi and Ronaldo argued so long they forgot to retire.",
-    c1: "#16a34a",
-    c2: "#65a30d",
-  },
-  {
-    slug: "spurs-collapse",
-    sport: "NBA",
-    cap: "Blowing a 29-point lead takes real commitment.",
-    c1: "#111827",
-    c2: "#4b5563",
-  },
-  {
-    slug: "wemby-blocks",
-    sport: "NBA",
-    cap: "Wemby blocks everything except the losing streak.",
-    c1: "#7c3aed",
-    c2: "#db2777",
-  },
-];
+// Real clips this pipeline produced, served from public storage. The catalog
+// itself lives in lib/showcase.js, shared with the public /showcase pages —
+// add clips there, not here. Poster images load immediately; the video only
+// downloads when someone hovers or taps, so six seconds of curiosity does not
+// cost twelve megabytes on arrival.
+const examples = showcaseClips;
 
 /**
  * One real clip in the showcase strip.
@@ -258,9 +210,16 @@ function ShowcaseReel({ clip }) {
           <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 42, height: 42, borderRadius: "50%", background: "#00000066", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", color: "#fff", fontSize: 15, paddingLeft: 3 }}>
             ▶
           </div>
-          <div style={{ position: "absolute", left: 10, right: 10, bottom: 12, color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 14, lineHeight: 1.28, textShadow: "0 2px 10px #0008" }}>
+          {/* Caption doubles as the crawlable link to the clip's public page
+              (/showcase/:slug). stopPropagation keeps the tile's play toggle
+              from swallowing the navigation. */}
+          <a
+            href={`/showcase/${clip.slug}`}
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "absolute", left: 10, right: 10, bottom: 12, color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 14, lineHeight: 1.28, textShadow: "0 2px 10px #0008", textDecoration: "none" }}
+          >
             {clip.cap}
-          </div>
+          </a>
         </>
       )}
     </div>
@@ -529,7 +488,8 @@ export default function Landing() {
       <div id="examples" style={{ padding: "20px 0 60px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
           <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(25px, 6vw, 32px)", letterSpacing: "-.02em", margin: 0 }}>Made with BanterClips</h2>
-          <span onClick={go("/signin")} style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", cursor: "pointer" }}>Start creating →</span>
+          {/* Real <a> so crawlers reach the showcase index from the home page. */}
+          <a href="/showcase" style={{ fontSize: 14, fontWeight: 600, color: "var(--accent)", cursor: "pointer", textDecoration: "none" }}>See all examples →</a>
         </div>
         <div className="reel-strip" style={{ maxWidth: 1200, margin: "0 auto", display: "flex", gap: 16, overflowX: "auto", padding: "6px 28px 20px", scrollSnapType: "x mandatory", boxSizing: "border-box", WebkitOverflowScrolling: "touch" }}>
           {examples.map((c) => (
