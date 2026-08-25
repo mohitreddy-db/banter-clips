@@ -507,6 +507,34 @@ def list_videos(
     }
 
 
+def _rebuild_prompts(script: dict | None) -> list[dict] | None:
+    """Reconstruct the generation prompts from the stored script.
+
+    Prompts are deterministic functions of the plan (prompts.py), so the
+    stored script is enough to show exactly what the providers were asked
+    for. Review-escalation retries append extra instructions at render time
+    and are not reproduced here — the scene verdicts already tell that story.
+    """
+    if not script:
+        return None
+    try:
+        from ..video import prompts as prompt_builder
+        from ..video.types import VideoPlan
+
+        plan = VideoPlan.from_dict(script)
+        return [
+            {
+                "index": s.index,
+                "image_prompt": prompt_builder.build_image_prompt(plan, s),
+                "motion_prompt": prompt_builder.build_motion_prompt(plan, s),
+            }
+            for s in plan.scenes
+        ]
+    except Exception:  # noqa: BLE001 — an odd legacy script must not 500 the drawer
+        log.exception("could not rebuild prompts for admin view")
+        return None
+
+
 @router.get("/videos/{clip_id}")
 def video_detail(clip_id: uuid.UUID, admin: User = Depends(get_admin_user),
                  db: Session = Depends(get_db)):
@@ -532,6 +560,7 @@ def video_detail(clip_id: uuid.UUID, admin: User = Depends(get_admin_user),
         "video_url": c.video_url, "is_simulated": c.is_simulated,
         "provenance": c.provenance, "script": c.script,
         "script_approved": c.script_approved,
+        "prompts": _rebuild_prompts(c.script),
         "publishes": [
             {"id": str(p.id), "status": p.status, "handle": handle, "error": p.error,
              "external_url": p.external_url, "created_at": _iso(p.created_at),

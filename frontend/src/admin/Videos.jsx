@@ -84,11 +84,35 @@ export default function AdminVideos() {
   );
 }
 
+function ToggleSection({ label, open, onToggle, children }) {
+  return (
+    <div>
+      <button
+        type="button"
+        className="ghost-btn"
+        style={{ padding: "7px 14px", fontSize: 12, color: open ? T.cyan : undefined }}
+        onClick={onToggle}
+      >
+        {open ? "Hide" : "Show"} {label}
+      </button>
+      {open && children ? <div style={{ marginTop: 10 }}>{children}</div> : null}
+    </div>
+  );
+}
+
+const promptBox = {
+  fontFamily: "ui-monospace, monospace", fontSize: 11.5, lineHeight: 1.55,
+  whiteSpace: "pre-wrap", color: T.muted, background: "var(--app-surface)",
+  border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6,
+};
+
 function VideoDrawer({ id, onClose, onChanged }) {
   const { data: v, error, loading, reload } = useFetch(() => api.adminVideoDetail(id), [id]);
   const [busy, setBusy] = useState("");
   const [actionError, setActionError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [open, setOpen] = useState({ script: false, context: false, prompts: false });
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
 
   const run = async (name, fn) => {
     setBusy(name); setActionError("");
@@ -144,6 +168,74 @@ function VideoDrawer({ id, onClose, onChanged }) {
                   models: {Object.entries(prov.models).map(([k, val]) => `${k}=${val}`).join(" · ")}
                 </div>
               )}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {v.script && (
+              <ToggleSection label="script" open={open.script} onToggle={() => toggle("script")} />
+            )}
+            {v.script && (
+              <ToggleSection label="context" open={open.context} onToggle={() => toggle("context")} />
+            )}
+            {v.prompts && (
+              <ToggleSection label="prompts" open={open.prompts} onToggle={() => toggle("prompts")} />
+            )}
+          </div>
+
+          {open.script && v.script && (
+            <div className="panel" style={{ padding: 14 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: T.muted2, marginBottom: 8 }}>
+                SCRIPT — “{v.script.title || v.take}” · {v.script_approved ? "approved by the user" : "auto-generated"} · source: {v.script.source}
+              </div>
+              {(v.script.scenes || []).map((s, i) => (
+                <div key={i} style={{ marginBottom: 10, fontSize: 12.5, color: T.muted }}>
+                  <b style={{ color: T.text }}>Scene {i + 1}</b>
+                  <span style={{ color: T.muted2 }}> · {s.seconds}s · {s.venue}</span>
+                  {s.line && (
+                    <div style={{ marginTop: 3 }}>
+                      <span style={{ color: T.cyan, fontWeight: 600 }}>{s.speaker_id || "voice"}:</span>{" "}
+                      <span style={{ color: T.text }}>“{s.line}”</span>
+                      {s.delivery && <span style={{ color: T.muted2 }}> ({s.delivery})</span>}
+                    </div>
+                  )}
+                  {s.action && <div style={{ color: T.muted2, marginTop: 2 }}>{s.action}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {open.context && v.script && (
+            <div className="panel" style={{ padding: 14, fontSize: 12.5, color: T.muted }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: T.muted2, marginBottom: 8 }}>
+                CONTEXT THE PLANNER USED
+              </div>
+              <div>Focus: <b style={{ color: T.text }}>{v.script.focus}</b>
+                {(v.script.team_ids || []).length > 0 && <> · Teams: <b style={{ color: T.text }}>{v.script.team_ids.join(", ")}</b></>}
+                {v.script.style && <> · Style: {v.script.style}</>}</div>
+              {(v.script.cast || []).map((m) => (
+                <div key={m.id} style={{ marginTop: 8 }}>
+                  <b style={{ color: T.text }}>{m.name || m.id}</b>
+                  {m.look && <div style={{ color: T.muted2 }}>look: {m.look}</div>}
+                  {m.wardrobe && <div style={{ color: T.muted2 }}>wardrobe: {m.wardrobe}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {open.prompts && v.prompts && (
+            <div className="panel" style={{ padding: 14 }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", color: T.muted2 }}>
+                GENERATION PROMPTS — rebuilt from the stored script (review-retry escalations not shown)
+              </div>
+              {v.prompts.map((p) => (
+                <div key={p.index} style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text }}>Scene {p.index + 1} — image (keyframe) prompt</div>
+                  <div style={promptBox}>{p.image_prompt}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text, marginTop: 8 }}>Scene {p.index + 1} — motion (video) prompt</div>
+                  <div style={promptBox}>{p.motion_prompt}</div>
+                </div>
+              ))}
             </div>
           )}
 
