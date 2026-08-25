@@ -83,3 +83,29 @@ export function useSeo({ title, description, path, noindex = false, image = DEFA
     meta("name", "twitter:image", image);
   }, [title, description, path, noindex, image]);
 }
+
+/**
+ * Route-scoped JSON-LD. The site-wide graph (Organization/WebSite/
+ * WebApplication) lives statically in index.html; this hook is for structured
+ * data that only makes sense on one route — e.g. the VideoObject on a
+ * /showcase/:slug page. One managed <script> per `id`; replaced when `data`
+ * changes, removed when the route unmounts so it can't leak onto other pages.
+ *
+ * `data` must be JSON-serializable and TRUE of the page — same rules as the
+ * static graph: no invented ratings, dates or reviews.
+ */
+export function useJsonLd(id, data) {
+  useEffect(() => {
+    if (!data) return undefined;
+    const attr = "data-route-jsonld";
+    let el = document.head.querySelector(`script[${attr}="${id}"]`);
+    if (!el) {
+      el = document.createElement("script");
+      el.type = "application/ld+json";
+      el.setAttribute(attr, id);
+      document.head.appendChild(el);
+    }
+    el.textContent = JSON.stringify(data);
+    return () => el.remove();
+  }, [id, JSON.stringify(data)]);
+}

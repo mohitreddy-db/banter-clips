@@ -9,6 +9,7 @@ import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import { Privacy, Terms } from "./pages/Legal.jsx";
+import { ShowcaseIndex, ShowcaseClip } from "./pages/Showcase.jsx";
 import AdminCatalog from "./pages/AdminCatalog.jsx";
 import AdminShell from "./admin/AdminShell.jsx";
 import AdminDashboard from "./admin/Dashboard.jsx";
@@ -35,6 +36,10 @@ export default function App() {
           to /signin. The page itself puts the app chrome back for signed-in
           users (AppShell children mode). */}
       <Route path="/pricing" element={<Pricing />} />
+      {/* Public clip pages — /showcase, not /clips, which is the gated user
+          library. One URL per clip so each carries its own VideoObject. */}
+      <Route path="/showcase" element={<ShowcaseIndex />} />
+      <Route path="/showcase/:slug" element={<ShowcaseClip />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
         <Route path="/clips" element={<Clips />} />
