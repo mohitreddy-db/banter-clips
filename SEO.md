@@ -55,6 +55,23 @@ Note `/pricing` is `noindex` **because it is gated**, not because pricing pages
 are low value — a crawler only ever gets a redirect to `/signin`. The public
 pricing story is the `#pricing` section on the landing page.
 
+## Never block `/assets/`
+
+The first version of `robots.txt` carried `Disallow: /assets/`, on the
+reasoning that minified bundles are not pages and have nothing to index. That
+reasoning is wrong, and Search Console's live test proved it: **Googlebot obeys
+`robots.txt` for the subresources it fetches while rendering**, so blocking
+`/assets/` blocked `index-*.js` and `index-*.css` — and Google rendered nothing
+but the unstyled static `#root` fallback, with no React app at all.
+
+For a client-rendered SPA this is close to the worst possible own-goal: it
+silently switches Google from "sees the whole app" to "sees the fallback", and
+every green check in Search Console keeps saying the page is fine. Bundles are
+not indexed as pages whether you block them or not, so there is no upside.
+If a rendering problem ever appears, check `robots.txt` for resource-blocking
+rules first — the live test's **More info → Page resources** tab lists
+everything Google could not fetch and why.
+
 ## Structured data
 
 `index.html` carries one JSON-LD `@graph` with three nodes:
