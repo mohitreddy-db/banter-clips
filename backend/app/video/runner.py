@@ -681,6 +681,16 @@ def _job_budget(db) -> float:
         return float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
 
 
+def _release_credits(db, clip) -> None:
+    """A failed clip is free (PRICING rule 3). Idempotent and non-fatal."""
+    try:
+        from ..services import credits
+
+        credits.refund_video(db, clip)
+    except Exception:  # noqa: BLE001 — a refund hiccup must not mask the failure
+        log.exception("credit refund failed for clip %s", clip.id)
+
+
 def run_clip_job(clip_id: uuid.UUID) -> None:
     """Drive one Clip row through the pipeline. Never raises."""
     from ..db import SessionLocal
@@ -711,6 +721,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             clip.error = spend.OVER_BUDGET_MESSAGE
             clip.current_step = None
             db.commit()
+            _release_credits(db, clip)
             return
 
         approved_plan = None
@@ -770,6 +781,8 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             clip.error = (result.error or "generation failed")[:500]
             clip.current_step = None
         db.commit()
+        if not result.ok:
+            _release_credits(db, clip)
         log.info("clip %s finished in %.1fs ok=%s cost=$%.3f warnings=%d",
                  clip_id, time.time() - started, result.ok, result.cost_usd,
                  len(result.warnings))
@@ -781,6 +794,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
                 clip.status = "failed"
                 clip.error = str(exc)[:500]
                 db.commit()
+                _release_credits(db, clip)
         except Exception:  # noqa: BLE001
             log.exception("could not record failure for %s", clip_id)
     finally:

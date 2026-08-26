@@ -54,9 +54,12 @@ def _run_job(clip_id: uuid.UUID) -> None:
                 clip.status = "failed"
                 clip.error = (
                     "Scene generation did not pass validation after its bounded "
-                    "retry. Your allowance was not used — retry for free."
+                    "retry. Your credits were refunded — retry for free."
                 )
                 db.commit()
+                from . import credits
+
+                credits.refund_video(db, clip)
                 return
 
         clip.status = "ready"

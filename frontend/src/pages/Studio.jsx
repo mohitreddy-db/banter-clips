@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api, downloadClip } from "../lib/api.js";
 import { resolutionLabel } from "../lib/format.js";
-import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import { UpgradeModal, PublishModal, TopUpModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 import Trending from "../components/Trending.jsx";
 
@@ -83,7 +83,7 @@ export default function Studio() {
 
   const nav = useNavigate();
   const { search } = useLocation();
-  const { profile, left, limit, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
+  const { profile, credits, videoPrice, prices, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
   // input → generating → result | failed. Enhancement happens on the input
   // page, before anything is generated.
   const [phase, setPhase] = useState("input");
@@ -103,6 +103,7 @@ export default function Studio() {
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);      // "Show script" dialog
   const [scriptFeedback, setScriptFeedback] = useState(""); // regenerate note
@@ -175,6 +176,8 @@ export default function Studio() {
   }, [search]);
 
   const valid = take.trim().length >= 10 && take.length <= 280;
+  // Exact menu price of the configured video (PRICING §7) — never estimated.
+  const thisPrice = videoPrice(duration, resolution);
 
   const watchClip = useCallback(
     (id, startedAtMs) => {
@@ -234,9 +237,11 @@ export default function Studio() {
         setError("Couldn't come up with a better angle — your take is good as is.");
       }
     } catch (e) {
-      setError(`Enhance is unavailable right now (${e.message}). Your take still works.`);
+      if (e.code === "insufficient_credits") setTopupOpen(true);
+      else setError(`Enhance is unavailable right now (${e.message}). Your take still works.`);
     } finally {
       setEnhancing(false);
+      refreshUsage(); // the enhance credit left the wallet
     }
   };
 
@@ -250,7 +255,9 @@ export default function Studio() {
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id, new Date(c.created_at).getTime());
     } catch (e) {
-      if (e.code === "limit_reached" || e.code === "upgrade_required") setUpgradeOpen(true);
+      // Empty balance → top up, never an upgrade prompt (PRICING rule 2).
+      if (e.code === "insufficient_credits") setTopupOpen(true);
+      else if (e.code === "upgrade_required") setUpgradeOpen(true);
       else setError(e.message);
     } finally {
       setBusy(false);
@@ -265,7 +272,8 @@ export default function Studio() {
       // from it would open the timer minutes or days in.
       watchClip(c.id, Date.now());
     } catch (e) {
-      setError(e.message);
+      if (e.code === "insufficient_credits") setTopupOpen(true);
+      else setError(e.message);
     }
   };
 
@@ -361,8 +369,8 @@ export default function Studio() {
               {enhancing
                 ? "Finding sharper angles…"
                 : variations.length
-                  ? "Enhance again"
-                  : "Enhance take"}
+                  ? `Enhance again · ${prices.enhance_take} credit`
+                  : `Enhance take · ${prices.enhance_take} credit`}
             </button>
 
             {enhancing && (
@@ -496,18 +504,18 @@ export default function Studio() {
             </div>
           </div>
 
-          {/* credits bar */}
+          {/* credits bar — the exact quote, and top-up (never upgrade) when short */}
           <div className="panel" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 14, flexWrap: "wrap" }}>
             <span style={{ color: "var(--app-cyan)" }}>⚡</span>
             <span style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
-              <b style={{ color: "var(--app-text)" }}>{left}</b> of <b style={{ color: "var(--app-text)" }}>{limit}</b> monthly videos left · each clip uses 1 · failures are free
+              This video: <b style={{ color: "var(--app-text)" }}>{thisPrice} credits</b>
+              {" · "}you have <b style={{ color: credits < thisPrice ? "var(--app-error)" : "var(--app-text)" }}>{credits.toLocaleString()}</b>
+              {" · "}failures are refunded
             </span>
             <div style={{ flex: 1 }} />
-            {plan !== "creator" && (
-              <button onClick={() => nav("/pricing")} style={{ background: "none", border: "none", color: "var(--app-cyan)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
-                + Get more with Creator
-              </button>
-            )}
+            <button onClick={() => setTopupOpen(true)} style={{ background: "none", border: "none", color: "var(--app-cyan)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
+              + Top up credits
+            </button>
           </div>
 
           {error && (
@@ -779,7 +787,11 @@ export default function Studio() {
               <path d="m8 12.5 2.6 2.6L16 9.5" />
             </svg>
             <span style={{ fontSize: 15, fontWeight: 600, color: "var(--app-green)" }}>Video ready · 0:{String(Math.round(clip.duration_seconds || 14)).padStart(2, "0")}</span>
-            <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)" }}>{clip.sport} · {clip.tone}</span>
+            <span style={{ marginLeft: "auto", fontSize: 13, color: "var(--app-muted)" }}>
+              {clip.sport} · {clip.tone}
+              {clip.credits_charged > 0 &&
+                ` · ⚡ ${clip.credits_charged} credits (${clip.duration_target}s ${clip.resolution === "1080p" ? "HD" : "Standard"})`}
+            </span>
           </div>
           {/* Full take, untruncated — opened from My Clips this is the only
               place the whole thing is readable. */}
@@ -864,7 +876,8 @@ export default function Studio() {
         </>
       )}
 
-      {upgradeOpen && <UpgradeModal reason={left <= 0 ? "limit" : "download"} onClose={() => setUpgradeOpen(false)} />}
+      {upgradeOpen && <UpgradeModal reason="download" onClose={() => setUpgradeOpen(false)} />}
+      {topupOpen && <TopUpModal needed={thisPrice} onClose={() => { setTopupOpen(false); refreshUsage(); }} />}
       {publishOpen && clip && <PublishModal clip={clip} onClose={() => setPublishOpen(false)} />}
       {scriptOpen && clip?.script && <ScriptDialog script={clip.script} onClose={() => setScriptOpen(false)} />}
     </div>

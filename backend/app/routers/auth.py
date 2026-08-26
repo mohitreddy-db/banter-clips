@@ -46,6 +46,10 @@ def _find_or_create_user(db: Session, *, email: str, supabase_uid: str | None, d
         db.add(user)
         db.commit()
         record_event(db, "account_created", user)
+        # Welcome credits (PRICING §5): one-time, enough for one 15s video.
+        from ..services import credits
+
+        credits.grant_signup(db, user)
     elif supabase_uid and user.supabase_uid != supabase_uid:
         user.supabase_uid = supabase_uid
         db.commit()
@@ -114,6 +118,10 @@ def request_link(body: MagicLinkRequest, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         record_event(db, "account_created", user)
+        # Welcome credits (PRICING §5): one-time, enough for one 15s video.
+        from ..services import credits
+
+        credits.grant_signup(db, user)
 
     raw, digest = new_login_token()
     db.add(LoginToken(user_id=user.id, token_hash=digest, expires_at=login_token_expiry()))

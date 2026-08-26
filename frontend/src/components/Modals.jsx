@@ -16,6 +16,104 @@ function Overlay({ children, onClose }) {
   );
 }
 
+/**
+ * Top Up Credits — the ONLY thing offered when a balance runs short
+ * (PRICING rule 2: top up, never upgrade). Packs come from the server so
+ * admin price changes appear without a release. Credits are granted by the
+ * Stripe webhook after payment, not on redirect.
+ */
+export function TopUpModal({ onClose, needed = 0 }) {
+  const { credits } = useApp();
+  const [packs, setPacks] = useState(null);
+  const [available, setAvailable] = useState(true);
+  const [buying, setBuying] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api.packs()
+      .then((d) => { setPacks(d.packs || []); setAvailable(d.available); })
+      .catch(() => { setPacks([]); setAvailable(false); });
+  }, []);
+
+  const buy = async (key) => {
+    setBuying(key);
+    setError("");
+    api.track("topup_pack_clicked", { pack: key });
+    try {
+      const { url } = await api.topup(key);
+      window.location.href = url;
+    } catch (e) {
+      setError(e.message);
+      setBuying("");
+    }
+  };
+
+  const short = needed > 0 && credits < needed;
+  return (
+    <Overlay onClose={() => !buying && onClose()}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 21, color: "var(--app-text)" }}>⚡ Top Up Credits</div>
+        <div style={{ fontSize: 13.5, color: "var(--app-muted)", lineHeight: 1.5 }}>
+          {short
+            ? <>This video needs <b style={{ color: "var(--app-text)" }}>{needed}</b> credits — you have <b style={{ color: "var(--app-text)" }}>{credits.toLocaleString()}</b>. Top-up credits never expire.</>
+            : <>You have <b style={{ color: "var(--app-text)" }}>{credits.toLocaleString()}</b> credits. Top-up credits never expire.</>}
+        </div>
+
+        {packs === null && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="shimmer" style={{ height: 104, borderRadius: 14, border: "1px solid var(--app-border)" }} />
+            ))}
+          </div>
+        )}
+        {packs !== null && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {packs.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => buy(p.key)}
+                disabled={!!buying || !available}
+                style={{
+                  position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                  padding: "18px 10px 14px", borderRadius: 14, cursor: available ? "pointer" : "not-allowed",
+                  background: "var(--app-surface)",
+                  border: `1.5px solid ${p.popular ? "var(--app-cyan)" : "var(--app-border)"}`,
+                  opacity: buying && buying !== p.key ? 0.5 : 1,
+                }}
+              >
+                {p.popular && (
+                  <span style={{ position: "absolute", top: -9, right: 10, fontSize: 9.5, fontWeight: 800, letterSpacing: ".05em", padding: "3px 9px", borderRadius: 999, background: "var(--app-cyan)", color: "#04121a" }}>
+                    POPULAR
+                  </span>
+                )}
+                <span style={{ fontSize: 24, fontWeight: 800, color: "var(--app-text)" }}>
+                  {buying === p.key ? "…" : p.credits.toLocaleString()}
+                </span>
+                <span style={{ fontSize: 11.5, color: "var(--app-muted)" }}>credits</span>
+                <span style={{ fontSize: 15.5, fontWeight: 700, color: "var(--app-cyan)", marginTop: 6 }}>
+                  ${p.usd.toFixed(2)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!available && packs !== null && (
+          <div style={{ fontSize: 12.5, color: "var(--app-muted)" }}>Payments aren't configured on this server.</div>
+        )}
+        {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
+        <div style={{ fontSize: 11.5, color: "var(--app-muted2)", textAlign: "center" }}>
+          Secure payment via Stripe. Your card details never touch our servers.
+        </div>
+        <button onClick={() => !buying && onClose()} style={{ background: "none", border: "none", color: "var(--app-muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          Close
+        </button>
+      </div>
+    </Overlay>
+  );
+}
+
+
 export function UpgradeModal({ onClose, reason }) {
   const { upgrade, startCheckout } = useApp();
   const [state, setState] = useState("offer"); // offer | paying | done
@@ -52,7 +150,7 @@ export function UpgradeModal({ onClose, reason }) {
             On the Free plan you publish with the BanterClips watermark — every post promotes you <i>and</i> us. Creator unlocks the full kit:
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {["Download in HD — no watermark", "Publish without the watermark", "Full HD 1080p quality", "30 videos a month (vs 5)", "Priority render queue"].map((f) => (
+            {["Download in HD — no watermark", "Publish without the watermark", "Full HD 1080p quality", "30-second videos", "150 credits every month", "Priority render queue"].map((f) => (
               <div key={f} style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--app-text)", fontWeight: 500 }}>
                 <span style={{ color: "var(--app-green)", fontWeight: 700 }}>✓</span> {f}
               </div>

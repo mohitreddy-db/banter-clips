@@ -110,6 +110,9 @@ export const api = {
   disconnectSocial: (platform) => request(`/socials/${platform}`, { method: "DELETE" }),
 
   // billing — Stripe Checkout when configured, mock upgrade as dev fallback
+  // Credit top-ups: pack list + one-time Checkout (credits granted by webhook).
+  packs: () => request("/billing/packs"),
+  topup: (pack) => request("/billing/topup", { method: "POST", body: { pack } }),
   checkout: () => request("/billing/checkout", { method: "POST" }),
   billingPortal: () => request("/billing/portal", { method: "POST" }),
   upgrade: () => request("/billing/upgrade", { method: "POST" }),
@@ -161,6 +164,10 @@ export const api = {
   adminRemoveAdmin: (email, reason) =>
     request("/admin/admins/remove", { method: "POST", body: { email, reason } }),
   adminCredits: () => request("/admin/credits"),
+  adminGrantCredits: (email, delta, reason) =>
+    request("/admin/credits/grant", { method: "POST", body: { email, delta, reason } }),
+  adminSaveCreditSettings: (body) =>
+    request("/admin/settings/credits", { method: "PUT", body }),
 
   // analytics (fire-and-forget)
   track: (name, props = {}) =>

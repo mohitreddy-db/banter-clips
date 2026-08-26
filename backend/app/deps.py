@@ -65,13 +65,29 @@ def successful_clips_this_month(db: Session, user: User) -> int:
 
 
 def usage_for(db: Session, user: User) -> dict:
-    limit = settings.PLAN_LIMITS.get(user.plan, 5)
+    """Plan capabilities + the credit wallet (PRICING.md).
+
+    The old "X of N videos" allowance is gone — credits are the only usage
+    unit. `used/limit/left` stay in the payload for any stale client, mapped
+    onto credits. Creator's monthly grant is applied lazily here (idempotent,
+    28-day guard) so renewals never depend on a Stripe webhook event."""
+    from .services import credits
+
+    credits.maybe_grant_monthly(db, user)
+    price_cfg = credits.prices(db)
     used = successful_clips_this_month(db, user)
     return {
         "plan": user.plan,
         "used": used,
-        "limit": limit,
-        "left": max(0, limit - used),
+        "limit": None,
+        "left": user.credits,
+        "credits": user.credits,
+        # What things cost, so the client can quote exactly and estimate
+        # "≈ N videos" dynamically. Never includes our costs.
+        "prices": {
+            "per_second": price_cfg["per_second"],
+            "enhance_take": price_cfg["enhance_take"],
+        },
         # Client non-negotiables: Free = publish-only + watermark;
         # Creator = download + watermark-free.
         "can_download": user.plan == "creator",

@@ -266,6 +266,12 @@ export function AppProvider({ children }) {
   const left = usage?.left ?? Math.max(0, limit - used);
   const canDownload = usage?.can_download ?? plan === "creator";
   const watermarked = usage?.watermarked ?? plan !== "creator";
+  // The credit wallet (PRICING.md): the only usage unit shown anywhere.
+  const credits = usage?.credits ?? 0;
+  const prices = usage?.prices ?? { per_second: { "720p": 4, "1080p": 7 }, enhance_take: 1 };
+  // Exact menu price — quoted before generating, charged on success.
+  const videoPrice = (duration, resolution) =>
+    (prices.per_second?.[resolution] ?? 4) * duration;
 
   const onboarded = !!user?.preferences?.onboarding_completed;
   const instagram = socials.find((s) => s.platform === "instagram") || null;
@@ -288,6 +294,9 @@ export function AppProvider({ children }) {
     used,
     limit,
     left,
+    credits,
+    prices,
+    videoPrice,
     canDownload,
     watermarked,
     onboarded,

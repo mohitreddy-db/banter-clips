@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -144,6 +145,52 @@ def checkout(user: User = Depends(get_current_user), db: Session = Depends(get_d
     return {"url": session.url}
 
 
+@router.get("/packs")
+def packs(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The top-up menu — available to every plan (PRICING §6). Free users
+    top up too; packs buy fuel, never capabilities."""
+    from ..services import credits
+
+    return {"packs": credits.prices(db)["packs"],
+            "available": bool(settings.STRIPE_SECRET_KEY)}
+
+
+class TopupBody(BaseModel):
+    pack: str
+
+
+@router.post("/topup")
+def topup(body: TopupBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """One-time Stripe Checkout for a credit pack. Credits are granted by the
+    webhook when the payment completes — never on redirect, which is spoofable."""
+    from ..services import credits
+
+    if not settings.STRIPE_SECRET_KEY:
+        raise HTTPException(503, detail={"code": "stripe_not_configured", "message": "Payments are not configured on this server."})
+    chosen = credits.pack(db, body.pack)
+    if chosen is None:
+        raise HTTPException(404, "Unknown credit pack.")
+    session = _stripe().checkout.Session.create(
+        mode="payment",
+        customer=_ensure_customer(db, user),
+        line_items=[{
+            "quantity": 1,
+            "price_data": {
+                "currency": "usd",
+                "unit_amount": int(chosen["usd"] * 100),
+                "product_data": {"name": f"BanterClips — {chosen['credits']:,} credits"},
+            },
+        }],
+        success_url=f"{settings.FRONTEND_URL}/account?topup=success",
+        cancel_url=f"{settings.FRONTEND_URL}/account?topup=cancelled",
+        client_reference_id=str(user.id),
+        metadata={"kind": "topup", "user_id": str(user.id),
+                  "credits": str(chosen["credits"]), "pack": chosen["key"]},
+    )
+    record_event(db, "topup_started", user, pack=chosen["key"], credits=chosen["credits"])
+    return {"url": session.url}
+
+
 @router.post("/portal")
 def portal(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not (stripe_configured() and user.stripe_customer_id):
@@ -179,7 +226,20 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         if event_type == "checkout.session.completed":
             ref = _g(obj, "client_reference_id")
             user = db.get(User, ref) if ref else None
-            if user is not None:
+            meta = _g(obj, "metadata") or {}
+            if user is not None and _g(obj, "mode") == "payment" and meta.get("kind") == "topup":
+                # A credit pack. Idempotent: the StripeEvent dedupe above
+                # guarantees this delivery grants exactly once.
+                from ..services import credits as credit_svc
+
+                amount = int(meta.get("credits") or 0)
+                if amount > 0 and _g(obj, "payment_status") == "paid":
+                    credit_svc.apply(db, user, amount, "topup",
+                                     note=f"pack {meta.get('pack', '?')}")
+                    record_event(db, "topup_completed", user,
+                                 pack=meta.get("pack"), credits=amount)
+                user = None  # not a subscription — skip the sync below
+            elif user is not None:
                 # Link ids from the session, then converge from the API.
                 user.stripe_customer_id = _g(obj, "customer") or user.stripe_customer_id
                 db.commit()

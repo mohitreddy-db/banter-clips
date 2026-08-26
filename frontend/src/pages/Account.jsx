@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
+import { TopUpModal } from "../components/Modals.jsx";
 
 import { useSeo } from "../lib/seo.js";
 export default function Account() {
@@ -14,11 +15,12 @@ export default function Account() {
 
   const nav = useNavigate();
   const {
-    user, plan, used, limit, left, profile, signOut, cancelPlan, refreshUser,
-    instagram, connected, connectSocial, disconnectSocial,
+    user, plan, credits, videoPrice, profile, signOut, cancelPlan, refreshUser,
+    refreshUsage, instagram, connected, connectSocial, disconnectSocial,
   } = useApp();
   const isCreator = plan === "creator";
   const [busy, setBusy] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
   const [error, setError] = useState("");
   const [params, setParams] = useSearchParams();
   const [igNotice, setIgNotice] = useState(null);
@@ -31,6 +33,29 @@ export default function Account() {
     else setIgNotice({ ok: false, text: `Instagram connect ${ig === "denied" ? "was cancelled" : "failed"}${params.get("reason") ? ` — ${params.get("reason")}` : ""}.` });
     setParams({}, { replace: true });
   }, [params, setParams]);
+
+  // Return from a top-up Checkout (?topup=success|cancelled). Credits are
+  // granted by the webhook, which can lag a beat — poll the wallet briefly.
+  useEffect(() => {
+    const t = params.get("topup");
+    if (!t) return;
+    setParams({}, { replace: true });
+    if (t === "cancelled") {
+      setIgNotice({ ok: false, text: "Top-up cancelled — no payment was made." });
+      return;
+    }
+    setIgNotice({ ok: true, text: "Payment received — adding your credits…" });
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries += 1;
+      await refreshUsage();
+      if (tries >= 8) {
+        clearInterval(timer);
+        setIgNotice({ ok: true, text: "Credits added. ⚡" });
+      }
+    }, 1500);
+    return () => clearInterval(timer);
+  }, [params, setParams, refreshUsage]);
 
   // Return from Stripe Checkout (?checkout=success|cancelled). The webhook
   // flips the plan server-side, which can lag a beat — poll briefly.
@@ -105,28 +130,29 @@ export default function Account() {
       {/* plan & usage */}
       <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center" }}>
-          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>PLAN & ALLOWANCE</span>
+          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>PLAN & CREDITS</span>
           <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: isCreator ? "rgba(52,226,122,.14)" : "#161e30", color: isCreator ? "var(--app-green)" : "var(--app-muted)", border: "1px solid var(--app-border)" }}>
             {isCreator ? "CREATOR · $9.99/mo" : "FREE"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 800, fontSize: "clamp(28px, 7vw, 34px)", color: "var(--app-text)" }}>{left} of {limit}</span>
-          <span style={{ fontSize: 15, color: "var(--app-muted)" }}>videos remaining this month</span>
-        </div>
-        <div style={{ height: 10, borderRadius: 999, background: "var(--app-panel)", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${Math.min(100, (used / limit) * 100)}%`, background: "var(--app-grad)", borderRadius: 999 }} />
+          <span style={{ fontWeight: 800, fontSize: "clamp(28px, 7vw, 34px)", color: "var(--app-text)" }}>⚡ {credits.toLocaleString()}</span>
+          <span style={{ fontSize: 15, color: "var(--app-muted)" }}>credits available</span>
         </div>
         <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
-          {used} used · only successful videos count — failed jobs and retries are free.
+          ≈ {Math.floor(credits / videoPrice(15, "720p"))} videos at 15s Standard
+          {isCreator ? ` · ≈ ${Math.floor(credits / videoPrice(15, "1080p"))} at 15s HD` : ""}
+          {" · "}only successful videos charge — failures are refunded.
+        </div>
+        <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
+          <button className="grad-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => setTopupOpen(true)}>
+            ⚡ Top up credits
+          </button>
         </div>
         {!isCreator ? (
-          <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
-            <button className="grad-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
-              Upgrade to Creator — $9.99/mo
-            </button>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="ghost-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
-              Compare plans
+              Creator plan — 1080p, 30s, no watermark, 150 credits/mo
             </button>
           </div>
         ) : user?.cancel_at_period_end ? (
@@ -208,6 +234,7 @@ export default function Account() {
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-error)", cursor: "pointer" }}>Delete my account and videos</span>
         </div>
       </div>
+      {topupOpen && <TopUpModal onClose={() => { setTopupOpen(false); refreshUsage(); }} />}
     </div>
   );
 }

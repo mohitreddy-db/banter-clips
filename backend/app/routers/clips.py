@@ -89,18 +89,31 @@ def enhance_take(
 def enhance_take_variations(
     body: TakeEnhanceRequest,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Two sharper versions of a take, for the input page.
 
     Called on demand and repeatedly — every press returns two NEW variations,
     and the original is echoed back so the client can always offer it as the
-    third choice. Nothing is generated and no allowance is touched.
+    third choice. Costs 1 credit per press (PRICING §4) — charged up front,
+    which is also the farming guard.
 
     An empty `variations` list is a valid answer: it means keep what you
     wrote, which is never the wrong outcome.
     """
+    from ..services import credits
     from ..video import providers, takes
 
+    fee = int(credits.prices(db)["enhance_take"])
+    if fee > 0:
+        try:
+            credits.apply(db, user, -fee, "enhance_charge", note="enhance take")
+        except ValueError:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"Enhancing costs {fee} credit — you have {user.credits}.",
+                "needed": fee, "balance": user.credits,
+            })
     options = takes.variations(
         body.take, body.sport or "NBA", body.tone or "Funny",
         client=providers.text_client(), round_index=body.round,
@@ -130,19 +143,23 @@ def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
 
 @router.post("", response_model=ClipOut, status_code=201)
 def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     # A demo run costs nothing and produces nothing publishable, so it must
-    # not be charged against the monthly allowance or gated by it.
+    # not be charged credits or gated by the balance.
     simulated = markers.is_simulated(body.take)
 
-    usage = usage_for(db, user)
-    if not simulated and usage["left"] <= 0:
-        # BR-09: at the limit → upgrade prompt, never a silent failure.
+    price = 0 if simulated else credits.video_price(db, body.duration, body.resolution)
+    if user.credits < price:
+        # PRICING rule 2: an empty balance means top up — never an upgrade
+        # prompt, and never a plan mention.
         raise HTTPException(
             402,
             detail={
-                "code": "limit_reached",
-                "message": f"You've used all {usage['limit']} videos on the "
-                f"{user.plan} plan this month.",
+                "code": "insufficient_credits",
+                "message": f"This video needs {price} credits — you have {user.credits}.",
+                "needed": price,
+                "balance": user.credits,
             },
         )
 
@@ -181,6 +198,19 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
     )
     db.add(clip)
     db.commit()
+    if price > 0:
+        # The reservation (PRICING rule 3): charged now, refunded in full if
+        # generation fails or the clip is abandoned at the script stage.
+        try:
+            credits.charge_video(db, user, clip, price)
+        except ValueError:  # concurrent spend won the last credits
+            db.delete(clip)
+            db.commit()
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"This video needs {price} credits — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
     record_event(db, "generation_started", user, sport=body.sport, tone=body.tone, duration=body.duration)
     start_generation(clip.id)
     return _serialize(clip)
@@ -288,10 +318,29 @@ def regenerate_script(
 
 @router.post("/{clip_id}/retry", response_model=ClipOut)
 def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
     if clip.status != "failed":
         raise HTTPException(409, "Only failed jobs can be retried.")
-    # BR-09: retries are free — the allowance is only charged on success.
+    # A failed clip was refunded, so a retry reserves again like a fresh run
+    # (rule 3: "retries charge like a normal run and refund the same way").
+    if not clip.is_simulated and clip.credits_charged <= 0:
+        price = credits.video_price(db, clip.duration_target, clip.resolution)
+        if user.credits < price:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"Retrying needs {price} credits — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
+        try:
+            credits.charge_video(db, user, clip, price)
+        except ValueError:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"Retrying needs {price} credits — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
     clip.status = "queued"
     clip.stage_index = 0
     clip.error = None
@@ -307,7 +356,13 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
 
 @router.delete("/{clip_id}", status_code=204)
 def delete_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
+    # Abandoning an unfinished clip (script stage, queue, mid-render) releases
+    # its reservation — only a completed video keeps its charge (rule 3).
+    if clip.status != "ready":
+        credits.refund_video(db, clip)
     # Delete the bytes too. Dropping only the row leaves the video publicly
     # fetchable at its URL forever — a deletion that does not delete.
     try:

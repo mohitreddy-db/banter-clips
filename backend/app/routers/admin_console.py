@@ -5,10 +5,9 @@ detail endpoint here. Everything is computed live from the tables we already
 have (users, clips, jobs, publishes, events, social_accounts, stripe_events)
 plus Stripe deep links and the OpenRouter credits API — no analytics product.
 
-Credits are deliberately NOT implemented: /admin/credits reports
-``enabled: false`` with the PRICING.md launch price list so the page (and any
-future ledger work) has one obvious place to land. Nothing else in this file
-assumes credits exist; costs are dollars from clips.cost_usd.
+Credits are live (services/credits.py): /admin/credits serves the KPIs,
+price config and ledger; /admin/credits/grant and /admin/settings/credits are
+the actions. Provider costs elsewhere stay dollars from clips.cost_usd.
 
 Every mutating endpoint writes an AdminAction row — the audit log is the read
 view of those rows, and rows are never edited or deleted from the app.
@@ -52,17 +51,6 @@ router = APIRouter(prefix="/admin", tags=["admin-console"])
 CREATOR_PRICE_USD = 9.99
 PROCESSING_STATUSES = ("queued", *GENERATION_STAGES, "script_ready")
 PAGE_SIZE = 50
-
-# PRICING.md §4 launch price list — surfaced read-only by /admin/credits so
-# the constants live in exactly one backend place when the ledger ships.
-CREDIT_PRICE_LIST = {
-    "video": {"10s": {"720p": 250, "1080p": 425},
-              "15s": {"720p": 375, "1080p": 650},
-              "30s": {"720p": 700, "1080p": 1200}},
-    "extras": {"enhance_take": 2, "captions": 0, "publish": 0, "retry": 0},
-    "face_value_usd": 0.01,
-}
-
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -229,7 +217,7 @@ def overview(
         ],
         "top_takes": [{"take": t, "sport": s, "tone": tn, "publishes": p}
                       for t, s, tn, p in top_takes],
-        "credits_enabled": False,
+        "credits_enabled": True,
     }
 
 
@@ -318,6 +306,7 @@ def user_detail(user_id: uuid.UUID, admin: User = Depends(get_admin_user),
         "stripe_url": f"https://dashboard.stripe.com/customers/{u.stripe_customer_id}"
         if u.stripe_customer_id else None,
         "videos": videos, "cost_usd": round(cost, 2), "published": publish_count,
+        "credits": u.credits,
         "recent_clips": [
             {"id": str(c.id), "take": c.take, "status": c.status,
              "cost_usd": float(c.cost_usd) if c.cost_usd is not None else None,
@@ -895,7 +884,7 @@ def revenue(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)
                      for n, at, email in activity],
         "stripe_events": [{"id": e.id, "type": e.type,
                            "at": _iso(e.event_created_at)} for e in stripe_evts],
-        "credits_enabled": False,
+        "credits_enabled": True,
     }
 
 
@@ -1063,16 +1052,104 @@ def remove_admin(body: AdminEmailBody, admin: User = Depends(get_admin_user),
 
 
 @router.get("/credits")
-def credits_view(admin: User = Depends(get_admin_user)):
-    """Placeholder until the credit ledger ships (PRICING.md).
+def credits_view(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """The credit system, live: KPIs, price config, and the recent ledger."""
+    from ..models import CreditEntry
+    from ..services import credits as credit_svc
 
-    The frontend renders a "not live yet" state from ``enabled: false``.
-    When the ledger lands, this endpoint grows the issued/consumed KPIs and
-    ledger listing — nothing else in the console assumes credits exist.
-    """
+    month_ago = _now() - timedelta(days=30)
+    outstanding = int(db.scalar(select(func.coalesce(func.sum(User.credits), 0))) or 0)
+
+    def _sum(*kinds) -> int:
+        return int(db.scalar(
+            select(func.coalesce(func.sum(CreditEntry.delta), 0))
+            .where(CreditEntry.kind.in_(kinds), CreditEntry.created_at >= month_ago)
+        ) or 0)
+
+    entries = db.execute(
+        select(CreditEntry, User.email)
+        .join(User, User.id == CreditEntry.user_id)
+        .order_by(CreditEntry.created_at.desc())
+        .limit(60)
+    ).all()
     return {
-        "enabled": False,
-        "note": "Credit-based pricing is specified in PRICING.md but not yet "
-                "integrated. Costs elsewhere in the console are provider USD.",
-        "price_list": CREDIT_PRICE_LIST,
+        "enabled": True,
+        "outstanding": outstanding,
+        "last_30d": {
+            "granted": _sum("grant_signup", "grant_monthly", "grant_admin"),
+            "purchased": _sum("topup"),
+            # charges are negative deltas; report as positive consumption,
+            # net of refunds so a failed video counts zero
+            "consumed": -(_sum("video_charge", "enhance_charge") + _sum("video_refund")),
+        },
+        "prices": credit_svc.prices(db),
+        "ledger": [
+            {"id": str(e.id), "email": email, "delta": e.delta,
+             "balance_after": e.balance_after, "kind": e.kind,
+             "clip_id": str(e.clip_id) if e.clip_id else None,
+             "note": e.note, "created_at": _iso(e.created_at)}
+            for e, email in entries
+        ],
     }
+
+
+class GrantBody(BaseModel):
+    email: str
+    delta: int
+    reason: str
+
+
+@router.post("/credits/grant")
+def grant_credits(body: GrantBody, admin: User = Depends(get_admin_user),
+                  db: Session = Depends(get_db)):
+    """Manual grant (or deduction, with a negative delta). Reason required —
+    it lands in both the credit ledger and the audit log."""
+    from ..services import credits as credit_svc
+
+    if not body.reason.strip():
+        raise HTTPException(422, "A reason is required.")
+    if body.delta == 0 or abs(body.delta) > 100_000:
+        raise HTTPException(422, "Delta must be non-zero and sane.")
+    u = db.scalar(select(User).where(User.email == body.email.lower().strip()))
+    if u is None:
+        raise HTTPException(404, "No user with that email.")
+    try:
+        balance = credit_svc.apply(db, u, body.delta, "grant_admin",
+                                   note=f"{admin.email}: {body.reason.strip()}"[:300])
+    except ValueError:
+        raise HTTPException(409, f"That would take {u.email} below zero (balance {u.credits}).")
+    _audit(db, admin, "grant_credits", f"user {u.email} ({body.delta:+d})", body.reason)
+    db.commit()
+    return {"email": u.email, "balance": balance}
+
+
+class CreditSettingsBody(BaseModel):
+    per_second: dict
+    enhance_take: int
+    signup_grant: int
+    monthly_grant: int
+
+
+@router.put("/settings/credits")
+def put_credit_settings(body: CreditSettingsBody, admin: User = Depends(get_admin_user),
+                        db: Session = Depends(get_db)):
+    """Credit prices without a release (PRICING rule 5). Pack contents stay
+    code-side — they are Stripe-facing and rarely change."""
+    import json as json_mod
+
+    from ..services import credits as credit_svc, runtime_settings
+
+    rates = {k: int(v) for k, v in body.per_second.items() if k in ("720p", "1080p")}
+    if len(rates) != 2 or any(not 1 <= v <= 100 for v in rates.values()):
+        raise HTTPException(422, "per_second needs sane 720p and 1080p rates.")
+    for name, value in (("enhance_take", body.enhance_take),
+                        ("signup_grant", body.signup_grant),
+                        ("monthly_grant", body.monthly_grant)):
+        if not 0 <= value <= 10_000:
+            raise HTTPException(422, f"{name} out of range.")
+    saved = {"per_second": rates, "enhance_take": body.enhance_take,
+             "signup_grant": body.signup_grant, "monthly_grant": body.monthly_grant}
+    runtime_settings.set_value(db, credit_svc.SETTING_KEY, json_mod.dumps(saved), admin.email)
+    _audit(db, admin, "credit_settings", f"{saved}", "")
+    db.commit()
+    return {"prices": credit_svc.prices(db)}

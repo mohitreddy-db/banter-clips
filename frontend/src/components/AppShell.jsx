@@ -67,7 +67,7 @@ const icons = {
 export default function AppShell({ children }) {
   const nav = useNavigate();
   const loc = useLocation();
-  const { plan, left, limit, booted, signedIn, apiDown, user } = useApp();
+  const { plan, credits, videoPrice, booted, signedIn, apiDown, user } = useApp();
 
   // App pages require a session (BR-02). Wait for boot, then gate.
   if (!booted) {
@@ -141,14 +141,19 @@ export default function AppShell({ children }) {
           </div>
         ))}
 
-        <div style={{ marginTop: "auto", padding: "12px", borderRadius: 12, background: "var(--app-panel)", border: "1px solid var(--app-border)" }}>
+        <div style={{ marginTop: "auto", padding: "12px", borderRadius: 12, background: "var(--app-panel)", border: "1px solid var(--app-border)", cursor: "pointer" }}
+             onClick={() => nav("/account")}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--app-muted)", marginBottom: 6 }}>
             {plan === "creator" ? "CREATOR PLAN" : "FREE PLAN"}
           </div>
-          <div style={{ height: 6, borderRadius: 99, background: "#0b0f1c", overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ height: "100%", width: `${((limit - left) / limit) * 100}%`, background: "var(--app-grad)" }} />
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--app-text)" }}>
+            ⚡ {credits.toLocaleString()} <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--app-muted)" }}>credits</span>
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{left} of {limit} videos left</div>
+          <div style={{ fontSize: 11, color: "var(--app-muted2)", marginTop: 3 }}>
+            {credits > 0
+              ? `≈ ${Math.max(0, Math.floor(credits / videoPrice(15, "720p")))} videos at 15s`
+              : "Top up to keep creating"}
+          </div>
         </div>
       </aside>
 
@@ -162,11 +167,12 @@ export default function AppShell({ children }) {
               Upgrade
             </button>
           )}
-          <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: left > 0 ? "var(--app-green)" : "var(--app-error)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", whiteSpace: "nowrap" }}>
-              <span className="usage-long">{left} of {limit} videos left</span>
-              <span className="usage-short">{left}/{limit}</span>
+          <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0, cursor: "pointer" }}
+               onClick={() => nav("/account")} title="Credits — tap to top up">
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: credits > 0 ? "var(--app-green)" : "var(--app-error)" }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", whiteSpace: "nowrap" }}>
+              <span className="usage-long">⚡ {credits.toLocaleString()} credits</span>
+              <span className="usage-short">⚡ {credits.toLocaleString()}</span>
             </span>
           </div>
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", cursor: "pointer", flexShrink: 0 }} onClick={() => nav("/account")} />
