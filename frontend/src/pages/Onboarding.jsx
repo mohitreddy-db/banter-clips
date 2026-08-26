@@ -303,7 +303,7 @@ function OnboardingFlow() {
             />
             <PlanTile
               name="Creator"
-              price="$9.99"
+              price="$19"
               features={CREATOR_FEATURES}
               popular
               cta={plan === "creator" ? "✓ Your plan" : upgrading ? "Upgrading…" : "Go Creator"}

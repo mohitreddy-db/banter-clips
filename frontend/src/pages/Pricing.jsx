@@ -51,7 +51,7 @@ export default function Pricing() {
   useSeo({
     title: "Pricing — BanterClips plans from $0",
     description:
-      "BanterClips pricing: Free plan with welcome credits to make your first AI sports video, or Creator at $9.99/mo with monthly credits, 1080p and watermark-free downloads. No credit card to start.",
+      "BanterClips pricing: Free plan with welcome credits to make your first AI sports video, or Creator at $19/mo with monthly credits, 1080p and watermark-free downloads. No credit card to start.",
     path: "/pricing",
   });
 
@@ -78,7 +78,7 @@ export default function Pricing() {
       />
       <PlanCard
         name="Creator"
-        price="$9.99"
+        price="$19"
         tagline="For creators posting every week."
         features={CREATOR}
         popular

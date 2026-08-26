@@ -234,7 +234,7 @@ export function Terms() {
       <H>Plans and billing</H>
       <UL>
         <LI>Free: 5 successful videos per month, published with a watermark,
-          720p, up to 15 seconds. Creator ($9.99/month): 30 videos, 1080p
+          720p, up to 15 seconds. Creator ($19/month): 150 credits monthly, 1080p
           available, up to 30 seconds, watermark-free downloads.</LI>
         <LI>Only successful videos count against your allowance — failures and
           retries are free.</LI>

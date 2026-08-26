@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
 
     # Stripe (BR-15 Creator plan). When unset, /billing/upgrade acts as the
-    # dev mock. STRIPE_PRICE_CREATOR is the recurring $9.99/mo price id.
+    # dev mock. STRIPE_PRICE_CREATOR is the recurring monthly price id ($19 since 2026-08-26; earlier subs grandfathered at $9.99).
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PRICE_CREATOR: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
@@ -149,7 +149,7 @@ class Settings(BaseSettings):
 
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
-    CREATOR_PRICE: str = "$9.99/mo"
+    CREATOR_PRICE: str = "$19/mo"
 
     @property
     def admin_emails(self) -> set[str]:

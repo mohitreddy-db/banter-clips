@@ -48,7 +48,10 @@ log = logging.getLogger("banter.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin-console"])
 
-CREATOR_PRICE_USD = 9.99
+# $19 since 2026-08-26. Subs from before are grandfathered at $9.99, so MRR
+# slightly overstates until they churn; exact MRR lives in the Stripe
+# dashboard (linked from Revenue).
+CREATOR_PRICE_USD = 19.00
 PROCESSING_STATUSES = ("queued", *GENERATION_STAGES, "script_ready")
 PAGE_SIZE = 50
 

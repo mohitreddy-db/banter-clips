@@ -158,7 +158,7 @@ export function UpgradeModal({ onClose, reason }) {
           </div>
           {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
           <button className="grad-btn" style={{ padding: 14, fontSize: 15.5 }} onClick={doUpgrade}>
-            Upgrade to Creator — $9.99/mo
+            Upgrade to Creator — $19/mo
           </button>
           <button onClick={() => onClose(false)} style={{ background: "none", border: "none", color: "var(--app-muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Maybe later

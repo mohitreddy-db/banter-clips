@@ -132,7 +132,7 @@ export default function Account() {
         <div style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>PLAN & CREDITS</span>
           <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: isCreator ? "rgba(52,226,122,.14)" : "#161e30", color: isCreator ? "var(--app-green)" : "var(--app-muted)", border: "1px solid var(--app-border)" }}>
-            {isCreator ? "CREATOR · $9.99/mo" : "FREE"}
+            {isCreator ? "CREATOR" : "FREE"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
