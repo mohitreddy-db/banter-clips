@@ -151,6 +151,8 @@ export default function Pricing() {
           <a href="/privacy" style={{ color: "var(--app-muted)" }}>Privacy</a>
           {" · "}
           <a href="/terms" style={{ color: "var(--app-muted)" }}>Terms</a>
+          {" · "}
+          <a href="https://www.google.com/preferences/source?q=banterclips.com" target="_blank" rel="noopener" style={{ color: "var(--app-muted)" }}>★ Prefer us on Google</a>
         </div>
       </div>
     </div>
