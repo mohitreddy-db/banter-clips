@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -418,26 +419,133 @@ def brand(video: str | Path, out: str | Path, disclosure: str, watermark: str | 
     return Path(out)
 
 
-# The outro card: dark frame, "made with BanterClips" pops in with a short
-# rising chime, holding ~2s — the TikTok-outro pattern, with our own art and
-# a synthesized sound (nothing sampled from anyone else's jingle).
-END_CARD_SECONDS = float(os.environ.get("END_CARD_SECONDS", "1.8"))
-# Three-note ascending arpeggio (C5-G5-C6), each note struck then left to
-# ring with an exponential decay — reads as a friendly "ta-da-da" sting.
-_CHIME = (
-    "0.35*(sin(2*PI*523.25*t)*exp(-7*t)"
-    "+gte(t,0.16)*sin(2*PI*783.99*t)*exp(-7*(t-0.16))"
-    "+gte(t,0.34)*sin(2*PI*1046.5*t)*exp(-5.5*(t-0.34)))"
-)
+# The outro card: "made with <logo> BanterClips" over a short synthesized
+# sting, holding ~2s — the TikTok-outro pattern with our own art and sound.
+# One of four styles is picked at random per video so the ending never gets
+# stale; pin one with END_CARD_STYLE (also how a style is retired quickly).
+# The main video is never re-encoded: the "smooth transition" is a
+# freeze-frame dissolve baked into the card itself — its first beats
+# crossfade FROM the video's final frame — so the splice stays a stream copy.
+END_CARD_SECONDS = float(os.environ.get("END_CARD_SECONDS", "2.0"))
+END_CARD_XFADE = 0.4
+END_CARD_STYLES = ("navy", "gradient", "stamp", "light")
+_END_CARD_LOGO = Path(__file__).parent / "assets" / "logo.png"
+
+# Synthesized stings (aevalsrc expressions) — struck notes with exponential
+# decay, nothing sampled. Onsets sit just after the dissolve (t≈0.45) so the
+# sound lands with the text, not under the previous scene's tail.
+_STING = {
+    # rising three-note "ta-da-da" (C5-G5-C6)
+    "navy": ("0.35*(gte(t,0.45)*sin(2*PI*523.25*t)*exp(-7*(t-0.45))"
+             "+gte(t,0.61)*sin(2*PI*783.99*t)*exp(-7*(t-0.61))"
+             "+gte(t,0.79)*sin(2*PI*1046.5*t)*exp(-5.5*(t-0.79)))"),
+    # faster four-note sparkle (C5-E5-G5-C6)
+    "gradient": ("0.32*(gte(t,0.45)*sin(2*PI*523.25*t)*exp(-8*(t-0.45))"
+                 "+gte(t,0.57)*sin(2*PI*659.26*t)*exp(-8*(t-0.57))"
+                 "+gte(t,0.69)*sin(2*PI*783.99*t)*exp(-8*(t-0.69))"
+                 "+gte(t,0.81)*sin(2*PI*1046.5*t)*exp(-5*(t-0.81)))"),
+    # bass thud + tick when the lockup lands, softer settle hit after
+    "stamp": ("0.9*gte(t,0.70)*sin(2*PI*72*t)*exp(-9*(t-0.70))"
+              "+0.4*gte(t,0.70)*sin(2*PI*1400*t)*exp(-70*(t-0.70))"
+              "+gte(t,1.05)*(0.45*sin(2*PI*95*t)*exp(-11*(t-1.05))"
+              "+0.2*sin(2*PI*1800*t)*exp(-80*(t-1.05)))"),
+    # one soft marimba-ish ding with overtones
+    "light": ("0.30*gte(t,0.50)*(sin(2*PI*880*t)+0.35*sin(2*PI*1760*t)"
+              "+0.15*sin(2*PI*2640*t))*exp(-4.5*(t-0.50))"),
+}
 
 
-def end_card(video: str | Path, out: str | Path, work: Path) -> Path:
-    """Append the branded outro to a finished video.
+def _end_texts(s: float, font: str, made: str = "white", mark: str = "white",
+               site: str = "0x22D3EE", animate: bool = True) -> list[str]:
+    """The card's text lockup: "made with", wordmark, site line — the logo
+    mark is overlaid separately. Beats start after the dissolve (t≈0.4);
+    `animate=False` renders the settled layout (the stamp style's still)."""
+    a1 = ":alpha='0.75*min(1,max(0,(t-0.40)/0.30))'" if animate else ""
+    a2 = ":alpha='min(1,max(0,(t-0.45)/0.30))'" if animate else ""
+    a3 = ":alpha='min(1,max(0,(t-0.85)/0.30))'" if animate else ""
+    wordmark_y = (
+        f"'(h-text_h)/2-{round(20 * s)}"
+        f"+{round(70 * s)}*pow(1-min(1,max(0,(t-0.45)/0.35)),2)'" if animate
+        else f"(h-text_h)/2-{round(20 * s)}"
+    )
+    return [
+        f"drawtext=fontfile={font}:text=made with:fontcolor={made}"
+        f":fontsize={round(42 * s)}:x=(w-text_w)/2:y=(h-text_h)/2-{round(380 * s)}{a1}",
+        f"drawtext=fontfile={font}:text=BanterClips:fontcolor={mark}"
+        f":fontsize={round(104 * s)}:x=(w-text_w)/2:y={wordmark_y}{a2}",
+        f"drawtext=fontfile={font}:text=banterclips.com:fontcolor={site}"
+        f":fontsize={round(38 * s)}:x=(w-text_w)/2:y=(h-text_h)/2+{round(105 * s)}{a3}",
+    ]
 
-    The card is rendered at the video's own measured size and frame rate with
-    the same codec settings, so the join is a stream copy — no re-encode of
-    the paid content. Raises MediaError; callers treat the outro as cosmetic
-    (a job never fails because of it).
+
+def _card_video(style: str, width: int, height: int, fps: float, rate: int,
+                channels: int, d: float, work: Path) -> Path:
+    """One style's card, sized/paced to the target video, transition not yet
+    applied. Every style shares the lockup; they differ in world and sound."""
+    font = font_path()
+    s = width / 1080.0
+    logo_w = round(200 * s)
+    logo_y = height // 2 - round(310 * s)
+    out = work / f"end_card_{style}.mp4"
+    pan = "stereo|c0=c0|c1=c0" if channels == 2 else "mono|c0=c0"
+    audio = ["-f", "lavfi", "-i", f"aevalsrc='{_STING[style]}':s={rate}:d={d:.2f}"]
+    encode = [
+        "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-ar", str(rate), "-ac", str(channels),
+        "-t", f"{d:.2f}", str(out),
+    ]
+    afilter = ["-af", f"pan={pan},afade=t=out:st={d - 0.35:.2f}:d=0.35"]
+
+    if style == "stamp":
+        # The whole lockup (logo included) rendered once at 2x, then slammed
+        # in with zoompan: hold oversized through the dissolve, land, settle.
+        still = work / "end_card_stamp.png"
+        _run(["ffmpeg", "-v", "error", "-y",
+              "-f", "lavfi", "-i", f"color=c=0x05070D:s={width * 2}x{height * 2}",
+              "-loop", "1", "-i", str(_END_CARD_LOGO),
+              "-filter_complex",
+              (f"[0:v]{','.join(_end_texts(s * 2, font, animate=False))}[bg];"
+               f"[1:v]scale={logo_w * 2}:-1[lg];"
+               f"[bg][lg]overlay=(W-w)/2:{logo_y * 2}[outv]"),
+              "-map", "[outv]", "-frames:v", "1", str(still)], "end card still")
+        lead, slam = round(0.35 * fps), round(0.35 * fps)
+        zoom = f"'if(lte(on,{lead}),1.9,if(lte(on,{lead + slam}),1.9-0.9*(on-{lead})/{slam},1))'"
+        _run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(still), *audio,
+              "-vf", (f"zoompan=z={zoom}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                      f":d={int(d * fps)}:s={width}x{height}:fps={fps:g},setsar=1,format=yuv420p"),
+              *afilter, *encode], f"end card {style}")
+        return out
+
+    if style == "gradient":
+        bg = (f"gradients=s={width}x{height}:c0=0x3D2C8D:c1=0x0E7490"
+              f":speed=0.03:duration={d:.2f}:rate={fps:g}")
+        texts = _end_texts(s, font)
+    elif style == "light":
+        bg = f"color=c=0xF4F6FB:s={width}x{height}:r={fps:g}:d={d:.2f}"
+        texts = _end_texts(s, font, made="0x64748B", mark="0x0B1220", site="0x0891B2")
+    else:  # navy
+        bg = f"color=c=0x0A1020:s={width}x{height}:r={fps:g}:d={d:.2f}"
+        texts = _end_texts(s, font)
+    _run(["ffmpeg", "-v", "error", "-y",
+          "-f", "lavfi", "-i", bg,
+          "-loop", "1", "-i", str(_END_CARD_LOGO), *audio,
+          "-filter_complex",
+          (f"[0:v]{','.join(texts)}[bg];"
+           f"[1:v]scale={logo_w}:-1,fade=in:st=0.45:d=0.30:alpha=1[lg];"
+           f"[bg][lg]overlay=(W-w)/2:{logo_y}:shortest=1,setsar=1,format=yuv420p[outv]"),
+          "-map", "[outv]", "-map", "2:a", *afilter, *encode], f"end card {style}")
+    return out
+
+
+def end_card(video: str | Path, out: str | Path, work: Path,
+             style: str | None = None) -> Path:
+    """Append the branded outro to a finished video, in a per-video random
+    style, dissolving smoothly out of the video's last frame.
+
+    The card is rendered at the video's own measured size, frame rate and
+    audio spec with the same codec settings, so the join is a stream copy —
+    no re-encode of the paid content. Raises MediaError; callers treat the
+    outro as cosmetic (a job never fails because of it).
     """
     info = probe(video)
     width, height = int(info.get("width") or 0), int(info.get("height") or 0)
@@ -446,42 +554,38 @@ def end_card(video: str | Path, out: str | Path, work: Path) -> Path:
     # spliced to a 48k card plays the tail at the wrong clock (measured).
     rate = int(info.get("sample_rate") or 48000)
     channels = max(1, int(info.get("channels") or 2))
-    font = font_path()
-    if not (width and height and font):
+    if not (width and height and font_path()):
         raise MediaError("end card needs a readable frame and a font")
-    s = width / 1080.0
+    if not _END_CARD_LOGO.exists():
+        raise MediaError(f"logo asset missing: {_END_CARD_LOGO}")
+    style = (style or os.environ.get("END_CARD_STYLE", "")).strip().lower()
+    if style not in END_CARD_STYLES:
+        style = random.choice(END_CARD_STYLES)
+    work = Path(work)
     d = END_CARD_SECONDS
-    # Timing mirrors the reference outro: small line fades in, wordmark pops
-    # up and settles, site line arrives last. All beats in seconds from cut.
-    wordmark_y = (
-        f"(h-text_h)/2-{round(20 * s)}"
-        f"+{round(70 * s)}*pow(1-min(1,max(0,(t-0.15)/0.35)),2)"
-    )
-    filters = ",".join([
-        f"drawtext=fontfile={font}:text=made with:fontcolor=white"
-        f":fontsize={round(42 * s)}:x=(w-text_w)/2:y=(h-text_h)/2-{round(130 * s)}"
-        f":alpha='0.75*min(1,max(0,(t-0.10)/0.30))'",
-        f"drawtext=fontfile={font}:text=BanterClips:fontcolor=white"
-        f":fontsize={round(104 * s)}:x=(w-text_w)/2:y='{wordmark_y}'"
-        f":alpha='min(1,max(0,(t-0.15)/0.30))'",
-        f"drawtext=fontfile={font}:text=banterclips.com:fontcolor=0x22D3EE"
-        f":fontsize={round(38 * s)}:x=(w-text_w)/2:y=(h-text_h)/2+{round(105 * s)}"
-        f":alpha='min(1,max(0,(t-0.55)/0.30))'",
-        "setsar=1,format=yuv420p",
-    ])
-    card = Path(work) / "end_card.mp4"
-    _run([
-        "ffmpeg", "-v", "error", "-y",
-        "-f", "lavfi", "-i", f"color=c=0x0A1020:s={width}x{height}:r={fps:g}:d={d:.2f}",
-        "-f", "lavfi", "-i", f"aevalsrc='{_CHIME}':s={rate}:d={d:.2f}",
-        "-vf", filters,
-        "-af", (f"pan={'stereo|c0=c0|c1=c0' if channels == 2 else 'mono|c0=c0'},"
-                f"afade=t=out:st={d - 0.35:.2f}:d=0.35"),
-        "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k", "-ar", str(rate), "-ac", str(channels),
-        "-t", f"{d:.2f}", str(card),
-    ], "end_card")
-    listing = Path(work) / "end_card_concat.txt"
+
+    raw = _card_video(style, width, height, fps, rate, channels, d, work)
+    # The transition: the video's final frame crossfades into the card's
+    # opening. Re-encodes only the 2s card; the main video is untouched.
+    frozen = work / "end_card_frozen.png"
+    _run(["ffmpeg", "-v", "error", "-y", "-sseof", "-0.15", "-i", str(video),
+          "-frames:v", "1", "-update", "1", str(frozen)], "end card frame")
+    card = work / "end_card.mp4"
+    _run(["ffmpeg", "-v", "error", "-y",
+          "-loop", "1", "-t", f"{END_CARD_XFADE + 0.1:.2f}",
+          "-framerate", f"{fps:g}", "-i", str(frozen),
+          "-i", str(raw),
+          "-filter_complex",
+          (f"[0:v]scale={width}:{height},setsar=1,fps={fps:g},settb=AVTB[v0];"
+           f"[1:v]fps={fps:g},settb=AVTB[v1];"
+           f"[v0][v1]xfade=transition=fade:duration={END_CARD_XFADE:.2f}:offset=0,"
+           f"format=yuv420p[outv]"),
+          "-map", "[outv]", "-map", "1:a",
+          "-c:v", "libx264", "-preset", PRESET, "-crf", "20", "-pix_fmt", "yuv420p",
+          "-c:a", "aac", "-b:a", "192k", "-ar", str(rate), "-ac", str(channels),
+          "-t", f"{d:.2f}", str(card)], "end card dissolve")
+
+    listing = work / "end_card_concat.txt"
     listing.write_text(f"file '{Path(video).resolve()}'\nfile '{card.resolve()}'\n")
     _run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0",
           "-i", str(listing), "-c", "copy", "-movflags", "+faststart",
@@ -492,6 +596,7 @@ def end_card(video: str | Path, out: str | Path, work: Path) -> Path:
     got = probe(out).get("duration") or 0.0
     if abs(got - want) > 1.0:
         raise MediaError(f"spliced duration {got:.1f}s != expected {want:.1f}s")
+    log.info("end card: %s style spliced onto %s", style, video)
     return Path(out)
 
 
