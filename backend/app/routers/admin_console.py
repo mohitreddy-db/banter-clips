@@ -218,7 +218,23 @@ def overview(
         "top_takes": [{"take": t, "sport": s, "tone": tn, "publishes": p}
                       for t, s, tn, p in top_takes],
         "credits_enabled": True,
+        "credits": _credits_kpis(db),
     }
+
+
+def _credits_kpis(db: Session) -> dict:
+    """The dashboard's credits tile: outstanding balance + 30d consumption."""
+    from ..models import CreditEntry
+
+    month_ago = _now() - timedelta(days=30)
+    outstanding = int(db.scalar(select(func.coalesce(func.sum(User.credits), 0))) or 0)
+    consumed = -int(db.scalar(
+        select(func.coalesce(func.sum(CreditEntry.delta), 0)).where(
+            CreditEntry.kind.in_(("video_charge", "enhance_charge", "video_refund")),
+            CreditEntry.created_at >= month_ago,
+        )
+    ) or 0)
+    return {"outstanding": outstanding, "consumed_30d": consumed}
 
 
 # ------------------------------------------------------------------ users
