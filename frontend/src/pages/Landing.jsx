@@ -573,6 +573,20 @@ export default function Landing() {
             <span>© 2026 BanterClips · Every sports opinion deserves a viral video. · All videos are AI-generated parody.</span>
             <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Privacy</a>
             <a href="/terms" style={{ color: "var(--muted)", textDecoration: "none" }}>Terms</a>
+            {/* Google's Preferred Sources deeplink — the visitor confirms on
+                Google's side and our content gets a "preferred" badge in THEIR
+                results (Top Stories / AI Mode / AI Overviews). Per-user
+                personalization, not a ranking signal. The official JS button
+                (news.google.com/swg/js/v1/publisher.js) does the same in
+                place, but isn't worth a third-party script on every visit. */}
+            <a
+              href="https://www.google.com/preferences/source?q=banterclips.com"
+              target="_blank"
+              rel="noopener"
+              style={{ color: "var(--muted)", textDecoration: "none" }}
+            >
+              ★ Prefer us on Google
+            </a>
           </div>
         </div>
       </div>
