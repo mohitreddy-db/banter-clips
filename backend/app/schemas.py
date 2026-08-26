@@ -54,8 +54,13 @@ class PreferencesUpdate(BaseModel):
 class UsageOut(BaseModel):
     plan: Literal["free", "creator"]
     used: int
-    limit: int
+    # Video-count limits are gone (credits are the unit); kept nullable for
+    # stale clients, with `left` mapped onto the credit balance.
+    limit: int | None = None
     left: int
+    credits: int = 0
+    # The public price list: what actions cost, so the client quotes exactly.
+    prices: dict = {}
     can_download: bool
     watermarked: bool
 
