@@ -22,20 +22,25 @@ publish it to social without leaving the app.
 ```
 banter-clips/
 ├── frontend/    React SPA — Vercel          (own package.json + .env)
+├── mobile/      Flutter app — Play / App Store  (own pubspec + --dart-define)
 ├── backend/     FastAPI API — DO droplet    (own requirements.txt + .env)
 ├── deploy/      Droplet setup script, systemd unit, Caddyfile, runbook
 ├── infra/       ⚠ gitignored — prod details, creds, DNS, key inventory
 └── BRD.md       Business requirements — the product source of truth
 ```
 
-`frontend/` and `backend/` are independent projects: separate dependencies,
-separate `.env` files (each has a commented `.env.example`), separate deploys.
+`frontend/`, `mobile/` and `backend/` are independent projects: separate
+dependencies, separate configuration, separate deploys. The two clients talk
+to the same API and share the same accounts — see
+[`mobile/README.md`](mobile/README.md) for what the app ships and what it
+deliberately leaves to the website.
 
 ## Architecture
 
 | Piece | Local dev | Production |
 |---|---|---|
 | Frontend | Vite dev server :5173 | Vercel — www.banterclips.com (auto-deploys `main`) |
+| Mobile | `flutter run` on emulator/device | Play Store / App Store (gated by review) |
 | Backend | uvicorn :8000 | Droplet 168.144.149.99 — api.banterclips.com (Caddy TLS) |
 | App database | Postgres 16 in docker (`banterclips-postgres`, :5433) | Supabase Postgres |
 | Auth | Supabase Auth (same project) or offline dev magic-link | Supabase Auth |
