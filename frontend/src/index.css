@@ -1,0 +1,652 @@
+@import "tailwindcss";
+
+/* ---------- Landing theme (client's design — do not reinterpret) ---------- */
+:root {
+  --bg: #0b0d13;
+  --bg2: #12141d;
+  --bg3: #181b26;
+  --card: #141824;
+  --elev: #1c2130;
+  --border: #242a3a;
+  --border2: #333a4e;
+  --text: #f2f4fa;
+  --muted: #98a1b5;
+  --muted2: #6b7488;
+  --accent: oklch(0.66 0.19 253);
+  --accent2: oklch(0.8 0.16 152);
+  --accentSoft: oklch(0.66 0.19 253 / 0.16);
+  --greenSoft: oklch(0.8 0.16 152 / 0.16);
+  --grad: linear-gradient(120deg, oklch(0.66 0.19 253), oklch(0.8 0.16 152));
+  --display: "Space Grotesk", system-ui, sans-serif;
+
+  /* ---------- App theme (Figma) ---------- */
+  --app-bg: #0b0f1c;
+  --app-sidebar: #080c16;
+  --app-surface: #131a2b;
+  --app-panel: #0f1524;
+  --app-border: #232c40;
+  --app-cyan: #22d3ee;
+  --app-green: #34e27a;
+  --app-text: #f4f6fb;
+  --app-muted: #8b93a7;
+  --app-muted2: #4a5468;
+  --app-error: #f0546c;
+  --app-grad: linear-gradient(90deg, #22d3ee, #34e27a);
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+/* Mobile hygiene: no auto-inflated text after rotation, no grey flash on tap,
+   and no 300ms double-tap delay on anything tappable. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Manrope", system-ui, sans-serif;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a3143;
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+}
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+input:focus,
+textarea:focus {
+  outline: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Feature tiles: each one performs the feature it describes rather than
+   showing a glyph on a gradient. */
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.28); }
+  50%      { transform: scaleY(1); }
+}
+@keyframes wordPop {
+  0%, 12%  { opacity: 0; transform: translateY(7px) scale(0.9); }
+  22%, 88% { opacity: 1; transform: translateY(0) scale(1); }
+  100%     { opacity: 1; }
+}
+@keyframes sendUp {
+  0%, 18%  { transform: translateY(0); opacity: 1; }
+  55%      { transform: translateY(-46px); opacity: 0; }
+  56%, 100%{ transform: translateY(0); opacity: 0; }
+}
+@keyframes tickPop {
+  0%, 52%  { opacity: 0; transform: scale(0.5); }
+  66%, 92% { opacity: 1; transform: scale(1); }
+  100%     { opacity: 0; }
+}
+@keyframes slowZoom {
+  from { transform: scale(1); }
+  to   { transform: scale(1.12); }
+}
+
+/* "How it works": the take types itself, stages tick through, a clip appears.
+   The section demonstrates the product instead of describing it. */
+@keyframes caret {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+@keyframes tickIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes barFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Enhancement in progress: a light sweeps across the placeholder cards, so
+   waiting reads as the AI working rather than the page being stuck. */
+@keyframes shimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(34, 211, 238, 0.14) 45%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 420px 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.15s ease-in-out infinite;
+}
+/* The sparkle on the enhance button while it thinks. */
+@keyframes pulseGlow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.18);
+  }
+}
+
+/* The live status line: each new step slides up into place. */
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.28);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(6px);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes prog {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--border), 0 0 30px -8px var(--accentSoft);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--accent), 0 0 46px 0 var(--accentSoft);
+  }
+}
+
+/* Grid and flex items default to min-width:auto, so they refuse to shrink
+   below their own content. One unbreakable run — a stage line like "Casting
+   Victor Wembanyama", a row of chips that will not wrap — then forces the
+   whole track wider than its container, and that section bursts out of
+   alignment while everything around it stays put. min-width:0 lets them
+   shrink, and is the fix for almost every mystery grid blowout. */
+.feat-grid,
+.step-grid,
+.testi-grid,
+.stat-grid,
+.plan-grid {
+  min-width: 0;
+}
+.feat-grid > *,
+.step-grid > *,
+.testi-grid > *,
+.stat-grid > *,
+.plan-grid > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Landing responsive rules (from the client's page).
+   Headline and section-title sizes are fluid via inline clamp() in the JSX;
+   these rules handle structure — column counts, hidden chrome, nav swaps. */
+@media (max-width: 860px) {
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+    padding: 44px 20px 30px !important;
+  }
+  .land-nav-links {
+    display: none !important;
+  }
+  /* The sign-in area stays — a visitor on a phone still needs the CTA.
+     Only the "Sign in" text link goes; the button carries both jobs. */
+  .land-nav {
+    padding: 12px 16px !important;
+    gap: 12px !important;
+  }
+  .land-signin-label {
+    display: none !important;
+  }
+  .land-cta-btn {
+    padding: 10px 14px !important;
+    font-size: 13.5px !important;
+  }
+  .app-topbar h1 {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .feat-grid,
+  .plan-grid,
+  .step-grid,
+  .testi-grid {
+    grid-template-columns: 1fr !important;
+  }
+  /* A child still carrying `grid-column: span 2` inside a one-column grid
+     makes the grid grow an implicit second column, and the whole section
+     overflows the viewport. The Tone tile does exactly that, so .feat-grid
+     needs the same guard .step-grid already had. */
+  .step-grid > div,
+  .feat-grid > div,
+  .stat-grid > div {
+    grid-column: auto !important;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .ob-sports {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .app-shell {
+    grid-template-columns: 1fr !important;
+  }
+  .app-sidebar {
+    display: none !important;
+  }
+  .studio-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .result-grid {
+    grid-template-columns: 1fr !important;
+  }
+  /* One column means the 9:16 player would fill the whole width and tower
+     over the actions below it — cap it and center it instead. */
+  .result-player {
+    max-width: 290px;
+    margin: 0 auto;
+  }
+  .price-cards {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* App chrome: compact top bar + bottom tab bar replaces the sidebar. */
+  .app-topbar {
+    padding: 10px 14px !important;
+    gap: 10px !important;
+  }
+  .app-topbar h1 {
+    font-size: 17px !important;
+  }
+  .app-content {
+    /* Bottom padding clears the fixed tab bar (plus the home-indicator inset). */
+    padding: 14px 16px calc(92px + env(safe-area-inset-bottom)) !important;
+  }
+  .usage-long {
+    display: none !important;
+  }
+  .usage-short {
+    display: inline !important;
+  }
+  .usage-pill {
+    padding: 7px 12px !important;
+  }
+
+  /* The showcase strip scrolls by swipe on touch — the scrollbar is noise. */
+  .reel-strip {
+    scrollbar-width: none;
+  }
+  .reel-strip::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Mobile bottom navigation for the app shell. Hidden on desktop, where the
+   sidebar does this job. */
+.app-bottomnav {
+  display: none;
+}
+@media (max-width: 860px) {
+  .app-bottomnav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 50;
+    background: rgba(8, 12, 22, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--app-border);
+    padding: 6px max(10px, env(safe-area-inset-right))
+      calc(6px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+  .app-bottomnav a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 7px 0 5px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--app-muted);
+    text-decoration: none;
+  }
+  .app-bottomnav a.active {
+    color: var(--app-cyan);
+  }
+}
+.usage-short {
+  display: none;
+}
+
+/* The long CTA label gives way to a short one on narrow phones — at 320px
+   "Start Creating Free" pushes the nav button off the right edge. */
+.cta-label-short {
+  display: none;
+}
+@media (max-width: 420px) {
+  .cta-label-long {
+    display: none;
+  }
+  .cta-label-short {
+    display: inline;
+  }
+}
+
+/* Phone-width refinements. */
+@media (max-width: 480px) {
+  /* Hero CTAs stack full-width — two side-by-side buttons at 320px wrap
+     into a ragged pile anyway, so make the stack deliberate. */
+  .hero-cta {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .hero-cta > button {
+    justify-content: center;
+  }
+  .hero-trust {
+    gap: 8px 14px !important;
+    font-size: 12px !important;
+  }
+  /* The in-hero studio demo: shrink the phone preview column so the text
+     column keeps room to breathe, and scale its burned-in caption down to
+     match — 20px type inside a 118px phone overflows the frame. */
+  .demo-grid {
+    grid-template-columns: 1fr 118px !important;
+  }
+  .demo-caption {
+    font-size: 12px !important;
+  }
+  .demo-capwrap {
+    bottom: 48px !important;
+  }
+  .tone-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .auth-card {
+    padding: 26px 20px !important;
+  }
+  .modal-card {
+    padding: 20px 18px !important;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Onboarding plan tiles: two 160px columns at phone width is cramped enough
+   to clip feature lines — stack them before that happens. */
+@media (max-width: 640px) {
+  .ob-plans {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Modals must never be taller than the screen (the publish modal with three
+   caption suggestions is, on phones) — scroll inside the card instead. */
+.modal-card {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+/* App-side utility classes (Figma theme) */
+.app-font {
+  font-family: "Inter", system-ui, sans-serif;
+}
+.grad-btn {
+  background: var(--app-grad);
+  color: #06121a;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+.grad-btn:hover {
+  filter: brightness(1.08);
+}
+.grad-btn:active {
+  transform: scale(0.99);
+}
+.grad-btn:disabled {
+  background: #1a2234;
+  color: var(--app-muted2);
+  cursor: not-allowed;
+  filter: none;
+}
+.ghost-btn {
+  background: transparent;
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ghost-btn:hover {
+  border-color: var(--app-cyan);
+  background: rgba(34, 211, 238, 0.06);
+}
+.chip {
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--app-border);
+  background: #161e30;
+  color: var(--app-muted);
+  transition: all 0.15s;
+}
+.chip:hover {
+  border-color: var(--app-cyan);
+  color: var(--app-text);
+}
+.chip.on {
+  background: #12303d;
+  border-color: var(--app-cyan);
+  color: var(--app-text);
+  font-weight: 600;
+}
+.card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 20px;
+}
+.panel {
+  background: var(--app-panel);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+}
+
+/* Fullscreen playback letterboxes instead of cropping — cards use
+   object-fit: cover, which must not apply once the video goes fullscreen. */
+video:fullscreen {
+  object-fit: contain !important;
+  background: #000;
+}
+video:-webkit-full-screen {
+  object-fit: contain !important;
+  background: #000;
+}
+
+/* ── Admin catalog dialog ─────────────────────────────────────────────────
+   Desktop: a large centred dialog. Phones: a full-page sheet. */
+.admin-dialog {
+  width: 100%;
+  max-width: 920px;
+  max-height: 92dvh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+@media (min-width: 900px) {
+  .admin-dialog-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 26px;
+    align-items: start;
+  }
+}
+@media (max-width: 640px) {
+  .admin-dialog-overlay { padding: 0 !important; align-items: stretch !important; }
+  .admin-dialog {
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0 !important;
+  }
+}
+
+/* Admin console shell: sidebar collapses to a horizontal nav strip on
+   phones, same 860px breakpoint as the app shell. Visibility lives HERE
+   only — the components carry no inline display, so these rules always
+   apply. */
+.admin-console-mobilenav {
+  display: none;
+  scrollbar-width: none;
+}
+.admin-console-mobilenav::-webkit-scrollbar {
+  display: none;
+}
+@media (max-width: 860px) {
+  .admin-console-sidebar {
+    display: none;
+  }
+  .admin-console-mobilenav {
+    display: flex;
+  }
+  .admin-console-live,
+  .admin-console-backlink {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-two-col {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Public showcase clip page: player beside the copy on desktop, stacked on
+   phones (where a 340px 9:16 player would fill the viewport anyway). */
+@media (max-width: 760px) {
+  .showcase-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .showcase-grid video {
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}

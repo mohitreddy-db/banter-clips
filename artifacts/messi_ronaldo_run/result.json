@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "duration": 16.1,
+  "cost_usd": 2.41,
+  "warnings": [],
+  "plan_source": "llm",
+  "focus": {
+    "kind": "player",
+    "players": [
+      "messi",
+      "ronaldo"
+    ],
+    "teams": [
+      "inter-miami",
+      "al-nassr"
+    ]
+  },
+  "scenes": 2,
+  "delivered_scenes": 2,
+  "captions": 2
+}

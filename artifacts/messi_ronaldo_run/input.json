@@ -1,0 +1,18 @@
+{
+  "take": "Messi and Ronaldo have been arguing about the GOAT debate so long they both forgot how to retire.",
+  "sport": "Soccer",
+  "tone": "Funny",
+  "seconds": 15,
+  "scene_count": 2,
+  "focus": {
+    "kind": "player",
+    "players": [
+      "messi",
+      "ronaldo"
+    ],
+    "teams": [
+      "inter-miami",
+      "al-nassr"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+# www.banterclips.com
+#
+# Note on the signed-in app routes (/studio, /clips, /account, /onboarding):
+# they are deliberately NOT disallowed here. They serve
+# <meta name="robots" content="noindex"> instead — see src/lib/seo.js.
+# A Disallow rule would stop Google fetching those pages, and a noindex it
+# never fetches is a noindex it never honours, so anything already indexed
+# would be stranded. Once Search Console reports them dropped from the index,
+# they can be moved to Disallow lines to save crawl budget.
+
+User-agent: *
+Allow: /
+
+# Admin surface — no crawl, ever.
+Disallow: /admin
+
+# The auth callback carries no content worth indexing.
+Disallow: /reset-password
+
+# Do NOT add `Disallow: /assets/` here. It looks harmless — those are minified
+# bundles, not pages — but Googlebot obeys robots.txt for the subresources it
+# fetches while rendering, so blocking /assets/ blocks the JS and CSS this SPA
+# needs to render at all. It was blocked in the first version of this file and
+# Search Console's live test proved the cost: Google rendered only the static
+# #root fallback, unstyled, with none of the React app. Bundles are not indexed
+# as pages regardless, so there is nothing to gain by blocking them.
+
+Sitemap: https://www.banterclips.com/sitemap.xml

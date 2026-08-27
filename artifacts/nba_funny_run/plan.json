@@ -1,0 +1,53 @@
+{
+  "title": "Wemby Blocks Everything, But Not Losing Streaks",
+  "take": "Wemby swats every shot but can\u2019t stop the Spurs from losing every close fourth quarter on national TV.",
+  "sport": "NBA",
+  "tone": "Funny",
+  "disclosure": "AI-generated parody",
+  "style": "crisp broadcast lighting, neutral colour grade, deep clarity",
+  "focus": "player",
+  "team_ids": [
+    "spurs"
+  ],
+  "cast": [
+    {
+      "id": "wembanyama",
+      "name": "Victor Wembanyama",
+      "look": "an extremely tall, very slim 7-foot-4 French basketball player with very long limbs, short dark hair and sharp youthful features, towering over everyone around him",
+      "wardrobe": "a plain solid black or silver basketball jersey with no logos, no numbers, no lettering",
+      "voice": "calm, French-accented, understated"
+    },
+    {
+      "id": "coach_nba",
+      "name": "a weary head coach",
+      "look": "a tired middle-aged basketball head coach holding a clipboard, sleeves rolled up, thousand-yard stare",
+      "wardrobe": "a plain grey polo shirt and dark trousers with no lettering",
+      "voice": "flat, exhausted, deadpan"
+    }
+  ],
+  "scenes": [
+    {
+      "index": 0,
+      "beat": "hook",
+      "venue": "packed basketball arena at night, bright broadcast lighting, blurred crowd",
+      "action": "Wembanyama stands at the rim, casually swatting away a barrage of basketballs from unseen shooters. The air is full of rejected balls bouncing away in all directions. He looks unbothered as he blocks each one.",
+      "camera": "low-angle medium shot from just below the basket, emphasizing his towering height",
+      "speaker_id": "wembanyama",
+      "line": "Defense? Blocked it. Layup? Blocked it. Dunk? Blocked it! I block everything.",
+      "delivery": "comically matter-of-fact, barely breaking a sweat, a tiny grin",
+      "seconds": 7.5
+    },
+    {
+      "index": 1,
+      "beat": "payoff",
+      "venue": "dim locker room with black and silver stalls",
+      "action": "Coach sits slumped on a bench, surrounded by piles of basketballs rolling everywhere. In the background, a scoreboard-style clock (no numbers) stuck at '4th quarter' spins endlessly. Wembanyama stands in the doorway, still in uniform, arms crossed helplessly.",
+      "camera": "mid shot level with coach, showing Wemby looming in the background",
+      "speaker_id": "coach_nba",
+      "line": "He blocks every shot, but fourth quarters just block us from winning on national TV.",
+      "delivery": "exhausted, resigned, shrugs, massaging his forehead",
+      "seconds": 7.5
+    }
+  ],
+  "source": "llm"
+}

@@ -1,0 +1,60 @@
+[
+  {
+    "index": 0,
+    "keyframe_path": "../artifacts/messi_ronaldo_run/scene0_kf1.jpg",
+    "clip_path": "../artifacts/messi_ronaldo_run/scene0.mp4",
+    "transcript": "",
+    "review": {
+      "ok": true,
+      "hard": [],
+      "soft": [],
+      "raw": {
+        "readable_text": "NONE",
+        "has_text_defect": false,
+        "has_real_logo": false,
+        "subject_matches": true,
+        "is_single_frame": true,
+        "minor_defects": "NONE",
+        "severe_defects": "NONE",
+        "lower_quarter_clean": true
+      }
+    },
+    "attempts": 1,
+    "cost_usd": 1.18,
+    "notes": [],
+    "ok": true
+  },
+  {
+    "index": 1,
+    "keyframe_path": "../artifacts/messi_ronaldo_run/scene1_kf2.jpg",
+    "clip_path": "../artifacts/messi_ronaldo_run/scene1.mp4",
+    "transcript": "",
+    "review": {
+      "ok": false,
+      "hard": [
+        "text visible on kit or signage"
+      ],
+      "soft": [
+        "reviewer doubts the subject matches the brief"
+      ],
+      "raw": {
+        "readable_text": "NONE",
+        "has_text_defect": true,
+        "has_real_logo": false,
+        "subject_matches": false,
+        "is_single_frame": true,
+        "minor_defects": "NONE",
+        "severe_defects": "NONE",
+        "lower_quarter_clean": true
+      }
+    },
+    "attempts": 2,
+    "cost_usd": 1.23,
+    "notes": [
+      "attempt 1 rejected: text visible on kit or signage",
+      "attempt 2 rejected: text visible on kit or signage",
+      "keeping last keyframe despite review"
+    ],
+    "ok": true
+  }
+]

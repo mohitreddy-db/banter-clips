@@ -1,0 +1,12 @@
+# /etc/caddy/Caddyfile — reverse proxy with automatic HTTPS (Let's Encrypt).
+# Serves the API on both the primary domain and the legacy alias.
+
+api.banterclips.com, api.banterclips.goroutine.in {
+    reverse_proxy 127.0.0.1:8000
+    encode gzip
+
+    # Large-ish video responses from /media
+    request_body {
+        max_size 200MB
+    }
+}
