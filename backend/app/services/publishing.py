@@ -85,7 +85,9 @@ def _publish_tiktok(db, pub) -> None:
     if (init.get("error") or {}).get("code") not in (None, "ok") or "data" not in init:
         code = (init.get("error") or {}).get("code") or ""
         if "unaudited" in code:
-            return _fail(db, pub, "TikTok is still reviewing our app — posts are limited to private until the audit clears.")
+            # TikTok's rule while an app is unaudited/sandbox: the target
+            # ACCOUNT must be private, not just the post's privacy level.
+            return _fail(db, pub, "While our TikTok app is in review, TikTok only lets us post to private accounts. Switch your TikTok account to Private (Settings → Privacy → Private account) and retry — it's free.")
         msg = (init.get("error") or {}).get("message") or "TikTok rejected the upload request."
         return _fail(db, pub, msg)
     publish_id = init["data"]["publish_id"]
