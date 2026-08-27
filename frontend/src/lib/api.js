@@ -105,7 +105,9 @@ export const api = {
 
   // socials
   listSocials: () => request("/socials"),
-  igOauthUrl: (next) => request(`/socials/instagram/oauth-url?next=${encodeURIComponent(next || "/account")}`),
+  // Real OAuth consent URL for a platform (instagram | tiktok); 503 when
+  // that platform's app isn't configured server-side.
+  oauthUrl: (platform, next) => request(`/socials/${platform}/oauth-url?next=${encodeURIComponent(next || "/account")}`),
   connectSocial: (platform) => request("/socials/connect", { method: "POST", body: { platform } }),
   disconnectSocial: (platform) => request(`/socials/${platform}`, { method: "DELETE" }),
 

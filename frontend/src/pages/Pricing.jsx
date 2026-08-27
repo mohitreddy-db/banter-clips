@@ -15,7 +15,7 @@ import { useSeo } from "../lib/seo.js";
 
 const FREE = [
   [true, "60 welcome credits — your first video on us"],
-  [true, "One-click publish to Instagram"],
+  [true, "One-click publish to Instagram & TikTok"],
   [true, "Funny · Savage · Hype tones"],
   [true, "Free retries — failures never count"],
   [false, "720p HD only"],
@@ -140,7 +140,7 @@ export default function Pricing() {
           </h1>
           <div style={{ fontSize: 15.5, color: "var(--app-muted)", maxWidth: 560, margin: "0 auto", lineHeight: 1.55 }}>
             Turn a written sports take into a finished 9:16 AI video — voiceover, animated captions,
-            one-click publish to Instagram. Start free, no credit card.
+            one-click publish to Instagram & TikTok. Start free, no credit card.
           </div>
         </div>
         {cards}

@@ -832,7 +832,7 @@ export default function Studio() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <button className="grad-btn" style={{ padding: 15, fontSize: 16 }} onClick={() => setPublishOpen(true)}>
-                Publish to Instagram{watermarked ? " · free" : ""}
+                Publish to Instagram / TikTok{watermarked ? " · free" : ""}
               </button>
               {canDownload ? (
                 <button className="ghost-btn" style={{ padding: 14, fontSize: 15, color: "var(--app-text)" }} onClick={download}>

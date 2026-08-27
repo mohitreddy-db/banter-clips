@@ -16,7 +16,7 @@ export default function Account() {
   const nav = useNavigate();
   const {
     user, plan, credits, videoPrice, profile, signOut, cancelPlan, refreshUser,
-    refreshUsage, instagram, connected, connectSocial, disconnectSocial,
+    refreshUsage, instagram, tiktok, connected, connectSocial, disconnectSocial,
   } = useApp();
   const isCreator = plan === "creator";
   const [busy, setBusy] = useState(false);
@@ -25,13 +25,16 @@ export default function Account() {
   const [params, setParams] = useSearchParams();
   const [igNotice, setIgNotice] = useState(null);
 
-  // Result of the Instagram OAuth round-trip (?ig=connected|denied|error).
+  // Result of an OAuth round-trip (?ig=... for Instagram, ?tt=... for TikTok).
   useEffect(() => {
-    const ig = params.get("ig");
-    if (!ig) return;
-    if (ig === "connected") setIgNotice({ ok: true, text: `Instagram connected${params.get("handle") ? ` as @${params.get("handle")}` : ""}.` });
-    else setIgNotice({ ok: false, text: `Instagram connect ${ig === "denied" ? "was cancelled" : "failed"}${params.get("reason") ? ` — ${params.get("reason")}` : ""}.` });
-    setParams({}, { replace: true });
+    for (const [param, name, at] of [["ig", "Instagram", "@"], ["tt", "TikTok", ""]]) {
+      const result = params.get(param);
+      if (!result) continue;
+      if (result === "connected") setIgNotice({ ok: true, text: `${name} connected${params.get("handle") ? ` as ${at}${params.get("handle")}` : ""}.` });
+      else setIgNotice({ ok: false, text: `${name} connect ${result === "denied" ? "was cancelled" : "failed"}${params.get("reason") ? ` — ${params.get("reason")}` : ""}.` });
+      setParams({}, { replace: true });
+      return;
+    }
   }, [params, setParams]);
 
   // Return from a top-up Checkout (?topup=success|cancelled). Credits are
@@ -182,27 +185,32 @@ export default function Account() {
       {/* connected accounts */}
       <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>CONNECTED ACCOUNTS</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>
-              Instagram {connected ? `— ${instagram.handle}` : ""}
+        {[
+          { key: "instagram", name: "Instagram", account: instagram, bg: "linear-gradient(140deg,#7b2ff7,#f0546c)", blurb: "Connected · clips publish as Reels · explicit per-clip publishing only" },
+          { key: "tiktok", name: "TikTok", account: tiktok, bg: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", blurb: "Connected · clips post to your TikTok · explicit per-clip publishing only" },
+        ].map(({ key, name, account, bg, blurb }) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: bg, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>
+                {name} {account ? `— ${account.handle}` : ""}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
+                {account ? blurb : "Not connected"}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
-              {connected ? "Connected · clips publish as Reels · explicit per-clip publishing only" : "Not connected"}
-            </div>
+            {account ? (
+              <button className="ghost-btn" style={{ padding: "10px 18px", fontSize: 14, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => disconnectSocial(key))}>
+                Disconnect
+              </button>
+            ) : (
+              <button className="grad-btn" style={{ padding: "10px 20px", fontSize: 14, borderRadius: 10, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => connectSocial(key))}>
+                Connect
+              </button>
+            )}
           </div>
-          {connected ? (
-            <button className="ghost-btn" style={{ padding: "10px 18px", fontSize: 14, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => disconnectSocial("instagram"))}>
-              Disconnect
-            </button>
-          ) : (
-            <button className="grad-btn" style={{ padding: "10px 20px", fontSize: 14, borderRadius: 10, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => connectSocial("instagram"))}>
-              Connect
-            </button>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: "var(--app-muted2)" }}>One platform in beta — TikTok, YouTube and X arrive after launch.</div>
+        ))}
+        <div style={{ fontSize: 12, color: "var(--app-muted2)" }}>Two platforms in beta — YouTube and X arrive after launch.</div>
       </div>
 
       {/* preferences */}

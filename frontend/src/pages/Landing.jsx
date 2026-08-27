@@ -20,7 +20,7 @@ const features = [
   { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — real players, real kits.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
   { key: "voice",    title: "AI Voiceovers",       desc: "Characters speak their own lines, lip-synced, with crowd noise underneath.", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
   { key: "captions", title: "Animated Captions",   desc: "Burned in and timed to the dialogue, so it lands with the sound off.", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
-  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram the moment it renders. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
+  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram or TikTok the moment it renders. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
   { key: "tone",     title: "Tone Control",        desc: "Funny, savage, hype or bold — the tone changes the script and the lighting.", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
 ];
 

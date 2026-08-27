@@ -14,12 +14,12 @@ const ROLES = [
 ];
 const PLATFORMS = [
   { name: "Instagram", key: "instagram", sub: "Publishes as Reels · beta launch platform", connectable: true, tile: "linear-gradient(140deg,#7b2ff7,#f0546c)", glyph: "ig" },
-  { name: "TikTok", key: "tiktok", sub: "Direct post", connectable: false, tile: "#0f1524", glyph: "note" },
+  { name: "TikTok", key: "tiktok", sub: "Direct post · beta", connectable: true, tile: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", glyph: "note" },
   { name: "YouTube", key: "youtube", sub: "Shorts", connectable: false, tile: "#1a1114", glyph: "yt" },
   { name: "X", key: "x", sub: "Video post with caption", connectable: false, tile: "#0f1524", glyph: "x" },
 ];
 
-const FREE_FEATURES = ["5 videos a month", "One-click publish to Instagram", "Funny · Savage · Hype tones", "Watermark on every clip"];
+const FREE_FEATURES = ["5 videos a month", "One-click publish to Instagram & TikTok", "Funny · Savage · Hype tones", "Watermark on every clip"];
 const CREATOR_FEATURES = ["30 videos a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
@@ -80,15 +80,18 @@ export default function Onboarding() {
 
 function OnboardingFlow() {
   const nav = useNavigate();
-  const { profile, savePreferences, connected, connectSocial, plan, upgrade, startCheckout } = useApp();
+  const { profile, savePreferences, instagram, tiktok, connectSocial, plan, upgrade, startCheckout } = useApp();
+  const accounts = { instagram, tiktok };
   // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
   // resume at the connect step instead of restarting the flow.
   const [searchParams] = useSearchParams();
   const igReturn = searchParams.get("ig");
-  const [step, setStep] = useState(igReturn ? 4 : 1);
+  const ttReturn = searchParams.get("tt");
+  const oauthReturn = igReturn || ttReturn;
+  const [step, setStep] = useState(oauthReturn ? 4 : 1);
   const [igNotice] = useState(
-    igReturn && igReturn !== "connected"
-      ? `Instagram connect ${igReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
+    oauthReturn && oauthReturn !== "connected"
+      ? `${igReturn ? "Instagram" : "TikTok"} connect ${oauthReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
       : ""
   );
   const [sports, setSports] = useState(profile.sports || []);
@@ -156,10 +159,10 @@ function OnboardingFlow() {
     setInput("");
   };
 
-  const doConnect = async () => {
-    setConnecting(true);
+  const doConnect = async (platform) => {
+    setConnecting(platform);
     try {
-      await connectSocial("instagram");
+      await connectSocial(platform);
     } catch {
       /* surfaced by the button returning to Connect state */
     }
@@ -276,11 +279,11 @@ function OnboardingFlow() {
                   <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{p.sub}</div>
                 </div>
                 {p.connectable ? (
-                  connected ? (
+                  accounts[p.key] ? (
                     <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-green)" }}>● Connected</span>
                   ) : (
-                    <button className="grad-btn" style={{ padding: "9px 20px", fontSize: 14, borderRadius: 10, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
-                      {connecting ? "Connecting…" : "Connect"}
+                    <button className="grad-btn" style={{ padding: "9px 20px", fontSize: 14, borderRadius: 10, opacity: connecting ? 0.7 : 1 }} disabled={!!connecting} onClick={() => doConnect(p.key)}>
+                      {connecting === p.key ? "Connecting…" : "Connect"}
                     </button>
                   )
                 ) : (

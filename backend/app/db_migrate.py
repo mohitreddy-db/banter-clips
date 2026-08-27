@@ -37,6 +37,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "script_history", "jsonb"),
     ("users", "credits", "integer NOT NULL DEFAULT 0"),
     ("clips", "credits_charged", "integer NOT NULL DEFAULT 0"),
+    ("social_accounts", "refresh_token", "text"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied

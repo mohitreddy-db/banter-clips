@@ -228,11 +228,11 @@ export function AppProvider({ children }) {
 
   const connectSocial = useCallback(
     async (platform) => {
-      if (platform === "instagram") {
-        // Real Instagram Business Login when the Meta app is configured —
-        // the whole tab goes to Meta's consent screen and comes back.
+      if (platform === "instagram" || platform === "tiktok") {
+        // Real OAuth when the platform app is configured — the whole tab
+        // goes to the platform's consent screen and comes back.
         try {
-          const { url } = await api.igOauthUrl(window.location.pathname);
+          const { url } = await api.oauthUrl(platform, window.location.pathname);
           if (url) {
             window.location.href = url;
             return null;
@@ -275,6 +275,7 @@ export function AppProvider({ children }) {
 
   const onboarded = !!user?.preferences?.onboarding_completed;
   const instagram = socials.find((s) => s.platform === "instagram") || null;
+  const tiktok = socials.find((s) => s.platform === "tiktok") || null;
 
   const value = {
     booted,
@@ -312,6 +313,7 @@ export function AppProvider({ children }) {
     refreshUsage,
     socials,
     instagram,
+    tiktok,
     connected: !!instagram,
     connectSocial,
     disconnectSocial,

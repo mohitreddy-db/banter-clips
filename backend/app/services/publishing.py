@@ -1,11 +1,13 @@
 """Publish worker (BR-13).
 
 Two paths, chosen per connected account:
-- Real: the account came from the Instagram Business Login OAuth flow →
-  publish an actual Reel via the Instagram Graph API (create media container
-  from a public video URL → poll processing → publish → fetch permalink).
+- Real: the account came from a platform OAuth flow → publish for real.
+  Instagram: create a Reel container from a public video URL (Meta pulls),
+  poll processing, publish, fetch the permalink. TikTok: Direct Post via
+  FILE_UPLOAD (we push the bytes, optionally through the US proxy), then
+  poll until TikTok finishes processing.
 - Mock: the account was created by the dev mock connector → simulate the
-  same honest status machine without touching Instagram.
+  same honest status machine without touching the platform.
 """
 
 import threading
@@ -18,6 +20,7 @@ import httpx
 from ..config import settings
 from ..db import SessionLocal
 from ..models import Publish
+from . import tiktok
 
 FAIL_MARKER = "[fail]"
 MOCK_TOKEN = "mock-oauth-token"
@@ -56,6 +59,63 @@ def _fail(db, pub, message: str) -> None:
     pub.status = "failed"
     pub.error = message
     db.commit()
+
+
+def _publish_tiktok(db, pub) -> None:
+    account = pub.account
+    token = account.access_token
+
+    # 1. TikTok requires asking what the creator may post right now.
+    info = tiktok.creator_info(token)
+    if (info.get("error") or {}).get("code") not in (None, "ok"):
+        msg = (info.get("error") or {}).get("message") or "TikTok rejected the publish request."
+        return _fail(db, pub, msg)
+    options = (info.get("data") or {}).get("privacy_level_options") or []
+    privacy = tiktok.pick_privacy(options)
+
+    # 2. Fetch the finished clip's bytes — we push them, TikTok never needs
+    # to reach our storage, so this works from local dev too.
+    try:
+        video = httpx.get(_public_video_url(pub.clip), timeout=120).content
+    except httpx.HTTPError:
+        return _fail(db, pub, "Could not read the finished video from storage. Retrying is free.")
+
+    # 3. Init the Direct Post, upload, then poll processing.
+    init = tiktok.post_init(token, caption=pub.caption or "", privacy=privacy, video_size=len(video))
+    if (init.get("error") or {}).get("code") not in (None, "ok") or "data" not in init:
+        code = (init.get("error") or {}).get("code") or ""
+        if "unaudited" in code:
+            return _fail(db, pub, "TikTok is still reviewing our app — posts are limited to private until the audit clears.")
+        msg = (init.get("error") or {}).get("message") or "TikTok rejected the upload request."
+        return _fail(db, pub, msg)
+    publish_id = init["data"]["publish_id"]
+
+    try:
+        tiktok.upload_video(init["data"]["upload_url"], video)
+    except httpx.HTTPError:
+        return _fail(db, pub, "The upload to TikTok failed partway. Retrying is free.")
+
+    for _ in range(60):
+        time.sleep(3)
+        body = tiktok.post_status(token, publish_id)
+        status = (body.get("data") or {}).get("status")
+        if status == "PUBLISH_COMPLETE":
+            post_ids = (body.get("data") or {}).get("publicaly_available_post_id") or []
+            pub.status = "published"
+            pub.error = None
+            pub.published_at = datetime.now(timezone.utc)
+            # Public posts get a canonical link (TikTok redirects on the video
+            # id, whatever the @segment). Private/sandbox posts have no public
+            # URL — the video sits on the creator's own profile.
+            pub.external_url = (
+                f"https://www.tiktok.com/@_/video/{post_ids[0]}" if post_ids else None
+            )
+            db.commit()
+            return
+        if status == "FAILED":
+            reason = (body.get("data") or {}).get("fail_reason") or "TikTok could not process the video."
+            return _fail(db, pub, f"{reason} Retrying is free.")
+    return _fail(db, pub, "TikTok is taking too long to process the video. Retry in a minute.")
 
 
 def _real_publish(db, pub) -> None:
@@ -142,7 +202,11 @@ def _mock_publish(db, pub) -> None:
     pub.status = "published"
     pub.error = None
     pub.published_at = datetime.now(timezone.utc)
-    pub.external_url = f"https://www.instagram.com/reel/BC{str(pub.id)[:8]}/"
+    pub.external_url = (
+        f"https://www.tiktok.com/@banterclips/video/72{str(pub.id.int)[:14]}"
+        if pub.account and pub.account.platform == "tiktok"
+        else f"https://www.instagram.com/reel/BC{str(pub.id)[:8]}/"
+    )
     db.commit()
 
 
@@ -153,25 +217,27 @@ def _run_publish(publish_id: uuid.UUID) -> None:
         if pub is None:
             return
         account = pub.account
+        platform = account.platform if account else "instagram"
         real = bool(account and account.access_token and account.access_token != MOCK_TOKEN and account.platform_user_id)
         # Meta downloads the video from our public URL — with a localhost
-        # API_BASE_URL that's unreachable, so real publishing can't work.
+        # API_BASE_URL that's unreachable, so real IG publishing can't work.
         # Local dev simulates instead (even for genuinely connected accounts).
-        if real and settings.API_BASE_URL.startswith("http://localhost"):
+        # TikTok pushes the bytes itself, so it stays real everywhere.
+        if real and platform == "instagram" and settings.API_BASE_URL.startswith("http://localhost"):
             real = False
         if real:
-            # Roll the 60-day token if it's near expiry before using it.
+            # Roll the token if it's near expiry before using it.
             from ..routers.socials import maybe_refresh_token
 
             maybe_refresh_token(db, account)
             if account.status != "connected":
-                return _fail(db, pub, "Your Instagram session expired — reconnect the account and retry (it's free).")
+                return _fail(db, pub, f"Your {platform.title()} session expired — reconnect the account and retry (it's free).")
             pub.status = "uploading"
             db.commit()
             try:
-                _real_publish(db, pub)
+                _publish_tiktok(db, pub) if platform == "tiktok" else _real_publish(db, pub)
             except httpx.HTTPError:
-                _fail(db, pub, "Could not reach Instagram. Check your connection and retry — it's free.")
+                _fail(db, pub, f"Could not reach {platform.title()}. Check your connection and retry — it's free.")
         else:
             _mock_publish(db, pub)
     finally:

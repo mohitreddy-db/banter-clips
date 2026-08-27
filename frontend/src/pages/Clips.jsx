@@ -189,7 +189,7 @@ export default function Clips() {
                   {c.status === "ready" && pubInFlight && (
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
-                      publishing to Instagram…
+                      publishing to {latestPub?.platform === "tiktok" ? "TikTok" : "Instagram"}…
                     </span>
                   )}
                   {c.status === "ready" && !pubInFlight && published && (

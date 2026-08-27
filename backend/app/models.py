@@ -243,7 +243,10 @@ class SocialAccount(Base):
     handle: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="connected")
     access_token: Mapped[str | None] = mapped_column(Text)
-    # The platform-side user id (Instagram professional account id).
+    # TikTok only: its access tokens last 24h and roll via this year-long
+    # refresh token. Instagram's long-lived token refreshes itself, so NULL.
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    # The platform-side user id (IG professional account id / TikTok open_id).
     platform_user_id: Mapped[str | None] = mapped_column(Text)
     # When the long-lived token expires; refreshed automatically near expiry.
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

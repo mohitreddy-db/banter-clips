@@ -37,6 +37,28 @@ class Settings(BaseSettings):
     # Where the OAuth callback sends the browser afterwards.
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # TikTok Login Kit + Content Posting API (BR-13). When unset,
+    # /socials/connect falls back to the mock connector, same as Instagram.
+    TIKTOK_CLIENT_KEY: str = ""
+    TIKTOK_CLIENT_SECRET: str = ""
+    # Must exactly match a redirect URI registered in the TikTok app
+    # (https only — use a tunnel for local dev, like IG_REDIRECT_URI).
+    TIKTOK_REDIRECT_URI: str = ""
+    # Scopes requested at authorize time. Every scope listed here must be
+    # enabled on the TikTok app or the consent screen errors out, so trim
+    # via env rather than code if the portal config differs.
+    TIKTOK_SCOPES: str = "user.info.basic,video.publish,video.upload"
+    # Optional HTTP forward proxy for ALL TikTok API traffic (authorize URL
+    # excluded — that's the user's browser). TikTok is ISP-blocked in India
+    # and geo-sensitive about request origin, so TikTok calls can ride a US
+    # box (tinyproxy on the NYC droplet) regardless of where this backend
+    # runs: http://user:pass@161.35.124.197:8899. Empty = direct.
+    TIKTOK_PROXY_URL: str = ""
+    # Unaudited/sandbox TikTok apps may only post SELF_ONLY (private, visible
+    # to the author). Flip to False once the app passes TikTok's audit and
+    # public posting is allowed.
+    TIKTOK_UNAUDITED: bool = True
+
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
     # Where generated artifacts live. "local" writes under MEDIA_DIR and

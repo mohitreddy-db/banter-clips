@@ -190,11 +190,19 @@ export function UpgradeModal({ onClose, reason }) {
 
 export function PublishModal({ clip, onClose }) {
   const nav = useNavigate();
-  const { instagram, connected, connectSocial, watermarked, refreshClips } = useApp();
+  const { instagram, tiktok, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
   const [state, setState] = useState("compose"); // compose | queued
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState("");
+  // Where this clip goes. Defaults to the first connected platform.
+  const [platform, setPlatform] = useState(instagram ? "instagram" : tiktok ? "tiktok" : "instagram");
+  const PLATFORMS = [
+    { key: "instagram", name: "Instagram", account: instagram, bg: "linear-gradient(140deg,#7b2ff7,#f0546c)", how: "publishes as a Reel" },
+    { key: "tiktok", name: "TikTok", account: tiktok, bg: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", how: "posts to your TikTok" },
+  ];
+  const selected = PLATFORMS.find((p) => p.key === platform);
+  const connected = !!selected.account;
   // Written captions to pick between. Three options beat a blank box, and
   // beat one suggestion — a list gets chosen from, a single one gets ignored.
   const [suggestions, setSuggestions] = useState([]);
@@ -236,7 +244,7 @@ export function PublishModal({ clip, onClose }) {
     setConnecting(true);
     setError("");
     try {
-      await connectSocial("instagram");
+      await connectSocial(platform);
     } catch (e) {
       setError(e.message);
     }
@@ -245,10 +253,10 @@ export function PublishModal({ clip, onClose }) {
 
   // Fire-and-forget: the upload runs server-side; My Clips shows live status.
   const publish = async () => {
-    if (!instagram) return;
+    if (!selected.account) return;
     setError("");
     try {
-      await api.publishClip(clip.id, instagram.id, caption);
+      await api.publishClip(clip.id, selected.account.id, caption);
       refreshClips();
       setState("queued");
     } catch (e) {
@@ -260,23 +268,48 @@ export function PublishModal({ clip, onClose }) {
     <Overlay onClose={() => state !== "publishing" && onClose()}>
       {state === "compose" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publish to Instagram</div>
-          <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-            <div style={{ width: 30, height: 30, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)" }} />
-            {connected ? (
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Instagram · {instagram.handle}</div>
-                <div style={{ fontSize: 11.5, color: "var(--app-green)" }}>● Connected — publishes as a Reel</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect Instagram to publish</div>
-                <button className="grad-btn" style={{ padding: "8px 16px", fontSize: 13, borderRadius: 9, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
-                  {connecting ? "Connecting…" : "Connect"}
-                </button>
-              </>
-            )}
+          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publish clip</div>
+          {/* platform picker — two big tap targets, wraps on narrow screens */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {PLATFORMS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => { setPlatform(p.key); setError(""); }}
+                style={{
+                  flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 10,
+                  padding: "12px 14px", borderRadius: 12, cursor: "pointer", textAlign: "left",
+                  background: platform === p.key ? "rgba(34,211,238,.10)" : "var(--app-panel)",
+                  border: `1.5px solid ${platform === p.key ? "var(--app-cyan)" : "var(--app-border)"}`,
+                }}
+              >
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: p.bg, flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: p.account ? "var(--app-green)" : "var(--app-muted2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {p.account ? `● ${p.account.handle}` : "Not connected"}
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
+          {connected ? (
+            <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: selected.bg }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>{selected.name} · {selected.account.handle}</div>
+                <div style={{ fontSize: 11.5, color: "var(--app-green)" }}>● Connected — {selected.how}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: selected.bg }} />
+              <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect {selected.name} to publish</div>
+              <button className="grad-btn" style={{ padding: "8px 16px", fontSize: 13, borderRadius: 9, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
+                {connecting ? "Connecting…" : "Connect"}
+              </button>
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" }}>CAPTION</label>
             <textarea
@@ -325,12 +358,17 @@ export function PublishModal({ clip, onClose }) {
           </div>
           {watermarked && (
             <div style={{ fontSize: 12.5, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>
-              ℹ️ Free plan: your Reel is published <b style={{ color: "var(--app-text)" }}>with the BanterClips watermark</b>. Upgrade to Creator to publish clean.
+              ℹ️ Free plan: your clip is published <b style={{ color: "var(--app-text)" }}>with the BanterClips watermark</b>. Upgrade to Creator to publish clean.
+            </div>
+          )}
+          {platform === "tiktok" && (
+            <div style={{ fontSize: 12.5, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>
+              ℹ️ While BanterClips is under TikTok's app review, TikTok posts are published as <b style={{ color: "var(--app-text)" }}>private</b> (visible only to you).
             </div>
           )}
           {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
           <button className="grad-btn" style={{ padding: 14, fontSize: 15.5 }} disabled={!connected} onClick={publish}>
-            {connected ? "Publish now" : "Connect Instagram first"}
+            {connected ? "Publish now" : `Connect ${selected.name} first`}
           </button>
         </div>
       )}
@@ -339,7 +377,7 @@ export function PublishModal({ clip, onClose }) {
           <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(34,211,238,.12)", display: "grid", placeItems: "center", fontSize: 26 }}>🚀</div>
           <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publishing in the background</div>
           <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>
-            Your Reel is uploading to Instagram{watermarked ? " (with watermark)" : ""}. Track live status in
+            Your clip is uploading to {selected.name}{watermarked ? " (with watermark)" : ""}. Track live status in
             <b style={{ color: "var(--app-text)" }}> My Clips</b> — you can keep creating meanwhile.
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
