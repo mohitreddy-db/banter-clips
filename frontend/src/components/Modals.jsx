@@ -2,6 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
+import { SocialIcon } from "./SocialIcon.jsx";
+
+// How a publish attempt reads in the UI, per status.
+const PUBLISH_STATE = {
+  published: { text: "✓ Published", color: "var(--app-green)" },
+  queued: { text: "Publishing…", color: "var(--app-cyan)" },
+  uploading: { text: "Publishing…", color: "var(--app-cyan)" },
+  failed: { text: "Failed — try again, it's free", color: "var(--app-error)" },
+};
 
 function Overlay({ children, onClose }) {
   return (
@@ -192,17 +201,39 @@ export function PublishModal({ clip, onClose }) {
   const nav = useNavigate();
   const { instagram, tiktok, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
-  const [state, setState] = useState("compose"); // compose | queued
   const [connecting, setConnecting] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   // Where this clip goes. Defaults to the first connected platform.
   const [platform, setPlatform] = useState(instagram ? "instagram" : tiktok ? "tiktok" : "instagram");
   const PLATFORMS = [
-    { key: "instagram", name: "Instagram", account: instagram, bg: "linear-gradient(140deg,#7b2ff7,#f0546c)", how: "publishes as a Reel" },
-    { key: "tiktok", name: "TikTok", account: tiktok, bg: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", how: "posts to your TikTok" },
+    { key: "instagram", name: "Instagram", account: instagram, how: "publishes as a Reel" },
+    { key: "tiktok", name: "TikTok", account: tiktok, how: "posts to your TikTok" },
   ];
   const selected = PLATFORMS.find((p) => p.key === platform);
   const connected = !!selected.account;
+
+  // Live publish state for THIS clip. The dialog stays open after publishing:
+  // it shows where the clip has landed, links to each live post, and lets the
+  // user send it to the other platform (or the same one again) without
+  // reopening anything. Publishing is async, so poll while any attempt runs.
+  const [publishes, setPublishes] = useState(clip.publishes || []);
+  const latestFor = (key) => publishes.find((p) => p.platform === key) || null;
+  const anyInFlight = publishes.some((p) => ["queued", "uploading"].includes(p.status));
+
+  useEffect(() => {
+    if (!anyInFlight) return;
+    const timer = setInterval(async () => {
+      try {
+        const fresh = await api.getClip(clip.id);
+        setPublishes(fresh.publishes || []);
+        refreshClips();
+      } catch {
+        /* keep the last known status; the poll retries */
+      }
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [anyInFlight, clip.id, refreshClips]);
   // Written captions to pick between. Three options beat a blank box, and
   // beat one suggestion — a list gets chosen from, a single one gets ignored.
   const [suggestions, setSuggestions] = useState([]);
@@ -251,22 +282,32 @@ export function PublishModal({ clip, onClose }) {
     setConnecting(false);
   };
 
-  // Fire-and-forget: the upload runs server-side; My Clips shows live status.
+  // The upload runs server-side; the status panel below follows it live, so
+  // the dialog stays open and the user can send the clip to the other
+  // platform (or re-post it) without reopening anything.
   const publish = async () => {
     if (!selected.account) return;
     setError("");
+    setSending(true);
     try {
-      await api.publishClip(clip.id, selected.account.id, caption);
+      const pub = await api.publishClip(clip.id, selected.account.id, caption);
+      // Show it in flight at once; the poll above takes over from here.
+      setPublishes((list) => [
+        { ...pub, platform: selected.key, handle: selected.account.handle },
+        ...list.filter((p) => p.platform !== selected.key),
+      ]);
       refreshClips();
-      setState("queued");
     } catch (e) {
       setError(e.message);
     }
+    setSending(false);
   };
 
+  const attempted = PLATFORMS.filter((p) => latestFor(p.key));
+  const selectedPub = latestFor(platform);
+
   return (
-    <Overlay onClose={() => state !== "publishing" && onClose()}>
-      {state === "compose" && (
+    <Overlay onClose={onClose}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publish clip</div>
           {/* platform picker — two big tap targets, wraps on narrow screens */}
@@ -283,27 +324,65 @@ export function PublishModal({ clip, onClose }) {
                   border: `1.5px solid ${platform === p.key ? "var(--app-cyan)" : "var(--app-border)"}`,
                 }}
               >
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: p.bg, flexShrink: 0 }} />
+                <SocialIcon platform={p.key} size={28} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: p.account ? "var(--app-green)" : "var(--app-muted2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {p.account ? `● ${p.account.handle}` : "Not connected"}
-                  </div>
+                  {(() => {
+                    const s = PUBLISH_STATE[latestFor(p.key)?.status];
+                    const color = s ? s.color : p.account ? "var(--app-green)" : "var(--app-muted2)";
+                    const text = s ? s.text : p.account ? `● ${p.account.handle}` : "Not connected";
+                    return (
+                      <div style={{ fontSize: 11, color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {text}
+                      </div>
+                    );
+                  })()}
                 </div>
               </button>
             ))}
           </div>
+          {/* Where this clip has already been — both platforms, live, with a
+              link straight to each post. */}
+          {attempted.length > 0 && (
+            <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 14px" }}>
+              {attempted.map((p) => {
+                const pub = latestFor(p.key);
+                const s = PUBLISH_STATE[pub.status] || { text: pub.status, color: "var(--app-muted)" };
+                return (
+                  <div key={p.key} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <SocialIcon platform={p.key} size={22} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--app-text)" }}>
+                        {p.name}{pub.handle ? ` · ${pub.handle}` : ""}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: s.color, display: "flex", alignItems: "center", gap: 6 }}>
+                        {["queued", "uploading"].includes(pub.status) && (
+                          <span style={{ width: 9, height: 9, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
+                        )}
+                        {s.text}
+                      </div>
+                    </div>
+                    {pub.status === "published" && pub.external_url && (
+                      <a href={pub.external_url} target="_blank" rel="noreferrer"
+                         style={{ fontSize: 12.5, fontWeight: 700, color: "var(--app-cyan)", textDecoration: "none", whiteSpace: "nowrap" }}>
+                        View post ↗
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {/* The picker above already names the destination and its handle,
+              so a connected platform only needs the one-line "what happens".
+              Not connected is the one case that still needs a panel + CTA. */}
           {connected ? (
-            <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: selected.bg }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>{selected.name} · {selected.account.handle}</div>
-                <div style={{ fontSize: 11.5, color: "var(--app-green)" }}>● Connected — {selected.how}</div>
-              </div>
+            <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -6 }}>
+              Publishing to <b style={{ color: "var(--app-text)" }}>{selected.account.handle}</b> — {selected.how}.
             </div>
           ) : (
             <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              <div style={{ width: 30, height: 30, borderRadius: "50%", background: selected.bg }} />
+              <SocialIcon platform={selected.key} size={30} />
               <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect {selected.name} to publish</div>
               <button className="grad-btn" style={{ padding: "8px 16px", fontSize: 13, borderRadius: 9, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
                 {connecting ? "Connecting…" : "Connect"}
@@ -367,29 +446,33 @@ export function PublishModal({ clip, onClose }) {
             </div>
           )}
           {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
-          <button className="grad-btn" style={{ padding: 14, fontSize: 15.5 }} disabled={!connected} onClick={publish}>
-            {connected ? "Publish now" : `Connect ${selected.name} first`}
+          {/* Publishing again is never blocked: a clip can go to both
+              platforms, and a post the user deleted is worth re-posting. */}
+          <button
+            className="grad-btn"
+            style={{ padding: 14, fontSize: 15.5, opacity: sending ? 0.7 : 1 }}
+            disabled={!connected || sending}
+            onClick={publish}
+          >
+            {!connected
+              ? `Connect ${selected.name} first`
+              : sending
+                ? "Sending…"
+                : selectedPub?.status === "published"
+                  ? `Publish to ${selected.name} again`
+                  : ["queued", "uploading"].includes(selectedPub?.status)
+                    ? `Publishing to ${selected.name}…`
+                    : `Publish to ${selected.name}`}
           </button>
-        </div>
-      )}
-      {state === "queued" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "12px 0", textAlign: "center" }}>
-          <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(34,211,238,.12)", display: "grid", placeItems: "center", fontSize: 26 }}>🚀</div>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publishing in the background</div>
-          <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>
-            Your clip is uploading to {selected.name}{watermarked ? " (with watermark)" : ""}. Track live status in
-            <b style={{ color: "var(--app-text)" }}> My Clips</b> — you can keep creating meanwhile.
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-            <button className="ghost-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => onClose()}>
+          <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--app-muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               Done
             </button>
-            <button className="grad-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => { onClose(); nav("/clips"); }}>
+            <button onClick={() => { onClose(); nav("/clips"); }} style={{ background: "none", border: "none", color: "var(--app-cyan)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               Track in My Clips →
             </button>
           </div>
         </div>
-      )}
     </Overlay>
   );
 }

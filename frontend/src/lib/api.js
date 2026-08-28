@@ -177,7 +177,13 @@ export const api = {
 };
 
 // Downloads need the Authorization header, so fetch as a blob.
-export async function downloadClip(clip) {
+export async function downloadClip(clip, onProgress) {
+  // A clip is 5-20 MB, so on a phone the gap between tapping Download and the
+  // browser's own download prompt is long enough to read as a dead button.
+  // The body is streamed rather than awaited as one blob so `onProgress` can
+  // report real bytes ({received, total, pct}); pct is null when the server
+  // sent no content-length, and callers show an indeterminate bar.
+  onProgress?.({ received: 0, total: 0, pct: 0 });
   const res = await fetch(`${BASE}/clips/${clip.id}/download`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
@@ -190,7 +196,28 @@ export async function downloadClip(clip) {
       (typeof detail === "object" ? detail?.message : detail) || "Download failed"
     );
   }
-  const blob = await res.blob();
+  const total = Number(res.headers.get("content-length")) || 0;
+  let blob;
+  if (res.body?.getReader) {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress?.({
+        received,
+        total,
+        pct: total ? Math.min(99, Math.round((received / total) * 100)) : null,
+      });
+    }
+    blob = new Blob(chunks, { type: res.headers.get("content-type") || "video/mp4" });
+  } else {
+    blob = await res.blob();   // no streaming support: still downloads fine
+  }
+  onProgress?.({ received: blob.size, total: blob.size, pct: 100 });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

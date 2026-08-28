@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
-import { api, downloadClip } from "../lib/api.js";
+import { api } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import DownloadButton from "../components/DownloadButton.jsx";
+import { PublishedTo, SocialIcon } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
 const STATUS_LABEL = {
@@ -52,15 +54,6 @@ export default function Clips() {
     return () => clearInterval(t);
   }, [generating, publishing, refreshClips]);
 
-  const download = async (clip) => {
-    try {
-      await downloadClip(clip);
-    } catch (e) {
-      if (e.status === 403) setUpgradeOpen(true);
-      else setError(e.message);
-    }
-  };
-
   const retry = async (clip) => {
     try {
       await api.retryClip(clip.id);
@@ -101,7 +94,6 @@ export default function Clips() {
         {clips.map((c) => {
           const latestPub = c.publishes?.[0];
           const published = c.publishes?.some((p) => p.status === "published");
-          const publishedPub = c.publishes?.find((p) => p.status === "published");
           const pubInFlight = ["queued", "uploading"].includes(latestPub?.status);
           const pubFailed = latestPub?.status === "failed";
           const inFlight = c.status !== "ready" && c.status !== "failed";
@@ -189,17 +181,14 @@ export default function Clips() {
                   {c.status === "ready" && pubInFlight && (
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
-                      publishing to {latestPub?.platform === "tiktok" ? "TikTok" : "Instagram"}…
+                      publishing to
+                      <SocialIcon platform={latestPub?.platform} size={13} />…
                     </span>
                   )}
+                  {/* Where it landed, as the platforms' own logos — each one
+                      links straight to the live post. */}
                   {c.status === "ready" && !pubInFlight && published && (
-                    publishedPub?.external_url ? (
-                      <a href={publishedPub.external_url} target="_blank" rel="noreferrer" style={{ color: "var(--app-green)", fontWeight: 600, textDecoration: "none" }}>
-                        · published — view post ↗
-                      </a>
-                    ) : (
-                      <span style={{ color: "var(--app-green)" }}>· published</span>
-                    )
+                    <PublishedTo publishes={c.publishes} size={15} />
                   )}
                   {c.status === "ready" && !pubInFlight && !published && !pubFailed && <span>· not published yet</span>}
                   {c.status === "ready" && pubFailed && (
@@ -217,9 +206,13 @@ export default function Clips() {
                       {pubInFlight ? "Publishing…" : pubFailed ? "Retry publish" : "Publish"}
                     </button>
                     {canDownload ? (
-                      <button className="ghost-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }} onClick={() => download(c)}>
-                        ⬇ Download
-                      </button>
+                      <DownloadButton
+                        clip={c}
+                        className="ghost-btn"
+                        label="⬇ Download"
+                        style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }}
+                        onError={(e) => (e.status === 403 ? setUpgradeOpen(true) : setError(e.message))}
+                      />
                     ) : (
                       // BR-08: visible-but-locked download is the upgrade prompt.
                       <button

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { TopUpModal } from "../components/Modals.jsx";
+import { SocialIcon } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
 export default function Account() {
@@ -186,11 +187,11 @@ export default function Account() {
       <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 14 }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>CONNECTED ACCOUNTS</span>
         {[
-          { key: "instagram", name: "Instagram", account: instagram, bg: "linear-gradient(140deg,#7b2ff7,#f0546c)", blurb: "Connected · clips publish as Reels · explicit per-clip publishing only" },
-          { key: "tiktok", name: "TikTok", account: tiktok, bg: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", blurb: "Connected · clips post to your TikTok · explicit per-clip publishing only" },
-        ].map(({ key, name, account, bg, blurb }) => (
+          { key: "instagram", name: "Instagram", account: instagram, blurb: "Connected · clips publish as Reels · explicit per-clip publishing only" },
+          { key: "tiktok", name: "TikTok", account: tiktok, blurb: "Connected · clips post to your TikTok · explicit per-clip publishing only" },
+        ].map(({ key, name, account, blurb }) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: bg, flexShrink: 0 }} />
+            <SocialIcon platform={key} size={36} />
             <div style={{ flex: 1, minWidth: 180 }}>
               <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>
                 {name} {account ? `— ${account.handle}` : ""}

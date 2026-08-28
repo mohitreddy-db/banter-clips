@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
-import { api, downloadClip } from "../lib/api.js";
+import { api } from "../lib/api.js";
 import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal, TopUpModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 import Trending from "../components/Trending.jsx";
+import DownloadButton from "../components/DownloadButton.jsx";
+import { PublishedTo } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
 const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
@@ -273,15 +275,6 @@ export default function Studio() {
       watchClip(c.id, Date.now());
     } catch (e) {
       if (e.code === "insufficient_credits") setTopupOpen(true);
-      else setError(e.message);
-    }
-  };
-
-  const download = async () => {
-    try {
-      await downloadClip(clip);
-    } catch (e) {
-      if (e.code === "upgrade_required" || e.status === 403) setUpgradeOpen(true);
       else setError(e.message);
     }
   };
@@ -563,8 +556,9 @@ export default function Studio() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.take}</div>
-                      <div style={{ fontSize: 10.5, color: c.status === "failed" ? "var(--app-error)" : "var(--app-muted)", marginTop: 3 }}>
-                        {c.sport} · {c.tone}{c.status === "ready" && c.publishes?.some((p) => p.status === "published") ? " · published" : c.status !== "ready" ? ` · ${c.status}` : ""}
+                      <div style={{ fontSize: 10.5, color: c.status === "failed" ? "var(--app-error)" : "var(--app-muted)", marginTop: 3, display: "flex", alignItems: "center", gap: 5 }}>
+                        <span>{c.sport} · {c.tone}{c.status !== "ready" ? ` · ${c.status}` : ""}</span>
+                        <PublishedTo publishes={c.publishes} size={13} label="" />
                       </div>
                     </div>
                   </div>
@@ -831,13 +825,24 @@ export default function Studio() {
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {clip.publishes?.some((p) => p.status === "published") && (
+                <div className="panel" style={{ padding: "11px 14px", borderRadius: 10, fontSize: 13 }}>
+                  <PublishedTo publishes={clip.publishes} size={20} />
+                </div>
+              )}
               <button className="grad-btn" style={{ padding: 15, fontSize: 16 }} onClick={() => setPublishOpen(true)}>
-                Publish to Instagram / TikTok{watermarked ? " · free" : ""}
+                Publish{watermarked ? " · free" : ""}
               </button>
               {canDownload ? (
-                <button className="ghost-btn" style={{ padding: 14, fontSize: 15, color: "var(--app-text)" }} onClick={download}>
-                  ⬇ Download MP4 · no watermark
-                </button>
+                <DownloadButton
+                  clip={clip}
+                  className="ghost-btn"
+                  label="⬇ Download MP4 · no watermark"
+                  style={{ padding: 14, fontSize: 15, color: "var(--app-text)" }}
+                  onError={(e) => (e.code === "upgrade_required" || e.status === 403
+                    ? setUpgradeOpen(true)
+                    : setError(e.message))}
+                />
               ) : (
                 <button className="ghost-btn" style={{ padding: 14, fontSize: 15, color: "var(--app-muted)" }} onClick={() => setUpgradeOpen(true)}>
                   🔒 Download HD — Creator feature
