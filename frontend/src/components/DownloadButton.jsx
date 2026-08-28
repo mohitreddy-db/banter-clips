@@ -12,6 +12,7 @@ const mb = (bytes) => `${(bytes / 1048576).toFixed(1)} MB`;
  */
 export default function DownloadButton({
   clip, onError, label = "⬇ Download", className = "ghost-btn", style,
+  compact = false,
 }) {
   const [dl, setDl] = useState(null);
 
@@ -28,21 +29,29 @@ export default function DownloadButton({
     }
   };
 
+  // `compact` is for the side-by-side buttons on a clip card, which are only
+  // ~110px wide: "Downloading… 82%" overflowed and the progress bar's own
+  // overflow:hidden clipped it mid-number ("Downloading… 8").
+  const progress = dl?.pct === null ? mb(dl.received) : `${dl?.pct}%`;
   const text = !dl
     ? label
     : dl.pct === 100
       ? "✓ Saved"
-      : dl.pct === null
-        ? `Downloading… ${mb(dl.received)}`
-        : `Downloading… ${dl.pct}%`;
+      : compact
+        ? `⬇ ${progress}`
+        : `Downloading… ${progress}`;
 
   return (
     <button
       className={className}
       disabled={!!dl}
       onClick={start}
-      title={dl ? "Download in progress" : "Save this clip as an MP4"}
-      style={{ position: "relative", overflow: "hidden", ...style, opacity: 1 }}
+      title={dl ? `Downloading… ${progress}` : "Save this clip as an MP4"}
+      style={{
+        position: "relative", overflow: "hidden",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        ...style, opacity: 1,
+      }}
     >
       {dl && (
         <span
@@ -56,7 +65,7 @@ export default function DownloadButton({
           }}
         />
       )}
-      <span style={{ position: "relative" }}>{text}</span>
+      <span style={{ position: "relative", whiteSpace: "nowrap", padding: "0 8px" }}>{text}</span>
     </button>
   );
 }

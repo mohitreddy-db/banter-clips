@@ -209,6 +209,7 @@ export default function Clips() {
                       <DownloadButton
                         clip={c}
                         className="ghost-btn"
+                        compact
                         label="⬇ Download"
                         style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }}
                         onError={(e) => (e.status === 403 ? setUpgradeOpen(true) : setError(e.message))}
