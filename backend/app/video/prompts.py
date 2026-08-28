@@ -19,6 +19,7 @@ None of the three is sufficient alone; all go in every prompt.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from .types import Scene, VideoPlan
 
@@ -38,15 +39,22 @@ STYLE_BIBLE = (
 # scene-specific direction it displaces. The load-bearing signal here is
 # "real photograph" plus a short, explicit list of the media it is not.
 PHOTOREAL = (
-    "REAL PHOTOGRAPH on a real camera: live action, true skin texture, real "
-    "fabric, real optical depth of field. Not animation, illustration, cartoon, "
-    "anime, 3D render or painted art"
+    "REAL PHOTOGRAPH on a real camera: true skin texture, real fabric, real "
+    "optical depth of field. Never animation, illustration, cartoon, anime, "
+    "3D render or painted art"
 )
 
 # Appended to every image and motion prompt.
+#
+# The "exactly once" rule is here rather than in its own clause so it reaches
+# both prompts for a dozen words. Two clips reviewed on 2026-08-28 rendered a
+# person twice: a bench shot with a second Mbappé bent over behind it, and a
+# frame containing two Vinícius/Mourinho/Mbappé pairs side by side. Nothing in
+# the prompt had ever said a person may not be duplicated.
 NEGATIVES = (
     "No captions, subtitles or watermarks (added later); no split screen, "
-    "panels or collage"
+    "panels or collage. Each person appears EXACTLY ONCE — never a twin, "
+    "clone, mirrored or look-alike copy of anyone, foreground or background"
 )
 
 # Every clip reviewed on 2026-08-20 carried invented lettering somewhere the
@@ -54,9 +62,8 @@ NEGATIVES = (
 # gibberish scoreboard. Models render named text cleanly and unnamed text as
 # alien script, so unnamed surfaces must be explicitly plain.
 CLEAN_TEXT = (
-    "Readable lettering only where named: kit crests, names, numbers, named "
-    "props. Ad boards, scoreboards, signage and sponsor patches stay plain "
-    "or out of focus, unreadable"
+    "Readable lettering only where named: kit crests, names, numbers, props. "
+    "Ad boards, scoreboards and signage stay plain or unreadable"
 )
 
 # Framing. This replaced "keep the lower quarter of the frame visually calm",
@@ -66,15 +73,15 @@ CLEAN_TEXT = (
 # at mid-thigh, dead floor below. Constrain the clutter, not the subject.
 FULL_FIGURE = (
     "Whole bodies in frame, heads and feet included, never cropped at the "
-    "knees; a little headroom; plain uncluttered ground at the bottom edge."
+    "knees; plain uncluttered ground at the bottom edge."
 )
 
 # Stills only. A camera direction like "wide shot, then a close-up" describes a
 # sequence, and an image model renders a sequence as stacked panels — which is
 # exactly how a keyframe came back as a three-panel collage. Say "one frame".
 SINGLE_FRAME = (
-    "ONE photograph from ONE camera position — a single frozen instant, "
-    "never two moments or two angles in one image"
+    "ONE photograph from ONE camera position — one frozen instant, never "
+    "two moments or two angles"
 )
 
 # Cross-shot drift: within one video, Arteta rendered in a plain shirt, a
@@ -83,6 +90,15 @@ SINGLE_FRAME = (
 WORLD_LOCK = (
     "Continuity: one filmed video — same location, light and wardrobe in "
     "every shot"
+)
+
+# Words that cannot end a description of a person: articles, intensifiers,
+# prepositions and bare adjectives all leave the fragment describing nothing.
+_DANGLING = re.compile(
+    r"(?:a|an|the|very|extremely|quite|really|with|and|of|in|his|her|their|"
+    r"tall|short|slim|thin|slight|fast|quick|compact|stocky|lean|big|small|"
+    r"young|old|broad|heavy|light|strong|muscular|athletic|wiry|burly)",
+    re.IGNORECASE,
 )
 
 # A shot list joined by any of these is two shots, not one.
@@ -137,22 +153,79 @@ def style_for(plan: VideoPlan) -> str:
     return f"{STYLE_BIBLE}.{flavour} Tone: {tone}"
 
 
+def _plain(text: object) -> str:
+    """Lowercase and accent-stripped, so "Mbappé" in an action matches a cast
+    member written "Kylian Mbappe"."""
+    stripped = unicodedata.normalize("NFKD", str(text or ""))
+    return "".join(c for c in stripped if not unicodedata.combining(c)).lower()
+
+
+def visible_cast(plan: VideoPlan, scene: Scene, limit: int = 2) -> list:
+    """Who is actually in this shot, most important first.
+
+    One source of truth for both the prompt text and the reference stills the
+    runner attaches — when those disagreed, a shot whose action was entirely
+    about Mbappé was anchored to a photo of Mourinho, and the model resolved
+    the contradiction by drawing extra people.
+
+    A speaker with a line must be visible to be lip-synced, so they lead.
+    In a silent shot "speaker" is a leftover field, so whoever the action
+    actually names leads instead.
+    """
+    speaker = plan.speaker_for(scene)
+    text = _plain(f"{scene.action or ''} {scene.blocking or ''}")
+    named = [
+        m for m in plan.cast
+        if any(len(tok) >= 4 and tok in text for tok in _plain(m.name).split())
+    ]
+    head = ([speaker] if (speaker and scene.line) else []) + named
+    ordered: list = []
+    for member in head + list(plan.cast):
+        if member is not None and member not in ordered:
+            ordered.append(member)
+    return ordered[:limit]
+
+
+def _trim_clause(text: object, limit: int) -> str:
+    """Shorten to roughly `limit` words, cutting at a clause boundary so the
+    fragment never dangles mid-phrase."""
+    text = str(text or "").strip().rstrip(".")
+    if len(text.split()) <= limit:
+        return text
+    kept: list[str] = []
+    for clause in re.split(r"(?<=[,;])\s*", text):
+        if kept and len(" ".join(kept + [clause]).split()) > limit:
+            break
+        kept.append(clause)
+    joined = " ".join(kept).strip().rstrip(" ,;.")
+    return joined or " ".join(text.split()[:limit]).rstrip(" ,;.")
+
+
 def cast_clause(plan: VideoPlan, scene: Scene, limit: int = 2) -> str:
     """Describe whoever should be visible, name first, wardrobe rule attached.
 
-    Capped at two people. Three full descriptions ran to 127 words — more than
-    the entire rest of the direction — and every one of those words displaces
-    scene-specific detail the model would otherwise act on. Two is also what
-    almost every scene actually contains.
+    Capped at two people, and each description capped in turn: a research-
+    enriched look plus wardrobe ran to 102 words for two people — a third of
+    the whole prompt spent on appearance the reference stills already carry
+    far more precisely, displacing the scene-specific detail the model would
+    otherwise act on.
     """
-    speaker = plan.speaker_for(scene)
-    members = [speaker] if speaker else []
-    for member in plan.cast:
-        if member not in members and len(members) < limit:
-            members.append(member)
+    members = [m for m in visible_cast(plan, scene, limit) if m]
     if not members:
         return "a professional athlete in an authentic team kit"
-    return "; ".join(f"{m.name}, {m.look}, wearing {m.wardrobe}" for m in members if m)
+    # Teammates share a kit, and describing it twice cost 25 words to say the
+    # same sentence again. The wardrobe itself is never trimmed — exact kit
+    # detail is the thing that makes a frame read as real footage — so the
+    # words come out of the duplication and the adjective pile instead.
+    if (len(members) == 2 and members[0].wardrobe
+            and _plain(members[0].wardrobe) == _plain(members[1].wardrobe)):
+        first, second = members
+        return (f"{first.name}, {_trim_clause(first.look, 16)}; "
+                f"{second.name}, {_trim_clause(second.look, 16)}; "
+                f"both wearing {first.wardrobe}")
+    return "; ".join(
+        f"{m.name}, {_trim_clause(m.look, 16)}, wearing {m.wardrobe}" for m in members
+    )
 
 
 def short_look(member) -> str:
@@ -168,22 +241,19 @@ def short_look(member) -> str:
     look = str(member.look or "").strip()
     if not look:
         return ""
-    # Cut at a clause boundary, not a word count. Truncating mid-phrase gave
-    # "an extremely tall, very slim 7-foot-4 French basketball" — a dangling
-    # adjective that describes nothing and reads as a mistake to the model.
-    # But the FIRST clause alone can be junk too: "a fast, compact French
-    # forward" opens with "a fast" — every motion prompt read "Mbappe, a
-    # fast, says". Keep taking clauses until the fragment stands on its own.
-    clauses = [c.strip() for c in re.split(r"[,;]", look) if c.strip()]
-    head = ""
-    for clause in clauses:
-        head = f"{head}, {clause}" if head else clause
-        if len(head.split()) >= 3:
-            break
-    words = head.split()
-    if len(words) > 12:
-        head = " ".join(words[:12])
-    return head.rstrip(" ,;.")
+    # Pick the first clause that stands on its own. Accumulating clauses until
+    # three words were reached still produced "Wembanyama, an extremely tall,
+    # says" and "Mbappe, a fast, says" — three words of pure modifier that
+    # describe nobody. A clause ending in a qualifier is never the answer, and
+    # trailing qualifiers left by the length cap are dropped for the same
+    # reason.
+    for clause in (c.strip() for c in re.split(r"[,;]", look) if c.strip()):
+        words = clause.split()[:12]
+        while words and _DANGLING.fullmatch(words[-1].strip(".,;")):
+            words.pop()
+        if len(words) >= 3:
+            return " ".join(words).rstrip(" ,;.")
+    return _trim_clause(look, 12)
 
 
 def first_shot(camera: str) -> str:
@@ -244,6 +314,11 @@ _CORRECTIONS = (
      "CRITICAL CORRECTION: the previous attempt had anatomy errors. Render "
      "correct human anatomy: two arms, two legs, five fingers per hand, "
      "one clearly defined face per person."),
+    ("appears twice",
+     "CRITICAL CORRECTION: the previous attempt drew the same person more "
+     "than once. Every named person must appear exactly ONE time in the "
+     "frame — no twin, no clone, no mirrored copy, and no look-alike of them "
+     "standing in the background."),
 )
 
 
@@ -318,8 +393,28 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
             f'Dialogue: {speaker.name}, {short_look(speaker)}, says, "{line}" '
             f"— {scene.delivery or speaker.voice}."
         )
+        # Naming the speaker was not enough on its own: clips reviewed on
+        # 2026-08-28 had TWO people lip-syncing one line in identical sync
+        # (Bellingham and Mourinho on a bench; Vinícius and Mbappé while
+        # Mourinho's line played).
+        #
+        # It forbids LIP-SYNC, not open mouths. Scripts legitimately direct a
+        # reaction — one action read "both mouths agape" — and a blanket
+        # "everyone keeps their mouth closed" would contradict the shot's own
+        # description in the same prompt. Reacting is fine; mouthing the words
+        # is not.
+        speech_rule = (
+            f"Only {speaker.name}'s lips move in sync with the line. Nobody "
+            "else speaks, mouths or echoes it — other faces react in silence. "
+            "One voice on the track."
+        )
     elif line:
         parts.append(f'Dialogue: one voice says, "{line}".')
+        speech_rule = "Exactly one speaker; no other lips move in sync with the line."
+    else:
+        # A silent cutaway said nothing about speech at all, which left the
+        # model free to invent mouth movement over an empty soundtrack.
+        speech_rule = "No dialogue in this shot: nobody speaks and no lips move."
 
     if scene.shot_prompt:
         parts.append("Audio is diegetic only, under the dialogue. No music.")
@@ -331,8 +426,8 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     # to white across one generated clip (observed 2026-08-20). Naming the
     # constancy explicitly is the documented mitigation.
     parts.append(
-        "Every kit, colour and prop stays EXACTLY as in the first frame for "
-        "the whole shot — clothing never changes colour or design."
+        "Every kit, colour and prop stays exactly as in the first frame — "
+        "clothing never changes colour or design."
     )
     parts.append(f"{PHOTOREAL}.")
     if scene.transition and not scene.shot_prompt:
@@ -341,6 +436,10 @@ def build_motion_prompt(plan: VideoPlan, scene: Scene) -> str:
     # burn our own captions with ffmpeg, so a second set would collide.
     parts.append(f"{NEGATIVES}. No subtitles, no burned-in dialogue text. "
                  "Background signage and scoreboards stay unreadable.")
+    # Last, because models weight the end of a prompt most heavily and this
+    # rule has to win against a shot description that may itself put several
+    # mouths in motion.
+    parts.append(speech_rule)
     return " ".join(parts)
 
 
@@ -481,6 +580,15 @@ stand alone while matching the others.
 
 Repeat character and wardrobe descriptions verbatim between scenes. Rewording
 them makes the model render a different-looking person.
+
+- `speaker_id` is the person the shot is BUILT AROUND, and it must be someone
+  the `action` actually shows. One shot spoke as the manager while its action
+  was entirely about a forward, so the wrong face was anchored and the render
+  drew both. In a silent shot (`line` empty) name whoever the action is about.
+- Exactly one person speaks per shot. Never write an action where two people
+  say the same thing, speak in unison, or echo each other.
+- Never place the same person in a shot twice — no body double, no "and a
+  second Mbappé", no mirrored version of someone already on screen.
 </how_to_fill_each_field>
 
 Return ONLY JSON:

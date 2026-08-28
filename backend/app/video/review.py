@@ -7,8 +7,8 @@ Severity matters. An early binary version of this gate failed *every*
 candidate, because near-perfect hands are rare in generated images and it
 treated slightly odd fingers the same as a brand logo. Split the checks:
 
-  hard  — GARBLED lettering, collages, non-photoreal medium, severe anatomy.
-          Regenerate.
+  hard  — GARBLED lettering, collages, non-photoreal medium, severe anatomy,
+          the same person rendered twice. Regenerate.
 
 Note what is no longer a failure: visible text and real logos. A measured A/B
 found the model renders "SPURS 1" cleanly when asked for the real kit, and
@@ -39,7 +39,7 @@ Judge only what is visible. Return ONLY JSON with exactly these keys:
 
 {"visible_text": "<every word, letter or number you can read in the image, or NONE>",
  "has_garbled_text": true/false,
- "has_real_logo": true/false,
+ "duplicate_person": true/false,
  "subject_matches": true/false,
  "is_single_frame": true/false,
  "is_photoreal": true/false,
@@ -47,6 +47,12 @@ Judge only what is visible. Return ONLY JSON with exactly these keys:
  "minor_defects": "<odd hands, small anatomy or background issues, or NONE>",
  "severe_defects": "<extra limbs, melted or duplicated faces, impossible bodies, or NONE>",
  "lower_quarter_clean": true/false}
+
+duplicate_person is true when the SAME individual appears more than once in
+the frame — the same face, hair and kit on two separate bodies, a twin or
+mirrored copy, or a background figure who is clearly a second copy of someone
+already in the foreground. Different people who merely look similar, and
+ordinary crowd members, are NOT duplicates.
 
 has_garbled_text judges the QUALITY of lettering, not its presence. Real kit
 names, squad numbers, club crests, sponsor boards and arena signage are all
@@ -124,10 +130,14 @@ def review_keyframe(path: Path, subject: str, client) -> Verdict:
         found = str(data.get("visible_text") or "").strip()
         detail = f": {found[:60]}" if found and found.upper() != "NONE" else ""
         hard.append(f"garbled lettering{detail}")
-    # Real crests, kit names and sponsor boards are wanted now — they are what
-    # makes a frame read as broadcast footage. Only note them.
-    if _truthy(data.get("has_real_logo")):
-        soft.append("real logos visible (expected)")
+    # Real crests, kit names and sponsor boards are wanted — they are what
+    # makes a frame read as broadcast footage — so they are not reported at
+    # all. Noting them only filled every clip's provenance with a warning
+    # about the thing we asked for.
+    if _truthy(data.get("duplicate_person")):
+        # Hard: a twin in the keyframe becomes a twin in the animated clip,
+        # and it is the single most obviously-broken defect a viewer sees.
+        hard.append("the same person appears twice in the frame")
     if data.get("subject_matches") is False:
         # Measured as noisy in both directions (it rejected correct frames of
         # Brunson and Wemby), so it warns instead of burning a retry (§8.2).

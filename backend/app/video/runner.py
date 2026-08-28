@@ -276,19 +276,17 @@ def generate_video(
         base_prompt = prompts.build_image_prompt(plan, scene)
         speaker = plan.speaker_for(scene)
         subject = (speaker or plan.cast[0]).name if plan.cast else "the subject"
-        # Identity anchors for EVERYONE visible, not just the speaker: one
-        # still each for the speaker and the other in-frame cast member,
-        # plus the scene-0 world anchor. Anchoring only the speaker left
-        # the second character's wardrobe free to drift between shots.
+        # Identity anchors for everyone the prompt says is in this shot, from
+        # the same helper the prompt text uses — when the two disagreed, a
+        # shot whose action was all about one player was anchored to a photo
+        # of someone else, and the model drew both.
+        #
+        # Exactly ONE still per person. Padding a solo shot with a second
+        # still of the same face is what taught the model to compose that
+        # person twice (two Mbappés in one frame, observed 2026-08-28).
         refs: list[Path] = []
-        visible = [speaker] if speaker else []
-        for member in plan.cast:
-            if member not in visible and len(visible) < 2:
-                visible.append(member)
-        for member in visible:
+        for member in prompts.visible_cast(plan, scene):
             refs += catalog.select_references(references.get(member.id), scene.camera)[:1]
-        if len(refs) < 2 and speaker:
-            refs = catalog.select_references(references.get(speaker.id), scene.camera)[:2]
         if scene.index > 0 and venue_anchor:
             refs = refs[:2] + [venue_anchor[0]]
         best_path, best_hard = None, None

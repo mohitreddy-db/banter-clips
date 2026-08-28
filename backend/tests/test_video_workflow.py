@@ -360,7 +360,7 @@ def test_model_style_can_never_replace_the_photoreal_anchor():
     for text in (image, motion):
         assert "REAL PHOTOGRAPH" in text
         assert "photoreal" in text.lower()
-        assert "Not animation, illustration, cartoon" in text
+        assert "Never animation, illustration, cartoon" in text
         assert "metallic silver-blue grade" in text   # flavour still survives
 
 
@@ -452,6 +452,97 @@ def test_motion_prompt_covers_every_directed_field():
     assert "No music" in text
     # We burn our own captions; a second set from the model would collide.
     assert "No subtitles" in text
+
+
+def test_only_the_speaker_lip_syncs():
+    """Two clips shipped with two people mouthing one line in identical sync
+    (2026-08-28). Naming the speaker was not enough — everyone else has to be
+    told to stay shut, and a silent shot has to say nobody speaks at all."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    spoken = [s for s in plan.scenes if s.line]
+    assert spoken, "need a scene with dialogue"
+    for scene in spoken:
+        text = prompts.build_motion_prompt(plan, scene)
+        speaker = plan.speaker_for(scene)
+        assert f"Only {speaker.name}'s lips move in sync" in text
+        assert "Nobody else speaks, mouths or echoes it" in text
+        assert "One voice on the track." in text
+        # Last word wins: a shot description can itself put several mouths in
+        # motion ("both mouths agape"), so this has to sit at the very end.
+        assert text.rstrip().endswith("One voice on the track.")
+    for scene in (s for s in plan.scenes if not s.line):
+        assert "nobody speaks and no lips move" in prompts.build_motion_prompt(plan, scene)
+
+
+def test_nobody_is_rendered_twice():
+    """A person drawn twice is the most obviously-broken defect a viewer sees,
+    so every prompt forbids it and the review gate fails the frame."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    for scene in plan.scenes:
+        for text in (prompts.build_image_prompt(plan, scene),
+                     prompts.build_motion_prompt(plan, scene)):
+            assert "EXACTLY ONCE" in text
+            assert "twin" in text
+
+    class Doubled:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"duplicate_person": True, "is_photoreal": True,
+                               "is_single_frame": True})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        frame = Path(tmp) / "f.jpg"
+        frame.write_bytes(b"x")
+        verdict = review.review_keyframe(frame, "Wemby", Doubled())
+    assert not verdict, "a duplicated person must be a hard failure"
+    assert any("twice" in h for h in verdict.hard)
+    # And the retry says what to fix, rather than just trying again.
+    assert "exactly ONE time" in prompts.escalate("p", verdict.hard)
+
+
+def test_the_expected_real_logo_is_not_reported_as_a_problem():
+    """Real crests and sponsor boards are what make a frame read as broadcast
+    footage — noting them filled every clip's provenance with a warning about
+    the thing we asked for."""
+    class Logos:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"has_real_logo": True, "is_photoreal": True,
+                               "is_single_frame": True, "visible_text": "REAL MADRID"})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        frame = Path(tmp) / "f.jpg"
+        frame.write_bytes(b"x")
+        verdict = review.review_keyframe(frame, "Mourinho", Logos())
+    assert verdict, "real logos are expected, never a failure"
+    assert not any("logo" in note.lower() for note in verdict.soft + verdict.hard)
+
+
+def test_the_shot_is_anchored_to_whoever_it_is_actually_about():
+    """A silent shot's speaker_id is a leftover field. One clip's action was
+    entirely about a forward while speaker_id named the manager, so the
+    keyframe was anchored to the wrong face and the model drew both."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    scene = plan.scenes[-1]
+    forward, manager = plan.cast[0], plan.cast[-1]
+    scene.line = ""
+    scene.speaker_id = manager.id
+    scene.action = f"{forward.name} spins away laughing, alone in frame"
+    assert prompts.visible_cast(plan, scene)[0] is forward
+    assert prompts.cast_clause(plan, scene).startswith(forward.name)
+
+
+def test_a_person_is_described_by_something_that_describes_them():
+    """`short_look` attributes dialogue. It used to emit pure modifiers —
+    "Wembanyama, an extremely tall, says" — which describe nobody."""
+    for member in _plan(take="Wemby can't find Brunson", seconds=15).cast:
+        look = prompts.short_look(member)
+        assert len(look.split()) >= 3
+        assert not look.split()[-1].rstrip(",.;").lower() in {
+            "a", "an", "the", "very", "extremely", "tall", "fast", "with"
+        }, look
 
 
 def test_prompts_stay_inside_the_useful_length_band():
@@ -644,11 +735,15 @@ def test_written_bodies_are_capped():
 
 
 def test_speaker_attribution_cuts_at_a_clause_not_mid_phrase():
+    """It must also pick a clause that describes somebody. This asserted
+    "an extremely tall" for months — the exact dangling-modifier output the
+    function was written to prevent, reached because three words of pure
+    qualifier satisfied the old length check."""
     member = CastMember(
         name="Victor Wembanyama",
         look="an extremely tall, very slim 7-foot-4 French basketball player with long limbs")
     short = prompts.short_look(member)
-    assert short == "an extremely tall"
+    assert short == "very slim 7-foot-4 French basketball player with long limbs"
     assert not short.endswith(("basketball", ","))
 
 
