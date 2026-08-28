@@ -35,6 +35,10 @@ dependencies:
   url_launcher: ^6.3.1
   path_provider: ^2.1.5
 
+  # Store billing. Creator is a digital subscription consumed in-app, so
+  # Apple (3.1.1) and Google both require it to run through their billing.
+  in_app_purchase: ^3.2.0
+
   # Instagram Business Login in a system browser sheet
   # (ASWebAuthenticationSession on iOS, Custom Tabs on Android).
   flutter_web_auth_2: ^4.1.0

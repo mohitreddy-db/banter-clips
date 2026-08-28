@@ -159,13 +159,16 @@ class AccountScreen extends ConsumerWidget {
                     style: const TextStyle(fontSize: 12.5, height: 1.5, color: AppColors.muted),
                   ),
                   const SizedBox(height: 16),
-                  if (!state.isCreator)
+                  if (!state.isCreator) ...[
                     GradButton(
-                      label: 'See Creator — \$9.99/mo',
+                      label: 'Upgrade to Creator',
                       height: 46,
                       onPressed: () => showUpgradeSheet(context, reason: UpgradeReason.limit),
-                    )
-                  else ...[
+                    ),
+                    // Somebody who reinstalls opens Account, not the paywall,
+                    // and wonders where their plan went.
+                    const RestorePurchasesRow(),
+                  ] else ...[
                     if (user?.cancelAtPeriodEnd ?? false)
                       const Notice(
                         text: 'Creator stays active until the end of the billing period, '
@@ -173,11 +176,19 @@ class AccountScreen extends ConsumerWidget {
                         icon: Icons.schedule_rounded,
                       )
                     else
+                      // A store subscription can only be cancelled in the
+                      // store — we are not allowed to do it for them, and
+                      // pretending otherwise leaves people billed. Deep-link
+                      // straight to the right settings screen.
                       GhostButton(
-                        label: 'Manage billing on the web ↗',
+                        label: 'Manage subscription ↗',
                         color: AppColors.muted,
                         height: 46,
-                        onPressed: () => _open(Env.pricingUrl),
+                        onPressed: () => _open(
+                          Theme.of(context).platform == TargetPlatform.iOS
+                              ? 'https://apps.apple.com/account/subscriptions'
+                              : 'https://play.google.com/store/account/subscriptions',
+                        ),
                       ),
                   ],
                 ],

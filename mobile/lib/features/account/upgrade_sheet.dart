@@ -1,27 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/env.dart';
 import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
+import '../../widgets/states.dart';
 import '../../widgets/surfaces.dart';
+import 'purchases.dart';
 
 /// Why an action is locked. Wording changes; the offer does not.
 enum UpgradeReason { limit, download, quality, duration }
 
-/// The Creator upsell — the port of `UpgradeModal` in
-/// `frontend/src/components/Modals.jsx`, as a bottom sheet.
+/// The Creator paywall — the port of `UpgradeModal` in
+/// `frontend/src/components/Modals.jsx`, selling through the store rather
+/// than Stripe.
 ///
-/// **It does not sell anything.** A $9.99/month subscription consumed inside
-/// the app is a digital good; Apple (Guideline 3.1.1) and Google both require
-/// that to run through their billing, and a Stripe Checkout page opened from
-/// here is a straightforward rejection. So v1 explains the plan and sends the
-/// user to the website to buy — the "reader-style" split.
-///
-/// If native in-app purchase is adopted later, this is the one file that
-/// changes: swap [_upgradeAction] for an `in_app_purchase` flow and verify
-/// the receipt server-side before flipping `users.plan`. Never trust the
-/// client's word that a purchase succeeded.
+/// The purchase logic all lives in [PurchaseController]; this file is the
+/// presentation of it. The one rule worth repeating here: nothing on this
+/// screen decides the user is a Creator. It shows what the server said after
+/// it verified the receipt.
 Future<void> showUpgradeSheet(BuildContext context, {required UpgradeReason reason}) =>
     showModalBottomSheet<void>(
       context: context,
@@ -30,11 +28,16 @@ Future<void> showUpgradeSheet(BuildContext context, {required UpgradeReason reas
       builder: (context) => _UpgradeSheet(reason: reason),
     );
 
-class _UpgradeSheet extends StatelessWidget {
+class _UpgradeSheet extends ConsumerStatefulWidget {
   const _UpgradeSheet({required this.reason});
 
   final UpgradeReason reason;
 
+  @override
+  ConsumerState<_UpgradeSheet> createState() => _UpgradeSheetState();
+}
+
+class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
   static const _features = [
     'Download in HD — no watermark',
     'Publish without the watermark',
@@ -44,7 +47,15 @@ class _UpgradeSheet extends StatelessWidget {
     'Priority render queue',
   ];
 
-  String get _title => switch (reason) {
+  @override
+  void initState() {
+    super.initState();
+    // Ask the store what this costs here, so the price shown is the price
+    // charged — in the right currency, with the right regional tax.
+    Future.microtask(() => ref.read(purchaseControllerProvider.notifier).loadProduct());
+  }
+
+  String get _title => switch (widget.reason) {
         UpgradeReason.limit => "You've hit this month's limit",
         UpgradeReason.download => 'Downloading is a Creator feature',
         UpgradeReason.quality => '1080p is a Creator feature',
@@ -52,62 +63,72 @@ class _UpgradeSheet extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.cyanWash(0.12),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.lock_open_rounded, color: AppColors.cyan, size: 24),
+  Widget build(BuildContext context) {
+    final purchase = ref.watch(purchaseControllerProvider);
+    final controller = ref.read(purchaseControllerProvider.notifier);
+
+    if (purchase.phase == PurchasePhase.success) return const _WelcomeToCreator();
+
+    final storeUnavailable = purchase.phase == PurchasePhase.unavailable;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.cyanWash(0.12),
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 16),
-              Text(_title, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 10),
-              Text(
-                'On Free you publish with the BanterClips watermark — every post '
-                'promotes you and us. Creator unlocks the full kit:',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              for (final feature in _features)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 9),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_rounded, size: 17, color: AppColors.green),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          feature,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.text,
-                          ),
+              child: const Icon(Icons.lock_open_rounded, color: AppColors.cyan, size: 24),
+            ),
+            const SizedBox(height: 16),
+            Text(_title, style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 10),
+            Text(
+              'On Free you publish with the BanterClips watermark — every post '
+              'promotes you and us. Creator unlocks the full kit:',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            for (final feature in _features)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_rounded, size: 17, color: AppColors.green),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        feature,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.text,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 8),
-              // Honest about where the transaction happens. Vague wording
-              // here is what gets a build rejected under Guideline 3.1.1.
-              const Notice(
-                text: 'Plans are managed on banterclips.com. Upgrade there and '
-                    'your account unlocks here straight away.',
-                icon: Icons.open_in_new_rounded,
               ),
-              const SizedBox(height: 16),
-              GradButton(
-                label: 'Upgrade on the web — \$9.99/mo',
+
+            if (purchase.error.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Notice.error(purchase.error),
+            ],
+
+            const SizedBox(height: 18),
+
+            if (storeUnavailable)
+              // No store on this device or the product is not live yet. The
+              // website still sells it, and saying so beats a dead button.
+              GhostButton(
+                label: 'Upgrade on banterclips.com ↗',
                 onPressed: () async {
                   Navigator.of(context).pop();
                   await launchUrl(
@@ -115,15 +136,140 @@ class _UpgradeSheet extends StatelessWidget {
                     mode: LaunchMode.externalApplication,
                   );
                 },
+              )
+            else
+              GradButton(
+                label: purchase.phase == PurchasePhase.verifying
+                    ? 'Activating…'
+                    : 'Upgrade to Creator — ${purchase.priceLabel}/mo',
+                height: 54,
+                loading: purchase.busy,
+                onPressed: purchase.product == null ? null : controller.buy,
               ),
-              const SizedBox(height: 8),
-              TextAction(
-                label: 'Maybe later',
-                color: AppColors.muted,
-                onPressed: () => Navigator.of(context).pop(),
+
+            const SizedBox(height: 12),
+
+            // Both stores require a visible restore path, and Apple rejects
+            // builds without one. It is also the fix for "I paid on my old
+            // phone", which support would otherwise handle by hand.
+            TextAction(
+              label: 'Restore a previous purchase',
+              color: AppColors.muted,
+              fontSize: 13,
+              onPressed: purchase.busy ? null : controller.restore,
+            ),
+
+            const SizedBox(height: 6),
+            Text(
+              'Billed through your ${Theme.of(context).platform == TargetPlatform.iOS ? 'Apple' : 'Google'} '
+              'account and renews monthly until cancelled. Manage or cancel it '
+              'in your store subscription settings.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, height: 1.5, color: AppColors.muted2),
+            ),
+            const SizedBox(height: 8),
+            TextAction(
+              label: 'Maybe later',
+              color: AppColors.muted,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WelcomeToCreator extends ConsumerWidget {
+  const _WelcomeToCreator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: AppColors.greenWash(0.14),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Center(child: Text('🎉', style: TextStyle(fontSize: 26))),
+              ),
+              const SizedBox(height: 16),
+              Text('Welcome to Creator', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 10),
+              Text(
+                'Watermark-free publishing, HD downloads, 1080p and 30 videos a '
+                'month are unlocked now.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 22),
+              GradButton(
+                label: 'Continue',
+                onPressed: () {
+                  ref.read(purchaseControllerProvider.notifier).reset();
+                  Navigator.of(context).pop();
+                },
               ),
             ],
           ),
         ),
       );
+}
+
+/// A small always-visible restore entry for the Account screen. Somebody who
+/// reinstalls does not open the paywall — they open Account and wonder where
+/// their plan went.
+class RestorePurchasesRow extends ConsumerWidget {
+  const RestorePurchasesRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final purchase = ref.watch(purchaseControllerProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: purchase.busy
+              ? null
+              : () => ref.read(purchaseControllerProvider.notifier).restore(),
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Restore a previous purchase',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.cyan,
+                    ),
+                  ),
+                ),
+                if (purchase.phase == PurchasePhase.verifying)
+                  const InlineSpinner(size: 14)
+                else
+                  const Icon(Icons.refresh_rounded, size: 16, color: AppColors.muted2),
+              ],
+            ),
+          ),
+        ),
+        if (purchase.error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              purchase.error,
+              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+          ),
+      ],
+    );
+  }
 }

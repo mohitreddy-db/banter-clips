@@ -1,4 +1,4 @@
-package com.banterclips.banterclips
+package com.banterclips.app
 
 import io.flutter.embedding.android.FlutterActivity
 

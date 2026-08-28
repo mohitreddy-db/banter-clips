@@ -281,6 +281,47 @@ class StripeEvent(Base):
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class StoreSubscription(Base):
+    """A Creator subscription bought through Apple or Google (BR-15, mobile).
+
+    Same principle as the Stripe path: **the store is the ledger.** This table
+    holds only what we need to converge `users.plan` and to re-check with the
+    store later — never a copy of the transaction history.
+
+    `purchase_token` is unique across the whole table on purpose. It is the
+    store's own identifier for the subscription (Google's purchase token,
+    Apple's original transaction id), and the uniqueness is what stops one
+    paid receipt from entitling several accounts: replaying a friend's receipt
+    against a second account hits the constraint instead of granting Creator.
+    """
+
+    __tablename__ = "store_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)  # "ios" | "android"
+    product_id: Mapped[str] = mapped_column(Text, nullable=False)
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # "active" | "expired" | "cancelled" — cancelled still means entitled
+    # until expires_at, exactly like cancel_at_period_end on the Stripe path.
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
+    # The store's own expiry. This is what makes the entitlement self-healing:
+    # once it passes, the next check downgrades even if we never heard from
+    # the store that the subscription lapsed.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios','android')", name="store_sub_platform_check"),
+    )
+
+
 class Event(Base):
     __tablename__ = "events"
 

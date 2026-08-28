@@ -147,6 +147,29 @@ class Settings(BaseSettings):
     # leaving half-paid-for clips. 0 disables the check.
     MAX_DAILY_SPEND_USD: float = 25.0
 
+    # ── Store billing (BR-15, mobile) ──────────────────────────────────────
+    # Creator bought inside the app has to go through Apple's and Google's
+    # billing, so the receipt is verified against them rather than Stripe.
+    # Empty → /billing/mobile/verify answers 503 and the app falls back to
+    # sending the user to the website, exactly as the Stripe path does.
+
+    # Google Play: the full service-account JSON key, as one line. The account
+    # needs "View financial data" on the Play Console app.
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
+    ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
+
+    # Apple App Store Server API: an in-app-purchase key from App Store
+    # Connect (Users and Access → Integrations → In-App Purchase).
+    # APPLE_PRIVATE_KEY is the .p8 contents; newlines may be escaped as \n.
+    APPLE_KEY_ID: str = ""
+    APPLE_ISSUER_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_BUNDLE_ID: str = "com.banterclips.app"
+
+    # The subscription product id, identical in both stores so the server
+    # never has to care which one a receipt came from.
+    STORE_PRODUCT_CREATOR: str = "creator_monthly"
+
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
     CREATOR_PRICE: str = "$9.99/mo"

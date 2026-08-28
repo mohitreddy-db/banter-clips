@@ -307,12 +307,30 @@ class ApiClient {
 
   // --------------------------------------------------------------- billing
 
-  /// Stripe Checkout. Returns null when Stripe isn't configured (503), which
-  /// on the web means "use the dev mock upgrade".
+  /// Hand a store receipt to the server, which verifies it with Apple or
+  /// Google and is the only thing that may set `users.plan`.
   ///
-  /// On a phone this is NOT how a subscription may be sold: Apple 3.1.1 and
-  /// Google both require store billing for digital goods consumed in-app.
-  /// v1 therefore points at the website instead — see `AccountScreen`.
+  /// Called after every completed or restored purchase. Safe to repeat: the
+  /// endpoint is idempotent, keyed on the store's own purchase token, so a
+  /// retry after a dropped connection converges rather than double-granting.
+  Future<void> verifyStorePurchase({
+    required String platform,
+    required String productId,
+    required String purchaseToken,
+    String? transactionId,
+  }) async =>
+      _send('POST', '/billing/mobile/verify', body: {
+        'platform': platform,
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+        if (transactionId != null) 'transaction_id': transactionId,
+      });
+
+  /// Stripe Checkout. Returns null when Stripe isn't configured (503).
+  ///
+  /// Kept for parity with the web client, but the app must not call it to
+  /// sell a subscription: Apple 3.1.1 and Google both require store billing
+  /// for digital goods consumed in-app. See `purchases.dart`.
   Future<String?> checkout() async {
     try {
       final json = await _map('POST', '/billing/checkout');

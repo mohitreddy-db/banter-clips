@@ -16,6 +16,13 @@ def me(user: User = Depends(get_current_user)):
 
 @router.get("/usage", response_model=UsageOut)
 def usage(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Every client reads this before it gates anything, which makes it the
+    # right place to notice that a store subscription has run out. It is a
+    # local date comparison unless one actually has — see the docstring on
+    # refresh_expired_store_plan.
+    from .billing import refresh_expired_store_plan
+
+    refresh_expired_store_plan(db, user)
     return usage_for(db, user)
 
 

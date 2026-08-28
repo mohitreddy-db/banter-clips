@@ -38,6 +38,33 @@ ig_oauth_configured = lambda: bool(settings.META_APP_ID and settings.META_APP_SE
 MOCK_TOKEN = "mock-oauth-token"
 REFRESH_WINDOW = timedelta(days=15)
 
+# Where the mobile app wants the consent flow to hand control back. A phone has
+# no browser tab to return to, so the redirect target is a scheme the app owns
+# (registered in its AndroidManifest.xml and Info.plist) rather than a path on
+# the website. See mobile/README.md.
+MOBILE_RETURN = "banterclips://oauth/instagram"
+
+
+def _safe_next(next: str) -> str:
+    """Where the browser is allowed to be sent after consent.
+
+    Two shapes only: a path on our own site, or the ONE mobile URI above,
+    matched in full. Do not relax this to "any custom scheme" or to a prefix
+    check — `next` is attacker-controllable, and a laxer rule here is an
+    open-redirect hole with a valid-looking BanterClips URL in front of it.
+
+    "//host" is rejected as well as "http://host". It is harmless *today*,
+    because the only caller prepends FRONTEND_URL and so lands on our own
+    host — but a protocol-relative URL is a redirect to someone else's site
+    the moment anything uses this without that prefix, and this function is
+    named as though it guarantees otherwise.
+    """
+    if next == MOBILE_RETURN:
+        return next
+    if next.startswith("/") and not next.startswith("//"):
+        return next
+    return "/account"
+
 
 def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
     """Instagram long-lived tokens last ~60 days and do NOT renew themselves.
@@ -109,7 +136,7 @@ def instagram_oauth_url(
         {
             "sub": str(user.id),
             "purpose": "ig_oauth",
-            "next": next if next.startswith("/") else "/account",
+            "next": _safe_next(next),
             "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
         },
         settings.JWT_SECRET,
@@ -139,13 +166,21 @@ def instagram_callback(
     the real account, and bounces the browser back to the frontend."""
 
     def bounce(next_path: str, **params) -> RedirectResponse:
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+        # The mobile return is an absolute URI the app owns; everything else is
+        # a path on the website. Prefixing FRONTEND_URL onto the former would
+        # produce https://www.banterclips.combanterclips://… — a dead link that
+        # strands the user in a browser with no way back.
+        base = "" if next_path == MOBILE_RETURN else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}?{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
         assert claims.get("purpose") == "ig_oauth"
         user_id = claims["sub"]
-        next_path = claims.get("next", "/account")
+        # Re-validated on the way out, not just on the way in: the state JWT is
+        # signed by us, but this is the only line that actually builds a
+        # redirect, so it is the one that must be safe.
+        next_path = _safe_next(str(claims.get("next", "/account")))
     except Exception:
         return bounce("/account", ig="error", reason="invalid_state")
 

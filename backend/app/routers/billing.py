@@ -17,18 +17,24 @@ Dev fallback — with STRIPE_* env unset, /billing/checkout returns 503
 {code: stripe_not_configured} and the frontend uses the mock /billing/upgrade.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
-from ..models import StripeEvent, User
+from ..models import StoreSubscription, StripeEvent, User
 from ..schemas import PlanChangeResponse
+from ..services import store_billing
+
+log = logging.getLogger("banter.billing")
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -204,6 +210,185 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     return {"received": True}
 
 
+# ------------------------------------------------------- store billing (app)
+
+class StorePurchase(BaseModel):
+    platform: Literal["ios", "android"]
+    product_id: str = Field(max_length=128)
+    # Google: the purchase token. iOS: the base64 receipt, kept only as a
+    # fallback — `transaction_id` is what the App Store Server API needs.
+    purchase_token: str = Field(max_length=8192)
+    transaction_id: str | None = Field(default=None, max_length=128)
+
+
+def sync_store_subscription(db: Session, user: User, sub: StoreSubscription) -> None:
+    """Re-ask the store about one subscription and converge to its answer.
+
+    The mirror of `sync_subscription_state` on the Stripe path, and it obeys
+    the same rule: the store is the truth, this only derives from it.
+    """
+    try:
+        entitlement = store_billing.verify(
+            sub.platform,
+            purchase_token=sub.purchase_token,
+            product_id=sub.product_id,
+            transaction_id=sub.purchase_token if sub.platform == "ios" else None,
+        )
+    except store_billing.StoreError:
+        # The store could not be reached. Leave the entitlement exactly as it
+        # is: an outage at Apple must never downgrade a paying customer.
+        log.warning("could not re-verify store subscription %s", sub.id)
+        return
+    _apply_entitlement(db, user, sub, entitlement)
+
+
+def _apply_entitlement(
+    db: Session, user: User, sub: StoreSubscription, entitlement: store_billing.Entitlement
+) -> None:
+    was_creator = user.plan == "creator"
+
+    sub.status = entitlement.status
+    sub.expires_at = entitlement.expires_at
+    sub.auto_renewing = entitlement.auto_renewing
+    sub.last_verified_at = datetime.now(timezone.utc)
+
+    if entitlement.is_entitled:
+        user.plan = "creator"
+        user.plan_renews_at = entitlement.expires_at
+        user.cancel_at_period_end = not entitlement.auto_renewing
+    else:
+        # Only drop the plan if nothing ELSE is paying for it. A user who
+        # bought on the web and then also on their phone must not be
+        # downgraded because the phone subscription lapsed.
+        if not (stripe_configured() and user.stripe_subscription_id):
+            user.plan = "free"
+            user.plan_renews_at = None
+            user.cancel_at_period_end = False
+    db.commit()
+
+    if not was_creator and user.plan == "creator":
+        record_event(db, "upgrade_completed", user, provider=sub.platform)
+    elif was_creator and user.plan == "free":
+        record_event(db, "plan_downgraded", user, provider=sub.platform)
+
+
+def refresh_expired_store_plan(db: Session, user: User) -> None:
+    """Downgrade a store subscription that has run out.
+
+    Cheap by construction: the expiry the store gave us is stored locally, so
+    this is a date comparison and touches the network only for a subscription
+    that has actually lapsed. Called from `/me/usage`, which every client
+    reads before it gates anything.
+
+    This is the safety net that makes the entitlement self-healing without
+    server-to-server notifications. Once Google RTDN and Apple ASSN are wired
+    up, a lapse will be visible within minutes instead of at the next read —
+    but this should stay regardless, because notifications get dropped.
+    """
+    if user.plan != "creator":
+        return
+    sub = db.scalar(
+        select(StoreSubscription)
+        .where(StoreSubscription.user_id == user.id)
+        .order_by(StoreSubscription.expires_at.desc().nullslast())
+    )
+    if sub is None or sub.expires_at is None:
+        return
+    if sub.expires_at > datetime.now(timezone.utc):
+        return  # still paid for — no call, no cost
+    sync_store_subscription(db, user, sub)
+
+
+@router.post("/mobile/verify", response_model=PlanChangeResponse)
+def verify_store_purchase(
+    body: StorePurchase,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Verify a store receipt and grant Creator if it checks out.
+
+    This is the ONLY way a mobile purchase becomes an entitlement. The client
+    telling us a purchase succeeded is a request to go and ask Apple or
+    Google, never an answer in itself — the app is on someone else's device
+    and can be patched.
+
+    Idempotent: keyed on the store's own purchase token, so the app can (and
+    does) retry after a dropped connection without double-granting.
+    """
+    if not store_billing.configured(body.platform):
+        raise HTTPException(
+            503,
+            detail={
+                "code": "store_not_configured",
+                "message": "In-app purchases are not configured on this server.",
+            },
+        )
+
+    try:
+        entitlement = store_billing.verify(
+            body.platform,
+            purchase_token=body.purchase_token,
+            product_id=body.product_id,
+            transaction_id=body.transaction_id,
+        )
+    except store_billing.StoreError as exc:
+        # Our problem, not theirs — and the money may already be taken, so the
+        # message must not suggest the purchase failed.
+        log.warning("store verification failed for user %s: %s", user.id, exc)
+        raise HTTPException(
+            502,
+            detail={
+                "code": "store_unreachable",
+                "message": "We couldn't confirm the purchase with the store. "
+                "It will apply automatically — reopen the app in a minute.",
+            },
+        )
+
+    if not entitlement.is_entitled:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "purchase_not_active",
+                "message": "That subscription is no longer active.",
+            },
+        )
+
+    sub = db.scalar(
+        select(StoreSubscription).where(
+            StoreSubscription.purchase_token == entitlement.purchase_token
+        )
+    )
+    if sub is None:
+        sub = StoreSubscription(
+            user_id=user.id,
+            platform=body.platform,
+            product_id=entitlement.product_id,
+            purchase_token=entitlement.purchase_token,
+        )
+        db.add(sub)
+    elif sub.user_id != user.id:
+        # This receipt already entitles a different account. One paid
+        # subscription, one account — otherwise a receipt could be passed
+        # around to unlock Creator for everybody who has it.
+        record_event(db, "store_receipt_reuse_blocked", user, platform=body.platform)
+        raise HTTPException(
+            409,
+            detail={
+                "code": "receipt_already_used",
+                "message": "That purchase is already linked to another "
+                "BanterClips account.",
+            },
+        )
+
+    _apply_entitlement(db, user, sub, entitlement)
+
+    return PlanChangeResponse(
+        plan=user.plan,
+        cancel_at_period_end=user.cancel_at_period_end,
+        message="Welcome to Creator — downloads and watermark-free publishing are unlocked.",
+    )
+
+
 @router.post("/upgrade", response_model=PlanChangeResponse)
 def upgrade_mock(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dev-only mock upgrade — disabled once Stripe is configured."""
@@ -223,6 +408,28 @@ def upgrade_mock(user: User = Depends(get_current_user), db: Session = Depends(g
 
 @router.post("/cancel", response_model=PlanChangeResponse)
 def cancel(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # A store subscription can only be cancelled from the store — neither
+    # Apple nor Google exposes an API for it, by design. Setting our own flag
+    # would be worse than useless: the customer would see "cancelled" here and
+    # keep being charged. Say where to go instead.
+    store_sub = db.scalar(
+        select(StoreSubscription).where(
+            StoreSubscription.user_id == user.id,
+            StoreSubscription.status.in_(("active", "cancelled")),
+        )
+    )
+    if store_sub is not None and not (stripe_configured() and user.stripe_subscription_id):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "cancel_in_store",
+                "message": "This subscription is billed by "
+                f"{'Apple' if store_sub.platform == 'ios' else 'Google'}. "
+                "Cancel it in your store subscription settings — your videos "
+                "are never deleted.",
+            },
+        )
+
     # BR-09/BR-15: downgrades apply at period end; videos are never deleted.
     if stripe_configured() and user.stripe_subscription_id:
         try:

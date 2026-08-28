@@ -97,23 +97,51 @@ lib/
 | Landing · Showcase | ❌ | marketing and SEO surfaces; an installed user has converted |
 | `admin/*` | ❌ | ops tooling, desktop browser forever |
 
-### Billing is deliberately not in the app
+### Billing runs through the stores
 
-Creator at $9.99/month is a digital subscription consumed inside the app.
-Apple (Guideline 3.1.1) and Google both require that to run through their
-billing, which takes 15–30%. `../UNIT-ECONOMICS.md` already flags Creator as
-margin-negative above four videos a month, so a store cut on top is a pricing
-decision, not an overhead to absorb quietly.
+Creator at $9.99/month is a digital subscription consumed inside the app, so
+Apple (Guideline 3.1.1) and Google both require it to go through their
+billing — a Stripe Checkout page opened from the app is a straightforward
+rejection. That costs 15–30% on top of margins `../UNIT-ECONOMICS.md` already
+calls thin, so the mobile price is worth revisiting.
 
-v1 therefore ships **free-tier-first**: the app explains Creator and links to
-`banterclips.com/pricing` to buy. Upgrading there unlocks the app instantly,
-because both clients read the same `/me/usage`.
+**The client never decides who is a Creator.** A completed purchase is only a
+signal to go and ask the server:
 
-Everything needed to change that decision lives in
-[`lib/features/account/upgrade_sheet.dart`](lib/features/account/upgrade_sheet.dart).
-Swapping it for `in_app_purchase` means creating the product in both consoles
-and — critically — **verifying receipts server-side** before flipping
-`users.plan`. Never trust the client's word that a purchase succeeded.
+```
+buy -> store sheet -> purchase stream -> POST /billing/mobile/verify
+    -> server asks Apple/Google -> server writes users.plan
+    -> app refetches /me -> completePurchase()
+```
+
+That last step is not optional: an unacknowledged Android purchase is
+automatically refunded after three days.
+
+Client half: [`lib/features/account/purchases.dart`](lib/features/account/purchases.dart).
+Server half: `backend/app/services/store_billing.py` (the App Store Server API
+and the Play Developer API) behind `POST /billing/mobile/verify`. Configure it
+with the `APPLE_*` and `GOOGLE_PLAY_*` variables in `backend/.env.example`;
+with those empty the endpoint answers 503 and the paywall falls back to
+sending the user to the website.
+
+Three rules the implementation encodes, worth not undoing:
+
+* **One receipt, one account.** `purchase_token` is unique across the whole
+  `store_subscriptions` table, so a receipt passed to a friend hits the
+  constraint instead of granting them Creator.
+* **A store outage never downgrades a paying customer.** If Apple cannot be
+  reached, the entitlement is left exactly as it was.
+* **Expiry is self-healing.** The store's `expires_at` is stored, and
+  `/me/usage` re-checks only once it has actually passed — so a lapsed
+  subscription downgrades even though server-to-server notifications (Google
+  RTDN, Apple ASSN) are not wired up yet. Those are the follow-up: they make
+  a cancellation visible in minutes rather than at the next read.
+
+Cancellation is **not** possible from inside the app — neither store exposes
+an API for it. `POST /billing/cancel` returns `409 cancel_in_store` for a
+store subscription, and Account deep-links to the right settings screen.
+Setting our own flag instead would be worse than useless: the customer would
+see "cancelled" here and keep being charged.
 
 ## Long jobs and the phone lifecycle
 
@@ -173,11 +201,11 @@ redirect list, alongside the web one.
 
 Ordered by how expensive they get if left late.
 
-1. **Decide the bundle id.** It is currently `com.banterclips.banterclips`
-   (from `flutter create --org com.banterclips`). Changing it after a
-   submission means a new listing and losing every installed user.
-   `com.banterclips.app` is the tidier choice — it is a five-minute change
-   *today* and impossible later.
+1. **Create the subscription product** in App Store Connect and the Play
+   Console, with the id `creator_monthly` in both. The same string on both
+   stores is what lets the server verify a receipt without caring where it
+   came from. Until it exists the paywall shows its "not available from the
+   store on this build yet" state rather than a dead button.
 2. **Register the Google Play account ($25).** New accounts must run a closed
    test with 12 testers for 14 days before public release. Start that clock
    early; it runs in the background while you build.
