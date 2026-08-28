@@ -120,17 +120,17 @@
               "name": "Free",
               "price": "0",
               "priceCurrency": "USD",
-              "description": "5 successful videos per month, 720p, publishes with a BanterClips watermark."
+              "description": "Welcome credits on signup, 720p, publishes with a BanterClips watermark."
             },
             {
               "@type": "Offer",
               "name": "Creator",
-              "price": "9.99",
+              "price": "19.00",
               "priceCurrency": "USD",
-              "description": "30 successful videos per month, 1080p, watermark-free downloads and a priority render queue.",
+              "description": "150 credits every month, 1080p, watermark-free downloads and a priority render queue.",
               "priceSpecification": {
                 "@type": "UnitPriceSpecification",
-                "price": "9.99",
+                "price": "19.00",
                 "priceCurrency": "USD",
                 "billingDuration": 1,
                 "billingIncrement": 1,
@@ -144,12 +144,18 @@
     </script>
   </head>
   <body>
-    <!-- Server-rendered fallback. React clears and replaces this on boot, so
-         nobody with JS ever sees it — but Google's first-pass crawl, Bing, and
-         every LLM/social scraper that does not execute JS see only this. It
-         therefore carries the real headline and copy, not a spinner. -->
+    <!-- Server-rendered fallback for Google's first-pass crawl, Bing, and
+         every LLM/social scraper that does not execute JS: they see only
+         this, so it carries the real headline and copy, not a spinner.
+
+         React does replace it on boot — but not instantly. Between the HTML
+         painting and the bundle downloading, parsing and mounting there is a
+         real window (hundreds of ms on a cold load), and this whole page was
+         flashing up in it on every reload. The inline script below hides it
+         before the first paint; anything that never runs that script still
+         reads the copy exactly as before. -->
     <div id="root">
-      <div style="font-family: system-ui, sans-serif; padding: 48px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box; max-width: 720px; margin: 0 auto">
+      <div id="bc-prerender" style="font-family: system-ui, sans-serif; padding: 48px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box; max-width: 720px; margin: 0 auto">
         <h1 style="margin: 0 0 16px; font-size: 32px; line-height: 1.15">
           BanterClips — turn any sports opinion into a viral video
         </h1>
@@ -167,8 +173,9 @@
           <li>One-click publishing to Instagram</li>
         </ul>
         <p style="margin: 0 0 24px; color: #98a1b5; font-size: 16px">
-          Free plan: 5 videos a month, no credit card. Creator: $9.99 a month for
-          1080p and watermark-free downloads.
+          Free: welcome credits to make your first video, no credit card.
+          Creator: $19 a month for 150 credits, 1080p and watermark-free
+          downloads.
         </p>
         <p style="margin: 0; color: #6b7488; font-size: 14px">
           <a href="/privacy" style="color: #98a1b5">Privacy</a> ·
@@ -177,6 +184,22 @@
         </p>
       </div>
     </div>
+    <script>
+      // Inline and synchronous on purpose: it runs during parse, before the
+      // browser paints, so the crawler copy above is never shown to a person.
+      (function () {
+        var el = document.getElementById("bc-prerender");
+        if (!el) return;
+        el.style.display = "none";
+        // Failsafe: if the bundle never boots (blocked or failed script) React
+        // never clears #root, and a blank page is worse than the copy. React
+        // removes this node on mount, so a live node means it never mounted.
+        setTimeout(function () {
+          var stranded = document.getElementById("bc-prerender");
+          if (stranded) stranded.style.display = "";
+        }, 8000);
+      })();
+    </script>
     <noscript>BanterClips needs JavaScript — please enable it to continue.</noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
