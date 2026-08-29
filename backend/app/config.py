@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     # excluded — that's the user's browser). TikTok is ISP-blocked in India
     # and geo-sensitive about request origin, so TikTok calls can ride a US
     # box (tinyproxy on the NYC droplet) regardless of where this backend
-    # runs: http://user:pass@161.35.124.197:8899. Empty = direct.
+    # runs: http://user:pass@146.190.213.29:8899. Empty = direct.
     TIKTOK_PROXY_URL: str = ""
     # Unaudited/sandbox TikTok apps may only post SELF_ONLY (private, visible
     # to the author). Flip to False once the app passes TikTok's audit and
