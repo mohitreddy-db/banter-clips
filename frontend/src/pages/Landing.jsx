@@ -4,6 +4,11 @@ import { api } from "../lib/api.js";
 import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 import { showcaseClips, SHOWCASE_BASE } from "../lib/showcase.js";
 
+// The clip the hero tile and the "Publish or download" card demo. Follows
+// whatever leads the catalog, so refreshing the showcase refreshes the whole
+// page instead of leaving two hard-coded slugs behind.
+const LEAD_CLIP = showcaseClips[0].slug;
+
 import { useSeo } from "../lib/seo.js";
 /* Faithful port of the client's landing page (slim MVP prototype).
    Layout, copy, colors and animations preserved; only the pricing
@@ -46,7 +51,7 @@ function FeatureVisual({ f }) {
     // vertical" message, so the image only has to look like a real broadcast
     // frame. `center 34%` puts the crop band on the face rather than the
     // midriff, which is what a plain centred cover would land on.
-    const src = `${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`;
+    const src = `${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg`;
     return (
       <div style={frame}>
         <img
@@ -785,8 +790,8 @@ function HowItWorks() {
             // this card advertises stay in shot; a plain centred cover would
             // cut them off along with the bottom of the kit.
             <video
-              src={`${SHOWCASE_BASE}/ronaldo-penalties/final.mp4`}
-              poster={`${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`}
+              src={`${SHOWCASE_BASE}/${LEAD_CLIP}/final.mp4`}
+              poster={`${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg`}
               muted
               loop
               autoPlay
