@@ -48,7 +48,21 @@ export default function AdminVideos() {
                 className="card"
                 style={{ textAlign: "left", padding: 10, borderRadius: 14, cursor: "pointer", borderColor: v.status === "failed" ? "rgba(240,84,108,.5)" : v.warnings > 0 ? "rgba(225,158,60,.5)" : undefined }}
               >
-                <div style={{ height: 110, borderRadius: 10, background: v.thumb_gradient || "linear-gradient(140deg, #0f2436, #131a2b)", position: "relative", marginBottom: 10 }}>
+                <div style={{ height: 110, borderRadius: 10, background: v.thumb_gradient || "linear-gradient(140deg, #0f2436, #131a2b)", position: "relative", marginBottom: 10, overflow: "hidden" }}>
+                  {/* The real first frame. Triage is a visual job — a wall of
+                      identical gradients tells you nothing about which clip
+                      came out wrong. Failed clips have no poster and keep the
+                      gradient, which is itself the signal. */}
+                  {v.poster_url && (
+                    <img
+                      src={v.poster_url}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  )}
+                  <span style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(6,10,20,.55) 0%, transparent 38%, transparent 62%, rgba(6,10,20,.6) 100%)" }} />
                   <span style={{ position: "absolute", top: 8, left: 8 }}>{statusBadge(v.published ? "published" : v.status)}</span>
                   {v.warnings > 0 && (
                     <span style={{ position: "absolute", top: 8, right: 8 }}>

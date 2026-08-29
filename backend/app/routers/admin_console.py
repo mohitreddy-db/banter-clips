@@ -496,11 +496,23 @@ def list_videos(
         prov = c.provenance or {}
         return len(prov.get("warnings") or [])
 
+    def poster_url(c: Clip) -> str | None:
+        """The real first frame, so triage is visual rather than 24 identical
+        gradient rectangles. Pure string building (see storage.url), so it
+        costs nothing per row; a storage hiccup falls back to the gradient."""
+        if not c.poster_key:
+            return None
+        try:
+            return storage.get().url(c.poster_key)
+        except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
+            return None
+
     return {
         "total": total, "page": page, "page_size": 24,
         "videos": [
             {
                 "id": str(c.id), "take": c.take, "sport": c.sport, "tone": c.tone,
+                "poster_url": poster_url(c),
                 "status": c.status, "current_step": c.current_step,
                 "duration_target": c.duration_target,
                 "duration_seconds": float(c.duration_seconds) if c.duration_seconds else None,
