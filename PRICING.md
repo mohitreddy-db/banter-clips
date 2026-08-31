@@ -27,10 +27,10 @@ no pricing redesign needed.
    empty balance is "Top up credits". No screen, prompt, or email ever says
    "upgrade your plan to get more credits". A top-up never changes the
    monthly price. Plans are capability choices; credits are fuel.
-3. **You only pay for success.** Credits are reserved when a generation
-   starts and charged only when the video completes. A failed job releases
-   the full reservation. Retries charge like a normal run (so a video is
-   never charged twice).
+3. **You only pay for success.** The balance is checked up front, but the
+   single charge happens only when the finished video lands. Failures,
+   pauses (provider outage — progress saved, resume free) and abandoned
+   scripts never touch the wallet, and a video can never be charged twice.
 4. **Every video shows its receipt.** Each clip permanently displays how
    many credits it used and where they went, line by line (video + any
    paid extras used on it). The user can always answer "what did this
@@ -145,16 +145,17 @@ unchanged.
 
 | Scenario | What happens |
 |---|---|
-| Generation starts | full video price **reserved** (balance drops immediately, marked "in progress") |
-| Video completes | reservation becomes a charge; receipt attached |
-| Job fails | reservation fully released; retry is a fresh reserve→charge/release |
-| User abandons at script stage (deletes clip / never approves) | reservation released; the few cents of script cost are ours |
+| Generation starts | balance checked against the exact quote; **nothing is charged** |
+| Video completes | the quoted price is charged, once; receipt attached |
+| Job fails | nothing was charged; retry is free |
+| Provider runs out of credits mid-render | job **pauses** with the reason shown; finished scenes are checkpointed; resume is free and never re-bills them |
+| User abandons at script stage (deletes clip / never approves) | nothing was charged; the few cents of script cost are ours |
 | Script regenerated with feedback | free (cap 10); cost is ours, baked into video margin |
 | Balance too low to start | one message, one button: price shown + "Top up credits" — never "upgrade" |
 | Balance runs out mid-month (Creator) | same: top up; next month's 150 arrive on the billing date regardless |
 | Free user tops up | stays Free — 720p/15s/watermark limits unchanged |
 | Creator cancels | keeps balance, loses monthly drops + capabilities at period end |
-| Provider balance empty on our side | low-balance guard fails the job honestly ("temporarily unavailable"), reservation released — never a silently degraded video |
+| Provider balance empty on our side | preflight pauses the job before any scene renders — never a silently degraded video |
 | Chargeback / refund | credits from that payment are clawed back (floor 0); account flagged for review |
 | Blocked user | silent blocklist as built — no credit interaction |
 

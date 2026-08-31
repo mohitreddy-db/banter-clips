@@ -5,10 +5,11 @@ here, in the doc's words:
 
 - Prices are an exact menu lookup (duration × mode) — internal retries and
   shot counts never change what a user pays.
-- Reserve on start, keep on success, release on failure: `charge_video` at
-  clip creation, `refund_video` on any failure or abandonment. Refunds are
-  idempotent (guarded by clips.credits_charged) so a crash retry can never
-  double-refund.
+- Pay only for the finished video: the balance is checked at create/resume,
+  but the single charge happens in `charge_on_completion` when the video
+  lands. Failures, pauses and abandoned scripts never touch the wallet.
+  (`refund_video` remains for clips created under the old reserve-at-start
+  model that were still in flight at the changeover.)
 - Out of credits → top up, never upgrade. The API returns
   `insufficient_credits` with the exact shortfall; no code path suggests a
   plan change.
@@ -79,15 +80,25 @@ def pack(db: Session, key: str) -> dict | None:
 
 
 def apply(db: Session, user: User, delta: int, kind: str,
-          clip: Clip | None = None, note: str = "") -> int:
+          clip: Clip | None = None, note: str = "",
+          allow_negative: bool = False) -> int:
     """Move credits atomically and write the ledger row. Returns the new
     balance. A debit that would go below zero raises ValueError — callers
     check first and answer with `insufficient_credits`; this is the backstop
-    against concurrent spends."""
+    against concurrent spends.
+
+    `allow_negative` exists for exactly one caller: charging a video that has
+    already finished rendering. The user was balance-checked at create and at
+    resume, so a negative here means parallel spends raced — the debt is
+    real, the video is real, and refusing the charge would make the video
+    free instead."""
     delta = int(delta)
+    guard = [User.id == user.id]
+    if not allow_negative:
+        guard.append(User.credits + delta >= 0)
     row = db.execute(
         update(User)
-        .where(User.id == user.id, User.credits + delta >= 0)
+        .where(*guard)
         .values(credits=User.credits + delta)
         .returning(User.credits)
     ).first()
@@ -103,11 +114,21 @@ def apply(db: Session, user: User, delta: int, kind: str,
     return balance
 
 
-def charge_video(db: Session, user: User, clip: Clip, price: int) -> None:
-    """The reservation: taken when generation starts (rule 3)."""
-    clip.credits_charged = price
-    apply(db, user, -price, "video_charge", clip=clip,
-          note=f"{clip.duration_target}s {clip.resolution}")
+def charge_on_completion(db: Session, user: User, clip: Clip) -> int:
+    """The charge, taken only when the finished video exists.
+
+    Nothing is reserved up front any more: the balance is checked at create
+    and at resume, and the wallet moves exactly once, here. Idempotent via
+    credits_charged (a legacy clip that reserved at create keeps its charge
+    and is skipped), and simulated clips are always free."""
+    if clip.is_simulated or int(clip.credits_charged or 0) > 0:
+        return int(clip.credits_charged or 0)
+    amount = int(clip.credits_quoted or 0) or video_price(
+        db, clip.duration_target, clip.resolution)
+    clip.credits_charged = amount
+    apply(db, user, -amount, "video_charge", clip=clip,
+          note=f"{clip.duration_target}s {clip.resolution}", allow_negative=True)
+    return amount
 
 
 def refund_video(db: Session, clip: Clip) -> bool:

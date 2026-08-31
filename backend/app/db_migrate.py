@@ -39,6 +39,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "credits_charged", "integer NOT NULL DEFAULT 0"),
     ("clips", "sports", "text[] NOT NULL DEFAULT '{}'"),
     ("clips", "subjects", "text[] NOT NULL DEFAULT '{}'"),
+    ("clips", "credits_quoted", "integer NOT NULL DEFAULT 0"),
     ("social_accounts", "refresh_token", "text"),
 )
 
@@ -55,6 +56,13 @@ def _statements() -> tuple[str, ...]:
     # (which had no constraint) passed its tests. Sport and tone carry the
     # same trap — the sport list grew from 4 to 12 and tones gained "Roast".
     return (
+        # "creating_voice" left the vocabulary (2026-08-31). Any row still
+        # carrying it is a job that died mid-stage long ago; without this
+        # UPDATE the rebuilt status constraint below would fail validation
+        # and the whole migration transaction would roll back.
+        "UPDATE clips SET status = 'failed', "
+        "error = COALESCE(error, 'interrupted by a deploy') "
+        "WHERE status = 'creating_voice'",
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_status_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_status_check "
         f"CHECK (status IN {CLIP_STATUSES!r})",

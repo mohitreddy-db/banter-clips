@@ -1,15 +1,18 @@
 """Pipeline orchestration.
 
-Contract: `generate_video` always returns a Result and never raises. If a
-stage degrades, it substitutes and records a warning; only a genuinely
-unrecoverable state (no ffmpeg, or not one usable scene) produces ok=False.
+Contract: `generate_video` always returns a Result and never raises.
 
-Degradation ladder, in order, per scene:
+There is no still-image degradation any more. The old ladder (placeholder
+keyframes, Ken Burns pans) shipped "successful" videos of gradient slides
+whenever the provider ran out of credits — twice, to paying users. Now:
 
-    real keyframe -> placeholder still
-    real animation -> Ken Burns on the keyframe -> drop the scene
-
-A job survives losing individual scenes. It fails only when nothing is left.
+- provider out of credits -> the job PAUSES (result.paused): progress is
+  checkpointed per scene in the work dir, the user sees why, resumes for
+  free, and completed scenes are reused instead of re-billed.
+- any other per-scene failure keeps its bounded retries; a scene that still
+  fails drops, and a job with nothing usable fails honestly.
+- the user's credits are only charged when the finished video lands
+  (services/credits.charge_on_completion) — never for a pause or a failure.
 """
 
 from __future__ import annotations
@@ -36,7 +39,6 @@ log = logging.getLogger("banter.video.runner")
 
 # Names must match models.GENERATION_STAGES so the existing UI keeps working.
 STAGE_PLANNING = "planning_story"
-STAGE_VOICE = "creating_voice"
 STAGE_CHARACTERS = "designing_characters"
 STAGE_SCENES = "generating_scenes"
 STAGE_ANIMATE = "animating_scenes"
@@ -91,6 +93,9 @@ class Result:
     assets: list[SceneAsset] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str = ""
+    # Provider out of credits: progress is saved, the user is not charged,
+    # and the clip parks as "paused" instead of failing or degrading.
+    paused: bool = False
 
     def warn(self, message: str) -> None:
         log.warning("pipeline: %s", message)
@@ -205,13 +210,7 @@ def generate_video(
     if brief is not None:
         _write(work_dir / "brief.json", brief.to_dict())
 
-    # ------------------------------------------------- 2. voices / cast
-    stage(STAGE_VOICE)
-    speakers = {s.speaker_id for s in plan.scenes}
-    if len(speakers) < min(2, len(plan.scenes)):
-        result.warn("scenes share a speaker; voices may drift between clips")
-
-    # -------------------------------------- 3. characters and references
+    # -------------------------------------- 2. characters and references
     stage(STAGE_CHARACTERS)
     # The image provider and spend ledger exist from here (not stage 4):
     # discovering a new character may buy its reference stills, and that
@@ -270,6 +269,35 @@ def generate_video(
     # prompt text; a picture of the actual rendered world pins them together.
     venue_anchor: list[Path] = []
 
+    # Per-scene checkpoint, so a paused job resumes instead of re-billing.
+    # Maps scene index -> {"keyframe": path, "clip": path}; a recorded file
+    # that still exists is reused verbatim and costs nothing.
+    ckpt_path = work_dir / "checkpoint.json"
+    try:
+        checkpoint: dict = json.loads(ckpt_path.read_text()) if ckpt_path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        checkpoint = {}
+    ckpt_lock = threading.Lock()
+    paused = [False]
+
+    def _saved(scene_index: int, kind: str) -> Path | None:
+        recorded = (checkpoint.get(str(scene_index)) or {}).get(kind)
+        if recorded and Path(recorded).exists():
+            return Path(recorded)
+        return None
+
+    def _record(scene_index: int, kind: str, path: Path | str) -> None:
+        with ckpt_lock:
+            checkpoint.setdefault(str(scene_index), {})[kind] = str(path)
+            _write(ckpt_path, checkpoint)
+
+    def _pause(note: str) -> None:
+        # First reporter wins; everyone else just stops starting new work.
+        with ckpt_lock:
+            if not paused[0]:
+                paused[0] = True
+                log.warning("pausing job: %s", note)
+
     def make_keyframe(scene) -> SceneAsset:
         """One scene's keyframe, start to finish. Runs on a worker thread."""
         asset = SceneAsset(index=scene.index)
@@ -291,7 +319,16 @@ def generate_video(
             refs = refs[:2] + [venue_anchor[0]]
         best_path, best_hard = None, None
 
+        # A previous run of this job already produced and reviewed this
+        # frame — reuse it rather than paying for it twice.
+        saved = _saved(scene.index, "keyframe")
+        if saved is not None:
+            asset.keyframe_path = str(saved)
+            asset.note("keyframe reused from the previous run")
+
         for attempt in range(1, MAX_KEYFRAME_ATTEMPTS + 1):
+            if asset.keyframe_path or paused[0]:
+                break
             asset.attempts = attempt
             if ledger.exhausted():
                 asset.note("budget reached; skipped keyframe generation")
@@ -300,7 +337,12 @@ def generate_video(
                 base_prompt, best_hard
             )
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
-            path, cost = images.generate(prompt, target, references=refs)
+            try:
+                path, cost = images.generate(prompt, target, references=refs)
+            except providers.OutOfCredits:
+                _pause(f"scene {scene.index}: image provider out of credits")
+                asset.note("provider out of credits; job paused")
+                break
             ledger.charge(cost)
             asset.cost_usd += cost
             if not path:
@@ -319,21 +361,15 @@ def generate_video(
                 best_path, best_hard = path, verdict.hard
 
         if not asset.keyframe_path and best_path is not None:
+            # A real generated frame with flaws beats dropping the scene.
+            # What no longer exists is the gradient placeholder — a scene
+            # either comes from the model or it doesn't ship.
             asset.keyframe_path = str(best_path)
             asset.note(f"no attempt passed review; kept the closest ({'; '.join(best_hard)})")
             result.warn(f"scene {scene.index}: shipped a frame that failed review")
 
-        if not asset.keyframe_path:
-            try:
-                placeholder = media.placeholder_image(
-                    work_dir / f"scene{scene.index}_placeholder.jpg", plan.title,
-                    size=size,
-                )
-                asset.keyframe_path = str(placeholder)
-                asset.note("used placeholder still")
-                result.warn(f"scene {scene.index}: fell back to a placeholder still")
-            except media.MediaError:
-                asset.note("placeholder generation failed")
+        if asset.keyframe_path:
+            _record(scene.index, "keyframe", asset.keyframe_path)
 
         with done_count:
             finished[0] += 1
@@ -348,7 +384,7 @@ def generate_video(
     # becomes the world-anchor reference for every other scene, which is
     # worth far more than full parallelism ever was.
     assets = [make_keyframe(plan.scenes[0])]
-    if assets[0].keyframe_path and "placeholder" not in Path(assets[0].keyframe_path).name:
+    if assets[0].keyframe_path:
         venue_anchor.append(Path(assets[0].keyframe_path))
     rest = plan.scenes[1:]
     if rest:
@@ -371,11 +407,32 @@ def generate_video(
             return
         keyframe = Path(asset.keyframe_path)
         target = work_dir / f"scene{scene.index}.mp4"
-        motion = prompts.build_motion_prompt(plan, scene)
 
+        # Animated on a previous run of this job: reuse, pay nothing.
+        saved = _saved(scene.index, "clip")
+        if saved is not None:
+            asset.clip_path = str(saved)
+            asset.ok = True
+            asset.note("animation reused from the previous run")
+            with done_count:
+                animated[0] += 1
+                say(f"scene {scene.index + 1}: reused from checkpoint",
+                    f"Brought {animated[0]} of {total} scenes to life")
+            return
+        if paused[0]:
+            asset.note("job paused before this scene animated")
+            return
+
+        motion = prompts.build_motion_prompt(plan, scene)
+        path = None
         if not ledger.exhausted():
             started = time.time()
-            path, cost = video.animate(motion, scene.seconds, target, first_frame=keyframe)
+            try:
+                path, cost = video.animate(motion, scene.seconds, target, first_frame=keyframe)
+            except providers.OutOfCredits:
+                _pause(f"scene {scene.index}: video provider out of credits")
+                asset.note("provider out of credits; job paused")
+                return
             ledger.charge(cost)
             asset.cost_usd += cost
             with done_count:
@@ -385,23 +442,15 @@ def generate_video(
                     f"{time.time() - started:.0f}s (${ledger.spent:.2f} spent so far)",
                     f"Brought {animated[0]} of {total} scenes to life")
         else:
-            path = None
-            asset.note("budget reached; skipped animation")
-            say(f"scene {scene.index + 1}: budget ceiling reached; using a still instead",
-                f"Finishing scene {scene.index + 1}")
+            asset.note("budget reached; scene not animated")
 
-        if not path and not using_stub:
-            # Documented fallback: a still with a slow push-in beats no scene.
-            try:
-                path = media.ken_burns(keyframe, scene.seconds, target, size=size)
-                asset.note("animation failed; used Ken Burns fallback")
-                result.warn(f"scene {scene.index}: animation fell back to a still")
-            except media.MediaError:
-                path = None
-
+        # No Ken Burns fallback: a still pretending to be video is exactly
+        # the failure this rewrite removes. Stub mode (dev, no video keys)
+        # still animates locally inside StubVideoProvider itself.
         if path:
             asset.clip_path = str(path)
             asset.ok = True
+            _record(scene.index, "clip", path)
         else:
             asset.note("scene produced no clip")
             result.warn(f"scene {scene.index}: dropped")
@@ -418,6 +467,16 @@ def generate_video(
     # concurrently; copy it back so the DB, result.json and the log agree.
     result.cost_usd = ledger.spent
     result.assets = assets
+    if paused[0]:
+        # Out of provider credits mid-run. Everything finished so far is in
+        # the checkpoint; the caller parks the clip as paused and the user
+        # resumes later — completed scenes render for free next time.
+        done = sum(1 for a in assets if a.ok and a.clip_path)
+        result.paused = True
+        result.error = (f"paused: provider out of credits "
+                        f"({done}/{total} scenes completed and saved)")
+        _write(work_dir / "assets.json", [a.__dict__ for a in assets])
+        return result
     usable = [a for a in assets if a.ok and a.clip_path]
     if not usable:
         result.error = "no scene produced a usable clip"
@@ -684,6 +743,21 @@ def _job_budget(db) -> float:
         return float(getattr(settings, "MAX_JOB_COST_USD", 8.0))
 
 
+PAUSED_MESSAGE = (
+    "Generation is paused — our AI provider's credits ran low. "
+    "Your progress is saved and you have not been charged; "
+    "resume once and it continues from where it stopped."
+)
+
+
+def _park_paused(db, clip, progress: str) -> None:
+    """Provider ran dry: keep everything, charge nothing, explain why."""
+    clip.status = "paused"
+    clip.error = f"{PAUSED_MESSAGE} ({progress})"[:500]
+    clip.current_step = None
+    db.commit()
+
+
 def _release_credits(db, clip) -> None:
     """A failed clip is free (PRICING rule 3). Idempotent and non-fatal."""
     try:
@@ -714,6 +788,21 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             return
 
         # ---- Phase 2: render ------------------------------------------
+        # Provider-balance preflight. Below this floor OpenRouter's per-call
+        # pre-auth starts refusing unpredictably (measured across the two
+        # incidents: fine at $8, refused at $9.65), so don't start a render
+        # that will pause two scenes in — pause it now, before any spend.
+        if getattr(settings, "OPENROUTER_API_KEY", ""):
+            from ..services import provider_balance
+
+            floor = float(getattr(settings, "PROVIDER_MIN_BALANCE_USD", 8.0))
+            info = provider_balance.get()
+            if info is not None and info.get("balance_usd", floor) < floor:
+                log.error("provider balance $%.2f below the $%.2f floor; pausing clip %s",
+                          info["balance_usd"], floor, clip_id)
+                _park_paused(db, clip, "0 scenes started")
+                return
+
         # The daily spend gate applies to RENDERING only — writing a script
         # costs pennies and must never be refused by the video budget.
         may_spend, so_far, limit = spend.allowed(db)
@@ -779,12 +868,29 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             from datetime import datetime, timezone
             clip.completed_at = datetime.now(timezone.utc)
             clip.current_step = None
+            db.commit()
+            # The one and only charge: the finished video exists. Non-fatal —
+            # a billing hiccup must not un-deliver a delivered video.
+            try:
+                from ..models import User
+                from ..services import credits as credit_svc
+
+                user = db.get(User, clip.user_id)
+                if user is not None:
+                    charged = credit_svc.charge_on_completion(db, user, clip)
+                    db.commit()
+                    log.info("clip %s charged %d credits on completion", clip_id, charged)
+            except Exception:  # noqa: BLE001
+                log.exception("completion charge failed for clip %s", clip_id)
+        elif result.paused:
+            done = sum(1 for a in result.assets if a.ok and a.clip_path)
+            _park_paused(db, clip, f"{done}/{len(result.assets) or '?'} scenes completed")
+            return
         else:
             clip.status = "failed"
             clip.error = (result.error or "generation failed")[:500]
             clip.current_step = None
-        db.commit()
-        if not result.ok:
+            db.commit()
             _release_credits(db, clip)
         log.info("clip %s finished in %.1fs ok=%s cost=$%.3f warnings=%d",
                  clip_id, time.time() - started, result.ok, result.cost_usd,

@@ -545,6 +545,66 @@ def test_a_person_is_described_by_something_that_describes_them():
         }, look
 
 
+def test_out_of_provider_credits_pauses_instead_of_shipping_stills():
+    """The failure that shipped twice: the provider ran dry, every scene
+    degraded to a gradient placeholder, and the 'successful' slideshow charged
+    the user. Now the job pauses, completed scenes are reused from the
+    checkpoint, and nothing pretends to be a video."""
+    import subprocess
+    from app.video import providers, runner
+
+    class Broke:
+        available = True
+
+        def generate(self, *_a, **_k):
+            raise providers.OutOfCredits("no money")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp) / "work"
+        work.mkdir()
+        # Scene 0 finished on a previous run: a real keyframe and clip exist
+        # and the checkpoint records them.
+        kf = work / "scene0_kf1.jpg"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "color=c=blue:s=72x128", "-frames:v", "1", str(kf)],
+                       check=True)
+        clip0 = work / "scene0.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "color=c=blue:s=72x128:d=1", "-pix_fmt", "yuv420p",
+                        str(clip0)], check=True)
+        (work / "checkpoint.json").write_text(json.dumps(
+            {"0": {"keyframe": str(kf), "clip": str(clip0)}}))
+
+        real = providers.image_provider
+        providers.image_provider = lambda: Broke()
+        try:
+            result = runner.generate_video(
+                "Wemby can't find Brunson", "NBA", "Funny", 15,
+                work_dir=work, out_path=work / "final.mp4",
+            )
+        finally:
+            providers.image_provider = real
+
+    assert result.paused, "provider 402 must pause, not degrade"
+    assert not result.ok
+    assert "provider out of credits" in result.error
+    # The checkpointed scene was reused for free; nothing became a placeholder.
+    scene0 = next(a for a in result.assets if a.index == 0)
+    assert scene0.ok and scene0.cost_usd == 0
+    assert any("reused" in n for n in scene0.notes)
+    for asset in result.assets:
+        assert not (asset.keyframe_path and "placeholder" in asset.keyframe_path)
+        for note in asset.notes:
+            assert "Ken Burns" not in note and "placeholder" not in note
+
+
+def test_the_fake_voice_stage_is_gone():
+    from app.models import CLIP_STATUSES, GENERATION_STAGES
+
+    assert "creating_voice" not in GENERATION_STAGES
+    assert "paused" in CLIP_STATUSES
+
+
 def test_the_sport_is_inferred_so_picking_one_is_optional():
     """Sport used to be a required choice before you could type. Almost every
     take names its own league, club or player, so the words decide it."""

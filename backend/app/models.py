@@ -29,9 +29,11 @@ TONES = ("Funny", "Savage", "Roast", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 
 # Honest generation stages (BR-07), in order. Index into this list = stage_index.
+# "creating_voice" is gone: it was a display-only stage — voices are performed
+# by the video model inside animation, and a fake step is a lie in a progress
+# bar. Old rows carrying it are migrated by db_migrate.
 GENERATION_STAGES = (
     "planning_story",
-    "creating_voice",
     "designing_characters",
     "generating_scenes",
     "animating_scenes",
@@ -40,7 +42,10 @@ GENERATION_STAGES = (
 )
 # "script_ready" = the script is written and awaiting the user's approval
 # before any generation money is spent (script approval flow).
-CLIP_STATUSES = ("queued", *GENERATION_STAGES, "script_ready", "ready", "failed")
+# "paused" = generation stopped through no fault of the take (provider out of
+# credits). Progress is checkpointed on disk; the user resumes for free and
+# is only ever charged when the finished video lands.
+CLIP_STATUSES = ("queued", *GENERATION_STAGES, "script_ready", "paused", "ready", "failed")
 
 
 def _uuid() -> uuid.UUID:
@@ -212,9 +217,11 @@ class Clip(Base):
     cost_usd: Mapped[float | None] = mapped_column(Numeric(7, 3))
     provenance: Mapped[dict | None] = mapped_column(JSONB)
 
-    # The credit receipt (PRICING.md rule 4): what this video charged. Set on
-    # create (the reservation), zeroed by a refund — so >0 on a failed clip
-    # means "refund pending", and the ledger explains every change.
+    # The credit receipt (PRICING.md rule 4). `credits_quoted` is the exact
+    # menu price shown at create; `credits_charged` becomes that number in
+    # the single charge taken when the finished video lands. Until then the
+    # wallet is untouched — a paused or failed clip costs nothing.
+    credits_quoted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     credits_charged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     # Simulated clips ([mock] in the take, or dummy mode) never reach a real

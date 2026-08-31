@@ -162,6 +162,10 @@ class Settings(BaseSettings):
     # (~2x the measured $0.147/s at 720p) — so the cap only catches runaways,
     # never a job a Creator was allowed to ask for.
     MAX_JOB_COST_USD: float = 14.0
+    # Render preflight: below this OpenRouter balance the per-call pre-auth
+    # starts refusing unpredictably, so jobs pause up front instead of two
+    # scenes in (measured: fine at $8, refused at $9.65 with charges settling).
+    PROVIDER_MIN_BALANCE_USD: float = 8.0
     # Ceiling across ALL jobs in a rolling 24 hours. The per-job limit stops
     # one runaway clip; this stops a normal day from emptying the account,
     # which at ~$2.40 a clip takes very few users. Past it, generation is

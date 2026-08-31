@@ -29,14 +29,13 @@ const RESOLUTIONS = [
 const STAGE_LABELS = {
   queued: "Queued",
   planning_story: "Planning story",
-  creating_voice: "Creating voice",
   designing_characters: "Designing characters",
   generating_scenes: "Generating scene images",
   animating_scenes: "Animating scenes",
   assembling_video: "Assembling video",
   validating: "Validating",
 };
-const STAGES = Object.values(STAGE_LABELS).slice(1); // the 7 real stages
+const STAGES = Object.values(STAGE_LABELS).slice(1); // the real stages, in order
 
 /** One selectable wording — the user's own, or a suggested variation. */
 function TakeOption({ selected, onClick, label, text, hint, badge }) {
@@ -166,6 +165,7 @@ export default function Studio() {
         setClip(c);
         if (c.status === "ready") setPhase("result");
         else if (c.status === "failed") setPhase("failed");
+        else if (c.status === "paused") setPhase("paused");
         else if (c.status === "script_ready") setPhase("script");
         // Elapsed counts from when the job actually started, not from when
         // this page happened to open — reopening a running clip mid-render
@@ -221,6 +221,10 @@ export default function Studio() {
           } else if (c.status === "failed") {
             stopTimers();
             setPhase("failed");
+            refreshClips();
+          } else if (c.status === "paused") {
+            stopTimers();
+            setPhase("paused");
             refreshClips();
           } else if (c.status === "script_ready") {
             // The script is written; nothing renders until it's approved.
@@ -581,7 +585,7 @@ export default function Studio() {
             <span style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
               This video: <b style={{ color: "var(--app-text)" }}>{thisPrice} credits</b>
               {" · "}you have <b style={{ color: credits < thisPrice ? "var(--app-error)" : "var(--app-text)" }}>{credits.toLocaleString()}</b>
-              {" · "}failures are refunded
+              {" · "}charged only when your video completes
             </span>
             <div style={{ flex: 1 }} />
             <button onClick={() => setTopupOpen(true)} style={{ background: "none", border: "none", color: "var(--app-cyan)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>
@@ -647,7 +651,7 @@ export default function Studio() {
         </>
       )}
 
-      {(phase === "generating" || phase === "failed" || phase === "script") && clip && (
+      {(phase === "generating" || phase === "failed" || phase === "paused" || phase === "script") && clip && (
         <>
           {/* The take in full — this is the view My Clips links to, so it
               must not truncate the way a card does. */}
@@ -834,7 +838,7 @@ export default function Studio() {
                 <div style={{ width: 44, height: 44, borderRadius: 13, background: "rgba(240,84,108,.14)", display: "grid", placeItems: "center", fontSize: 20 }}>⚠️</div>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 19, color: "var(--app-text)" }}>Generation failed</div>
-                  <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Your allowance was not used.</div>
+                  <div style={{ fontSize: 13, color: "var(--app-muted)" }}>You were not charged.</div>
                 </div>
               </div>
               <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>{clip.error}</div>
@@ -844,6 +848,32 @@ export default function Studio() {
                 </button>
                 <button className="ghost-btn" style={{ padding: "13px 24px", fontSize: 15 }} onClick={reset}>
                   Start over
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Paused: the provider ran out of credits mid-render. Progress is
+              checkpointed server-side, so Resume finishes only the missing
+              scenes — and nothing has been charged. */}
+          {phase === "paused" && (
+            <div className="card" style={{ padding: "30px 28px", display: "flex", flexDirection: "column", gap: 16, alignItems: "flex-start", borderColor: "rgba(225,158,60,.5)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 13, background: "rgba(225,158,60,.14)", display: "grid", placeItems: "center", fontSize: 20 }}>⏸</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 19, color: "var(--app-text)" }}>Generation paused</div>
+                  <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
+                    Progress saved · you haven't been charged
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--app-muted2)", lineHeight: 1.55 }}>{clip.error}</div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button className="grad-btn" style={{ padding: "13px 24px", fontSize: 15 }} onClick={retry}>
+                  ▶ Resume — finished scenes won't re-render
+                </button>
+                <button className="ghost-btn" style={{ padding: "13px 24px", fontSize: 15 }} onClick={reset}>
+                  Start something else
                 </button>
               </div>
             </div>

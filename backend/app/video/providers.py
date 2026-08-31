@@ -100,6 +100,19 @@ class NullTextClient:
         return None
 
 
+class OutOfCredits(RuntimeError):
+    """The provider refused to spend — its account balance is below the
+    pre-authorization for the call. Nothing is wrong with the request; money
+    is. Callers pause the job (progress saved, user not charged) rather than
+    degrading it, because a placeholder video costs the user credits and
+    trust while telling them nothing about what actually happened."""
+
+
+def _raise_if_out_of_credits(resp) -> None:
+    if resp.status_code == 402:
+        raise OutOfCredits("provider account has insufficient credits")
+
+
 # ------------------------------------------------------------------- images
 
 class ImageProvider:
@@ -148,6 +161,7 @@ class ImageProvider:
                         f"{OPENROUTER}/images", json=body,
                         headers={"Authorization": f"Bearer {self.api_key}"},
                     )
+            _raise_if_out_of_credits(resp)
             if resp.status_code >= 400:
                 log.warning("image gen -> %s %s", resp.status_code, resp.text[:300])
                 return None, 0.0
@@ -157,6 +171,8 @@ class ImageProvider:
                 return None, 0.0
             out.write_bytes(base64.b64decode(payload))
             return out, float((data.get("usage") or {}).get("cost") or 0.0)
+        except OutOfCredits:
+            raise
         except Exception:  # noqa: BLE001
             log.exception("image generation failed")
             return None, 0.0
@@ -218,6 +234,7 @@ class VideoProvider:
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 resp = client.post(f"{OPENROUTER}/videos", json=body, headers=headers)
+                _raise_if_out_of_credits(resp)
                 if resp.status_code >= 400:
                     log.warning("video submit -> %s %s", resp.status_code, resp.text[:300])
                     return None, 0.0
@@ -245,6 +262,8 @@ class VideoProvider:
                     return None, cost
                 out.write_bytes(content.content)
                 return out, cost
+        except OutOfCredits:
+            raise
         except Exception:  # noqa: BLE001
             log.exception("video generation failed")
             return None, 0.0

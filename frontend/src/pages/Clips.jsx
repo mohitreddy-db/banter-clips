@@ -10,13 +10,13 @@ import { useSeo } from "../lib/seo.js";
 const STATUS_LABEL = {
   queued: "Queued…",
   planning_story: "Planning story…",
-  creating_voice: "Creating voice…",
   designing_characters: "Designing characters…",
   generating_scenes: "Generating scenes…",
   animating_scenes: "Animating scenes…",
   assembling_video: "Assembling video…",
   validating: "Validating…",
   script_ready: "📝 Script ready — tap to review",
+  paused: "⏸ Paused — progress saved",
 };
 
 export default function Clips() {
@@ -43,7 +43,7 @@ export default function Clips() {
   // Keep in-flight generations AND in-flight publishes live while this page
   // is open (publishing is async — the modal doesn't wait for it).
   const generating = clips.some(
-    (c) => !["ready", "failed", "script_ready"].includes(c.status)
+    (c) => !["ready", "failed", "paused", "script_ready"].includes(c.status)
   );
   const publishing = clips.some((c) =>
     ["queued", "uploading"].includes(c.publishes?.[0]?.status)
@@ -96,7 +96,7 @@ export default function Clips() {
           const published = c.publishes?.some((p) => p.status === "published");
           const pubInFlight = ["queued", "uploading"].includes(latestPub?.status);
           const pubFailed = latestPub?.status === "failed";
-          const inFlight = c.status !== "ready" && c.status !== "failed";
+          const inFlight = !["ready", "failed", "paused"].includes(c.status);
           return (
             <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16, display: "flex", flexDirection: "column" }}>
               {/* media frame: video covers the whole box, no gaps */}
@@ -140,6 +140,13 @@ export default function Clips() {
                       <div style={{ textAlign: "center", color: "#fff", padding: "0 14px" }}>
                         <div style={{ fontSize: 12.5, fontWeight: 700 }}>🎬 Video is being prepared</div>
                         <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.8 }}>Check back in a minute</div>
+                      </div>
+                    ) : c.status === "paused" ? (
+                      <div style={{ textAlign: "center", color: "#fff", padding: "0 14px" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>⏸ Paused — provider credits low</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.8 }}>
+                          Progress saved · not charged · tap to resume
+                        </div>
                       </div>
                     ) : (
                       <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
@@ -234,10 +241,10 @@ export default function Clips() {
                     )}
                   </div>
                 )}
-                {c.status === "failed" && (
+                {(c.status === "failed" || c.status === "paused") && (
                   <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
                     <button className="grad-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9 }} onClick={() => retry(c)}>
-                      ↻ Retry free
+                      {c.status === "paused" ? "▶ Resume" : "↻ Retry free"}
                     </button>
                     <button className="ghost-btn" style={{ height: 38, padding: "0 14px", fontSize: 13, borderRadius: 9, color: "var(--app-muted)" }} onClick={() => remove(c)}>
                       🗑

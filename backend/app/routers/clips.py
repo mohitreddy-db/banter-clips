@@ -149,6 +149,9 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
     # not be charged credits or gated by the balance.
     simulated = markers.is_simulated(body.take)
 
+    # The exact menu quote. The balance is only CHECKED here — the single
+    # charge happens when the finished video lands (charge_on_completion),
+    # so a failed or paused generation never touches the wallet.
     price = 0 if simulated else credits.video_price(db, body.duration, body.resolution)
     if user.credits < price:
         # PRICING rule 2: an empty balance means top up — never an upgrade
@@ -205,6 +208,7 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
         sport=primary,
         sports=list(dict.fromkeys(picked)),
         subjects=subjects,
+        credits_quoted=price,
         tone=body.tone,
         duration_target=body.duration,
         resolution=body.resolution,
@@ -213,19 +217,6 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
     )
     db.add(clip)
     db.commit()
-    if price > 0:
-        # The reservation (PRICING rule 3): charged now, refunded in full if
-        # generation fails or the clip is abandoned at the script stage.
-        try:
-            credits.charge_video(db, user, clip, price)
-        except ValueError:  # concurrent spend won the last credits
-            db.delete(clip)
-            db.commit()
-            raise HTTPException(402, detail={
-                "code": "insufficient_credits",
-                "message": f"This video needs {price} credits — you have {user.credits}.",
-                "needed": price, "balance": user.credits,
-            })
     record_event(db, "generation_started", user, sport=primary, tone=body.tone,
                  duration=body.duration, inferred_sport=not picked)
     start_generation(clip.id)
@@ -337,24 +328,19 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
     from ..services import credits
 
     clip = _own_clip(clip_id, user, db)
-    if clip.status != "failed":
-        raise HTTPException(409, "Only failed jobs can be retried.")
-    # A failed clip was refunded, so a retry reserves again like a fresh run
-    # (rule 3: "retries charge like a normal run and refund the same way").
+    if clip.status not in ("failed", "paused"):
+        raise HTTPException(409, "Only failed or paused jobs can be retried.")
+    # Nothing is charged here: a resumed job reuses its checkpointed scenes
+    # and the single charge happens when the video completes. The balance
+    # check just keeps that completion charge from landing on an empty
+    # wallet the user already spent elsewhere.
     if not clip.is_simulated and clip.credits_charged <= 0:
-        price = credits.video_price(db, clip.duration_target, clip.resolution)
+        price = clip.credits_quoted or credits.video_price(
+            db, clip.duration_target, clip.resolution)
         if user.credits < price:
             raise HTTPException(402, detail={
                 "code": "insufficient_credits",
-                "message": f"Retrying needs {price} credits — you have {user.credits}.",
-                "needed": price, "balance": user.credits,
-            })
-        try:
-            credits.charge_video(db, user, clip, price)
-        except ValueError:
-            raise HTTPException(402, detail={
-                "code": "insufficient_credits",
-                "message": f"Retrying needs {price} credits — you have {user.credits}.",
+                "message": f"Resuming needs {price} credits available — you have {user.credits}.",
                 "needed": price, "balance": user.credits,
             })
     clip.status = "queued"
