@@ -638,7 +638,12 @@ def _write_script(db, clip) -> None:
     clip.current_step = "Researching the real storyline"
     db.commit()
 
-    resolved = defaults.resolve(clip.take, clip.sport, clip.tone, clip.duration_target)
+    resolved = defaults.resolve(
+        clip.take, clip.sport, clip.tone, clip.duration_target,
+        # What the user asked for beyond the take: other sports the story may
+        # cross into, and any teams or players they named.
+        also_sports=list(clip.sports or []), subjects=list(clip.subjects or []),
+    )
     pack = context_mod.get_pack(resolved.take, resolved.sport)
     clip.current_step = "Writing your script"
     db.commit()

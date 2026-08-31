@@ -6,21 +6,22 @@ out-of-range number. Whatever arrives, this produces a complete brief.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 from . import catalog, focus as focus_mod
 from .library import default_venue
 from .types import _clean
 
-SPORTS = ("NBA", "NFL", "Soccer", "MLB")
-TONES = ("Funny", "Savage", "Hype", "Bold")
+# One vocabulary for the whole app: the DB check constraints, the API
+# schemas and these are all built from models.SPORTS / models.TONES, so a
+# sport can only be added in one place.
+from ..models import SPORTS, TONES  # noqa: E402
 # The product's duration tiers. These must match the options the UI offers and
 # the Literal on ClipCreate — a mismatch means a user picks a length and
 # silently gets a different one. Free tops out at 15s; 30s is Creator-only.
 DURATIONS = (10, 15, 30)
 
-DEFAULT_SPORT = "NBA"
+DEFAULT_SPORT = "Soccer"
 DEFAULT_TONE = "Bold"
 DEFAULT_SECONDS = 15
 # Matches the clips_take_len check constraint in the database.
@@ -36,20 +37,6 @@ SHOT_COUNTS = {10: 3, 15: 4, 30: 7}
 TARGET_SCENE_SECONDS = 4.5   # fallback for unmapped durations
 MIN_SCENES, MAX_SCENES = 2, 12
 
-# Only used when the sport is missing entirely — a cheap keyword vote.
-_SPORT_HINTS = {
-    "NBA": ("nba", "basketball", "dunk", "three-pointer", "lakers", "knicks", "celtics",
-            "warriors", "spurs", "lebron", "curry", "jokic", "wemby", "wembanyama",
-            "brunson", "hoop", "courtside", "finals mvp"),
-    "NFL": ("nfl", "football", "quarterback", "touchdown", "super bowl", "chiefs",
-            "eagles", "mahomes", "sack", "end zone", "gridiron"),
-    "Soccer": ("soccer", "premier league", "la liga", "champions league", "messi",
-               "ronaldo", "world cup", "fifa", "offside", "penalty", "striker",
-               "arsenal", "madrid", "barcelona", "yamal", "mbappe"),
-    "MLB": ("mlb", "baseball", "home run", "pitcher", "world series", "yankees",
-            "dodgers", "innings", "shortstop", "bullpen"),
-}
-
 
 @dataclass
 class ResolvedInput:
@@ -60,10 +47,15 @@ class ResolvedInput:
     scene_count: int
     venue: str
     focus: focus_mod.Focus = field(default_factory=focus_mod.Focus)
+    # The user's optional extras: other sports the take spans, and teams or
+    # players they explicitly asked to see. Requirements when present.
+    also_sports: list[str] = field(default_factory=list)
+    subjects: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "take": self.take, "sport": self.sport, "tone": self.tone,
+            "also_sports": self.also_sports, "subjects": self.subjects,
             "seconds": self.seconds, "scene_count": self.scene_count,
             "focus": self.focus.to_dict(),
         }
@@ -74,6 +66,8 @@ def resolve(
     sport: object = None,
     tone: object = None,
     seconds: object = None,
+    also_sports: list | None = None,
+    subjects: list | None = None,
 ) -> ResolvedInput:
     """Turn whatever we were given into a complete, valid brief."""
     clean_take = _clean(take)
@@ -104,6 +98,8 @@ def resolve(
         scene_count=count,
         venue=venue,
         focus=detected,
+        also_sports=[s for s in (also_sports or []) if s in SPORTS and s != resolved_sport],
+        subjects=[str(s).strip()[:60] for s in (subjects or []) if str(s).strip()][:8],
     )
 
 
@@ -124,14 +120,11 @@ def _infer_sport(take: str) -> str | None:
     from_catalog = catalog.sport_of_mentions(take)
     if from_catalog in SPORTS:
         return from_catalog
-    words = set(re.findall(r"[a-z']+", take.lower()))
-    blob = take.lower()
-    best, best_score = None, 0
-    for sport, hints in _SPORT_HINTS.items():
-        score = sum(1 for h in hints if (h in words) or (" " in h and h in blob))
-        if score > best_score:
-            best, best_score = sport, score
-    return best
+    # Otherwise the shared marker table (video/sports.py), which covers all
+    # twelve sports rather than the original four.
+    from . import sports as sports_mod
+
+    return sports_mod.infer(take)
 
 
 def _seconds(value: object) -> int:

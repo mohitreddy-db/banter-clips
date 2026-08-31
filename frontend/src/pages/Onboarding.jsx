@@ -2,13 +2,11 @@ import { useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
+import { SPORTS, suggestionsFor } from "../lib/sports.js";
 
 import { useSeo } from "../lib/seo.js";
-const SPORTS = [
-  ["NBA", "🏀"], ["NFL", "🏈"], ["Soccer", "⚽"], ["MLB", "⚾"],
-  ["F1", "🏎"], ["Tennis", "🎾"], ["College Sports", "🎓"], ["Combat Sports", "🥊"],
-];
-const MVP_SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
+// One vocabulary with the create page and the backend (lib/sports.js).
+// Nothing is locked any more: every sport here generates.
 const ROLES = [
   ["Sports Fan", "🙌"], ["Creator", "🎬"], ["Podcaster", "🎙"], ["Media Company", "📺"], ["Fantasy Creator", "📊"],
 ];
@@ -201,30 +199,23 @@ function OnboardingFlow() {
 
         {step === 1 && (
           <div className="ob-sports" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-            {SPORTS.map(([s, emoji]) => {
+            {SPORTS.map(({ key: s, icon }) => {
               const on = sports.includes(s);
-              const locked = !MVP_SPORTS.includes(s);
               return (
                 <button
                   key={s}
-                  onClick={() => !locked && toggleSport(s)}
+                  onClick={() => toggleSport(s)}
                   style={{
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-                    padding: "18px 8px 16px", borderRadius: 14, cursor: locked ? "default" : "pointer",
+                    padding: "18px 8px 16px", borderRadius: 14, cursor: "pointer",
                     background: on ? "#12303d" : "var(--app-surface)",
                     border: `1.5px solid ${on ? "var(--app-cyan)" : "var(--app-border)"}`,
-                    color: locked ? "var(--app-muted2)" : "var(--app-text)",
-                    fontWeight: 600, fontSize: 13, transition: "all .15s", position: "relative",
-                    opacity: locked ? 0.75 : 1,
+                    color: "var(--app-text)",
+                    fontWeight: 600, fontSize: 13, transition: "all .15s",
                   }}
                 >
-                  <span style={{ fontSize: 26, filter: locked ? "grayscale(.7)" : "none" }}>{emoji}</span>
+                  <span style={{ fontSize: 26 }}>{icon}</span>
                   {s}
-                  {locked && (
-                    <span style={{ position: "absolute", top: 8, right: 8, fontSize: 9, fontWeight: 700, letterSpacing: ".05em", color: "var(--app-muted)", background: "#161e30", borderRadius: 999, padding: "2px 7px" }}>
-                      SOON
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -233,8 +224,12 @@ function OnboardingFlow() {
 
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <TagField label="FAVORITE TEAMS" placeholder="Search teams — Lakers, Chiefs, Real Madrid…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))} />
-            <TagField label="FAVORITE PLAYERS" placeholder="Search players — LeBron, Mahomes, Messi…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))} />
+            <TagField label="FAVORITE TEAMS" placeholder="Search teams — Lakers, Chiefs, Real Madrid…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))}
+              suggestions={suggestionsFor(sports, "teams", 10).filter((t) => !teams.includes(t))}
+              onPick={(t) => setTeams([...teams, t])} />
+            <TagField label="FAVORITE PLAYERS" placeholder="Search players — LeBron, Mahomes, Messi…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))}
+              suggestions={suggestionsFor(sports, "players", 10).filter((p) => !players.includes(p))}
+              onPick={(p) => setPlayers([...players, p])} />
           </div>
         )}
 
@@ -364,7 +359,12 @@ function PlanTile({ name, price, features, popular, cta, onPick, busy }) {
   );
 }
 
-function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove }) {
+/**
+ * `suggestions` are drawn from the sports the user just picked, so this step
+ * opens with something to tap instead of an empty search box — a blank field
+ * is the question people skip. Typing still works for anything not listed.
+ */
+function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove, suggestions = [], onPick }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" }}>{label}</label>
@@ -385,6 +385,20 @@ function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove }
           </span>
         ))}
       </div>
+      {suggestions.length > 0 && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onPick?.(s)}
+              style={{ padding: "6px 12px", borderRadius: 999, background: "transparent", border: "1px dashed var(--app-border)", color: "var(--app-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

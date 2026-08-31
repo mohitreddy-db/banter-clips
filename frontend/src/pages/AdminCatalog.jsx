@@ -12,7 +12,8 @@ import { useSeo } from "../lib/seo.js";
  * overrides the curated JSON by id and applies to the next generation.
  */
 
-const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
+import { SPORT_KEYS } from "../lib/sports.js";
+const SPORTS = SPORT_KEYS;
 
 const imgUrl = (u) => (u.startsWith("http") ? u : `${API_BASE}${u}?token=${getToken()}`);
 

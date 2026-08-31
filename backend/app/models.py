@@ -20,8 +20,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
-SPORTS = ("NBA", "NFL", "Soccer", "MLB")
-TONES = ("Funny", "Savage", "Hype", "Bold")
+# Soccer leads: it is what the app is actually used for. "Other" is a real
+# option rather than a gap — a take about darts should still make a video, and
+# the pipeline degrades to a generic venue rather than refusing.
+SPORTS = ("Soccer", "NBA", "NFL", "MLB", "NHL", "Tennis", "F1",
+          "Cricket", "Golf", "Boxing", "MMA", "Other")
+TONES = ("Funny", "Savage", "Roast", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 
 # Honest generation stages (BR-07), in order. Index into this list = stage_index.
@@ -169,7 +173,13 @@ class Clip(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     take: Mapped[str] = mapped_column(Text, nullable=False)
+    # The world this video is built in — always exactly one, because venue,
+    # roster and trending all key off it. `sports` keeps the user's full
+    # multi-select (a take can straddle two), and `subjects` the teams or
+    # players they asked for; both are planner context, not pipeline keys.
     sport: Mapped[str] = mapped_column(Text, nullable=False)
+    sports: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    subjects: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     tone: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     stage_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

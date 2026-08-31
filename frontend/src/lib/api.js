@@ -83,8 +83,13 @@ export const api = {
   // Trending feed for the create page. Cheap: served from a shared
   // 20-minute server cache per sport.
   trending: (sport) => request(`/clips/trending?sport=${encodeURIComponent(sport)}`),
-  createClip: (take, sport, tone, duration = 15, resolution = "720p") =>
-    request("/clips", { method: "POST", body: { take, sport, tone, duration, resolution } }),
+  // `sports` and `subjects` are optional hints — the server infers the sport
+  // from the take when nothing is picked.
+  createClip: (take, sports = [], tone, duration = 15, resolution = "720p", subjects = []) =>
+    request("/clips", {
+      method: "POST",
+      body: { take, sports, subjects, tone, duration, resolution },
+    }),
   getClip: (id) => request(`/clips/${id}`),
   // Three written caption options to pick between when publishing.
   captionSuggestions: (id, avoid = []) =>

@@ -37,6 +37,8 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "script_history", "jsonb"),
     ("users", "credits", "integer NOT NULL DEFAULT 0"),
     ("clips", "credits_charged", "integer NOT NULL DEFAULT 0"),
+    ("clips", "sports", "text[] NOT NULL DEFAULT '{}'"),
+    ("clips", "subjects", "text[] NOT NULL DEFAULT '{}'"),
     ("social_accounts", "refresh_token", "text"),
 )
 
@@ -45,12 +47,23 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
 # rebuilding it from CLIP_STATUSES keeps the constraint in lockstep with the
 # model — a status added in code but not here silently fails every write.
 def _statements() -> tuple[str, ...]:
-    from .models import CLIP_STATUSES
+    from .models import CLIP_STATUSES, SPORTS, TONES
 
+    # Every enum-ish CHECK is rebuilt from the model tuple on boot. The status
+    # constraint taught us why: it was written once in schema.sql, the model
+    # gained "script_ready", and production rejected every write while local
+    # (which had no constraint) passed its tests. Sport and tone carry the
+    # same trap — the sport list grew from 4 to 12 and tones gained "Roast".
     return (
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_status_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_status_check "
         f"CHECK (status IN {CLIP_STATUSES!r})",
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_sport_check",
+        f"ALTER TABLE clips ADD CONSTRAINT clips_sport_check "
+        f"CHECK (sport IN {SPORTS!r})",
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_tone_check",
+        f"ALTER TABLE clips ADD CONSTRAINT clips_tone_check "
+        f"CHECK (tone IN {TONES!r})",
     )
 
 

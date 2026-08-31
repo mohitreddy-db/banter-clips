@@ -545,6 +545,83 @@ def test_a_person_is_described_by_something_that_describes_them():
         }, look
 
 
+def test_the_sport_is_inferred_so_picking_one_is_optional():
+    """Sport used to be a required choice before you could type. Almost every
+    take names its own league, club or player, so the words decide it."""
+    from app.video import sports as sports_mod
+
+    for take, expected in (
+        ("Mbappé just turned Real Sociedad's defense into cone drills", "Soccer"),
+        ("Seven foot four and Wemby still couldn't find Brunson", "NBA"),
+        ("Mahomes throws another touchdown and the Chiefs win again", "NFL"),
+        ("Verstappen wins another grand prix from pole", "F1"),
+        ("Kohli scored a century and the IPL crowd went wild", "Cricket"),
+        ("Djokovic won Wimbledon again somehow", "Tennis"),
+        ("McDavid is dragging the Oilers to the Stanley Cup", "NHL"),
+        ("Canelo knocked him out in the third round", "Boxing"),
+    ):
+        assert sports_mod.infer(take) == expected, take
+
+    # Nothing to go on: fall back to what the user follows, then to a default.
+    assert sports_mod.infer("my neighbour is very loud") is None
+    assert sports_mod.resolve(None, "my neighbour is very loud", ["NHL"]) == "NHL"
+    assert sports_mod.resolve(None, "my neighbour is very loud", []) == "Soccer"
+    # An explicit pick always wins over the guess.
+    assert sports_mod.resolve("Golf", "Wemby dunked on everyone", []) == "Golf"
+
+
+def test_ambiguous_names_follow_the_sports_the_fan_actually_watches():
+    from app.video import sports as sports_mod
+
+    assert sports_mod.resolve(None, "The Giants collapsed again", ["MLB"]) == "MLB"
+    assert sports_mod.resolve(None, "The Giants collapsed again", ["NFL"]) == "NFL"
+
+
+def test_every_sport_has_its_own_world():
+    """Unlisted sports fell through to the NBA venue list, which staged a
+    Formula 1 take in a basketball arena."""
+    from app.models import SPORTS
+    from app.video.library import default_venue
+
+    seen = set()
+    for sport in SPORTS:
+        venue = default_venue(sport)
+        assert venue and venue not in seen, f"{sport} shares a venue with another sport"
+        seen.add(venue)
+    assert "pit lane" in default_venue("F1")
+    assert "cricket" in default_venue("Cricket")
+
+
+def test_roast_is_a_tone_the_pipeline_understands():
+    from app.models import TONES
+
+    assert "Roast" in TONES
+    assert "Roast" in prompts.TONE_DIRECTION
+    plan = _plan(take="Arsenal bottled it again", tone="Roast", seconds=15)
+    assert plan.tone == "Roast"
+    assert "roast" in prompts.style_for(plan).lower()
+
+
+def test_named_teams_and_players_are_requirements_not_hints():
+    """A user who types "put Mbappé in it" gets Mbappé in it."""
+    resolved = defaults.resolve(
+        take="Two legends argue about who is more clutch", tone="Roast",
+        also_sports=["NBA"], subjects=["Patrick Mahomes", "LeBron James"],
+    )
+    message = prompts.planner_user_message(
+        resolved.take, resolved.sport, resolved.tone, [], ["a stadium"],
+        also_sports=resolved.also_sports, subjects=resolved.subjects,
+    )
+    assert "MUST feature: Patrick Mahomes, LeBron James" in message
+    # A second sport is offered as crossover, never as a second world.
+    crossed = defaults.resolve(take="Wemby tries out for the Chiefs", also_sports=["NFL"])
+    if crossed.also_sports:
+        assert "may cross" in prompts.planner_user_message(
+            crossed.take, crossed.sport, crossed.tone, [], ["a stadium"],
+            also_sports=crossed.also_sports,
+        )
+
+
 def test_prompts_stay_inside_the_useful_length_band():
     """Every guide measured says over-long prompts restrict the model:
     OpenAI warns they limit creativity, Runway that Gen-4 wants simplicity."""

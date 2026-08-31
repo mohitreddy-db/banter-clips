@@ -6,14 +6,15 @@ import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal, TopUpModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 import Trending from "../components/Trending.jsx";
+import { SPORT_KEYS, sportIcon, suggestionsFor } from "../lib/sports.js";
 import DownloadButton from "../components/DownloadButton.jsx";
 import { PublishedTo } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
-const SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
 const TONES = [
   { key: "Funny", icon: "😄", sub: "Playful roast" },
   { key: "Savage", icon: "🔪", sub: "No mercy" },
+  { key: "Roast", icon: "🔥", sub: "Friendly burn" },
   { key: "Hype", icon: "📣", sub: "Full energy" },
   { key: "Bold", icon: "💪", sub: "Fearless claim" },
 ];
@@ -97,7 +98,11 @@ export default function Studio() {
   const [enhancing, setEnhancing] = useState(false);
   const [round, setRound] = useState(0);
   const [take, setTake] = useState("");
-  const [sport, setSport] = useState(SPORTS.includes(profile.sports?.[0]) ? profile.sports[0] : "NBA");
+  // Sport is a multi-select HINT now, not a required single choice: empty is
+  // the normal case, and the server infers it from the take.
+  const [sports, setSports] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [subjectInput, setSubjectInput] = useState("");
   const [tone, setTone] = useState("Funny");
   const [duration, setDuration] = useState(15);
   const [resolution, setResolution] = useState("720p");
@@ -178,6 +183,18 @@ export default function Studio() {
   }, [search]);
 
   const valid = take.trim().length >= 10 && take.length <= 280;
+  // Trending and enhancement need one sport to key off. The user's pick wins,
+  // then what they follow, then the app's busiest sport.
+  const primarySport = sports[0] || profile.sports?.[0] || "Soccer";
+  const subjectIdeas = suggestionsFor(sports.length ? sports : profile.sports, "players", 6)
+    .filter((s) => !subjects.includes(s));
+  const addSubject = (value) => {
+    const name = String(value || "").trim().replace(/,$/, "");
+    if (name && !subjects.includes(name) && subjects.length < 8) {
+      setSubjects([...subjects, name]);
+    }
+    setSubjectInput("");
+  };
   // Exact menu price of the configured video (PRICING §7) — never estimated.
   const thisPrice = videoPrice(duration, resolution);
 
@@ -230,7 +247,7 @@ export default function Studio() {
     setError("");
     setEnhancing(true);
     try {
-      const res = await api.enhanceTakeVariations(take.trim(), sport, tone, round);
+      const res = await api.enhanceTakeVariations(take.trim(), primarySport, tone, round);
       if (res.variations?.length) {
         setVariations(res.variations);
         setChosen(-1); // never auto-select: the user's own take stays chosen
@@ -252,7 +269,7 @@ export default function Studio() {
     setError("");
     setBusy(true);
     try {
-      const c = await api.createClip(activeTake, sport, tone, duration, resolution);
+      const c = await api.createClip(activeTake, sports, tone, duration, resolution, subjects);
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id, new Date(c.created_at).getTime());
@@ -304,7 +321,7 @@ export default function Studio() {
       setDuration(p.seconds);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
-    api.track("trending_take_used", { sport, tone: p.tone, seconds: p.seconds });
+    api.track("trending_take_used", { sport: primarySport, tone: p.tone, seconds: p.seconds });
   };
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -402,18 +419,79 @@ export default function Studio() {
           </div>
 
           {/* trending — real topics from today's internet, per sport */}
-          <Trending sport={sport} onUse={useTrending} />
+          <Trending sport={primarySport} onUse={useTrending} />
 
-          {/* sport */}
+          {/* Sport — optional and multi-select. Most takes name their own
+              league or player, so this is a hint, not a gate: leave it alone
+              and the server works the sport out from the words. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>SPORT</span>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {SPORTS.map((s) => (
-                <button key={s} className={`chip${sport === s ? " on" : ""}`} onClick={() => setSport(s)}>
-                  {s}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>SPORT</span>
+              <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>
+                optional · {sports.length
+                  ? "pick more than one to cross them over"
+                  : "we'll work it out from your take"}
+              </span>
+              {sports.length > 0 && (
+                <button onClick={() => setSports([])}
+                        style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--app-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Clear
                 </button>
-              ))}
+              )}
             </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {SPORT_KEYS.map((s) => {
+                const on = sports.includes(s);
+                return (
+                  <button
+                    key={s}
+                    className={`chip${on ? " on" : ""}`}
+                    onClick={() => setSports(on ? sports.filter((x) => x !== s) : [...sports, s].slice(0, 4))}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span aria-hidden="true">{sportIcon(s)}</span> {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Teams / players — optional specificity. Anyone named here is a
+              requirement for the script, not a suggestion. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>TEAMS & PLAYERS</span>
+              <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>optional · anyone you add will be in the video</span>
+            </div>
+            {subjects.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {subjects.map((s) => (
+                  <button key={s} className="chip on" onClick={() => setSubjects(subjects.filter((x) => x !== s))}
+                          title="Remove" style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    {s} <span style={{ opacity: 0.7 }}>×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              value={subjectInput}
+              onChange={(e) => setSubjectInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSubject(subjectInput); }
+              }}
+              onBlur={() => addSubject(subjectInput)}
+              placeholder="Add a team or player — Arsenal, Mbappé, LeBron…"
+              className="panel"
+              style={{ padding: "11px 14px", fontSize: 14.5, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 12, boxSizing: "border-box", width: "100%" }}
+            />
+            {subjectIdeas.length > 0 && (
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                {subjectIdeas.map((s) => (
+                  <button key={s} className="chip" onClick={() => addSubject(s)}
+                          style={{ fontSize: 12, opacity: 0.85 }}>+ {s}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* tone cards */}

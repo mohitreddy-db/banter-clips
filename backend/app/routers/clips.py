@@ -102,7 +102,7 @@ def enhance_take_variations(
     wrote, which is never the wrong outcome.
     """
     from ..services import credits
-    from ..video import providers, takes
+    from ..video import providers, sports as sports_mod, takes
 
     fee = int(credits.prices(db)["enhance_take"])
     if fee > 0:
@@ -115,7 +115,7 @@ def enhance_take_variations(
                 "needed": fee, "balance": user.credits,
             })
     options = takes.variations(
-        body.take, body.sport or "NBA", body.tone or "Funny",
+        body.take, sports_mod.resolve(body.sport, body.take), body.tone or "Funny",
         client=providers.text_client(), round_index=body.round,
     )
     return TakeEnhanceResponse(
@@ -183,13 +183,28 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
             },
         )
 
+    # Sport is optional (a take usually names its own league or player), and
+    # multi-select: the first pick is the world the video is built in, the
+    # rest are context. Nothing here can fail — resolve always answers.
+    from ..video import sports as sports_mod
+
+    picked = [s for s in ([body.sport] if body.sport else []) + list(body.sports) if s]
+    primary = sports_mod.resolve(
+        picked[0] if picked else None,
+        body.take,
+        (user.preferences.sports if user.preferences else None) or [],
+    )
+    subjects = [s.strip()[:60] for s in body.subjects if s and s.strip()][:8]
+
     clip = Clip(
         user_id=user.id,
         # Markers are stripped so they can never surface in the video, the
         # captions, or a published Instagram caption.
         take=markers.strip(body.take),
         is_simulated=simulated,
-        sport=body.sport,
+        sport=primary,
+        sports=list(dict.fromkeys(picked)),
+        subjects=subjects,
         tone=body.tone,
         duration_target=body.duration,
         resolution=body.resolution,
@@ -211,7 +226,8 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
                 "message": f"This video needs {price} credits — you have {user.credits}.",
                 "needed": price, "balance": user.credits,
             })
-    record_event(db, "generation_started", user, sport=body.sport, tone=body.tone, duration=body.duration)
+    record_event(db, "generation_started", user, sport=primary, tone=body.tone,
+                 duration=body.duration, inferred_sport=not picked)
     start_generation(clip.id)
     return _serialize(clip)
 

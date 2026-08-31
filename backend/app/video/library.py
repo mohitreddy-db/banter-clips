@@ -115,6 +115,59 @@ VENUES: dict[str, list[str]] = {
         "the pitcher's mound in an empty stadium at dusk",
         "an infield covered in celebration confetti",
     ],
+    # The sports added on 2026-08-31. Without these every one of them fell
+    # through to the NBA list, so a Formula 1 take was staged in a basketball
+    # arena — the exact wrong-world failure the venue list exists to prevent.
+    "NHL": [
+        "a packed ice hockey arena at night, bright broadcast lighting, blurred crowd",
+        "the players' bench beside the boards, sticks racked behind",
+        "a concrete tunnel to the ice, skate guards on the floor",
+        "the ice at full time, streamers and hats scattered across it",
+    ],
+    "Tennis": [
+        "a floodlit tennis show court at night, blurred crowd in the stands",
+        "the players' chairs at the net post, towels and racket bags beside them",
+        "a practice court in bright daylight, ball baskets at the baseline",
+        "centre court after match point, the winner's bag by the umpire's chair",
+    ],
+    "F1": [
+        "a Formula 1 pit lane, garages and tyre stacks under bright light",
+        "the starting grid before lights out, mechanics crouched by the cars",
+        "a team garage full of monitors and engineers in headsets",
+        "the podium above the pit straight, confetti in the air",
+    ],
+    "Cricket": [
+        "a floodlit cricket ground at night, the square lit white, blurred crowd",
+        "the players' balcony above the pavilion, kit bags and helmets around",
+        "a practice net beside the outfield in hard afternoon sun",
+        "the middle at the close of play, stumps pulled and shadows long",
+    ],
+    "Golf": [
+        "a championship golf course fairway in soft morning light, galleries roped off",
+        "the eighteenth green with a leaderboard behind and spectators standing",
+        "a driving range at sunrise, buckets of balls lined up",
+        "the clubhouse terrace overlooking the closing hole",
+    ],
+    "Boxing": [
+        "a boxing ring under hard overhead lights, dark arena crowd beyond the ropes",
+        "the walkout tunnel filled with haze and phone lights",
+        "a corner between rounds, stool out and towels over the ropes",
+        "a weigh-in stage with sponsor boards and photographers at the front",
+    ],
+    "MMA": [
+        "the octagon under hard overhead lights, dark arena crowd beyond the cage",
+        "the walkout tunnel filled with haze and phone lights",
+        "a cage corner between rounds, cutman working with the stool out",
+        "a press-conference face-off stage with sponsor boards behind",
+    ],
+    # "Other" keeps a take about darts, chess boxing or anything else out of
+    # a basketball arena: neutral enough to host any sport's story.
+    "Other": [
+        "a packed indoor arena at night, bright broadcast lighting, blurred crowd",
+        "a competitor's bench at the edge of the arena floor",
+        "a plain locker room with benches and kit bags",
+        "an arena floor after the final, confetti settling",
+    ],
 }
 
 _GENERIC_VENUE = "a packed stadium at night, bright broadcast lighting, blurred crowd"

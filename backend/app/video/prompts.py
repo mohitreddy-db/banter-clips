@@ -133,6 +133,12 @@ def safe_style(style: str) -> str:
 TONE_DIRECTION = {
     "Funny": "warm absurdist physical comedy; nobody is humiliated",
     "Savage": "sharp, cocky mockery aimed at the situation rather than at a person's dignity",
+    # Roast sits between Funny and Savage: the affectionate insult a fan aims
+    # at their own team. Savage attacks the situation; Roast goes at the
+    # subject directly, but the way a mate would — never at anyone's
+    # appearance, family or dignity.
+    "Roast": "playful direct mockery of the subject, the way a friend roasts a "
+             "friend — cutting about what they did, never about who they are",
     "Hype": "triumphant, loud, celebratory energy",
     "Bold": "confident, declarative, unbothered swagger",
 }
@@ -608,14 +614,28 @@ Return ONLY JSON:
 def planner_user_message(
     take: str, sport: str, tone: str, roster: list, venues: list,
     focus_note: str = "", storyline: str = "",
+    also_sports: list | None = None, subjects: list | None = None,
 ) -> str:
     names = "\n".join(f"  - id={m.id!r} name={m.name!r} ({m.look})" for m in roster)
     places = "\n".join(f"  - {v}" for v in venues)
     context = f"\n{focus_note}\n" if focus_note else ""
     world = f"\n{storyline}\n" if storyline else ""
+    # What the user asked for beyond the take itself. Both are optional and
+    # both are requirements when present: ticking "NBA + NFL" means the story
+    # may cross them, and naming a player means that player is in the video.
+    crossover = [s for s in (also_sports or []) if s and s != sport]
+    extra = ""
+    if crossover:
+        extra += (f"Also in scope: {', '.join(crossover)}. The story may cross "
+                  f"between {sport} and these — that crossover is the point.\n")
+    wanted = [str(s).strip() for s in (subjects or []) if str(s).strip()]
+    if wanted:
+        extra += (f"MUST feature: {', '.join(wanted)}. Cast them by name and "
+                  f"give them something to do — this is what the user asked for.\n")
     return (
         f"Sport: {sport}\n"
         f"Tone: {tone}\n"
+        f"{extra}"
         f"The opinion to dramatise: {take}\n"
         f"{world}"
         f"{context}\n"

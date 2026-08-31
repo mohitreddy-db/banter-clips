@@ -4,8 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-Sport = Literal["NBA", "NFL", "Soccer", "MLB"]
-Tone = Literal["Funny", "Savage", "Hype", "Bold"]
+from .models import SPORTS, TONES
+
+# Built from the model tuples, so the API, the database check constraints and
+# the pipeline vocabulary can never drift apart — adding a sport is a one-line
+# change in models.py.
+Sport = Literal[SPORTS]  # type: ignore[valid-type]
+Tone = Literal[TONES]  # type: ignore[valid-type]
 Platform = Literal["instagram", "tiktok", "youtube", "x", "linkedin"]
 Role = Literal["Sports Fan", "Creator", "Podcaster", "Media Company", "Fantasy Creator"]
 
@@ -83,7 +88,14 @@ class UserOut(BaseModel):
 # ---------- clips ----------
 class ClipCreate(BaseModel):
     take: str = Field(min_length=10, max_length=280)
-    sport: Sport
+    # Optional, not a gate: most takes name a league, club or player, so the
+    # sport is inferred from the words when nothing is ticked (video/sports.py).
+    # `sports` carries a multi-select — a take can straddle two ("NBA + NFL")
+    # — and the first one is the world the video is built in.
+    sport: Sport | None = None
+    sports: list[Sport] = Field(default_factory=list, max_length=4)
+    # Optional teams/players the user wants in it, in their own words.
+    subjects: list[str] = Field(default_factory=list, max_length=8)
     tone: Tone
     duration: Literal[10, 15, 30] = 15
     resolution: Literal["720p", "1080p"] = "720p"
@@ -162,6 +174,10 @@ class ClipOut(BaseModel):
     id: uuid.UUID
     take: str
     sport: str
+    # What the user picked beyond the primary sport, echoed back so the UI can
+    # show what the video was actually built from.
+    sports: list[str] = []
+    subjects: list[str] = []
     tone: str
     status: str
     stage_index: int

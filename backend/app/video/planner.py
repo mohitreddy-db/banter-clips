@@ -121,6 +121,7 @@ def _ask_model(inp: ResolvedInput, roster, venues, client,
     user = prompts.planner_user_message(
         inp.take, inp.sport, inp.tone, roster, venues,
         focus_note=_focus_note(inp), storyline=storyline,
+        also_sports=inp.also_sports, subjects=inp.subjects,
     )
     if rejected_note:
         user += (
