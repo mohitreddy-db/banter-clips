@@ -24,6 +24,7 @@ export const SPORTS = [
   { key: "Golf", icon: "⛳" },
   { key: "Boxing", icon: "🥊" },
   { key: "MMA", icon: "🥋" },
+  { key: "Esports", icon: "🎮" },
   { key: "Other", icon: "🎯" },
 ];
 
@@ -74,6 +75,10 @@ export const SUGGESTIONS = {
   MMA: {
     teams: ["UFC", "Bellator", "PFL", "Lightweight", "Heavyweight"],
     players: ["Jon Jones", "Islam Makhachev", "Conor McGregor", "Alex Pereira", "Sean O'Malley", "Khabib", "Ilia Topuria"],
+  },
+  Esports: {
+    teams: ["T1", "G2 Esports", "Fnatic", "NAVI", "Team Liquid", "Cloud9", "FaZe Clan", "100 Thieves"],
+    players: ["Faker", "s1mple", "ZywOo", "Caps", "TenZ", "Bugha", "Chovy", "donk"],
   },
   Other: { teams: [], players: [] },
 };

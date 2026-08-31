@@ -96,6 +96,14 @@ MARKERS: dict[str, tuple[str, ...]] = {
         "canelo", "usyk", "joshua", "mike tyson", "ali", "knockout", " ko ",
         "the ring", "jab", "uppercut", "split decision", "undercard",
     ),
+    "Esports": (
+        "esports", "e-sports", "league of legends", "lol worlds",
+        "counter-strike", "cs2", "csgo", "valorant", "dota", "the international",
+        "overwatch", "rocket league", "call of duty league", "fortnite",
+        "faker", "s1mple", "zywoo", "t1 ", "g2 esports", "fnatic", "navi",
+        "team liquid", "cloud9", "faze", "100 thieves", "pentakill", "clutch round",
+        "grand final bo5", "twitch chat",
+    ),
     "MMA": (
         "mma", "ufc", "octagon", "mcgregor", "khabib", "jon jones",
         "adesanya", "poirier", "makhachev", "submission", "takedown",

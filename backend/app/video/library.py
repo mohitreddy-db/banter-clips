@@ -160,6 +160,12 @@ VENUES: dict[str, list[str]] = {
         "a cage corner between rounds, cutman working with the stool out",
         "a press-conference face-off stage with sponsor boards behind",
     ],
+    "Esports": [
+        "an esports arena stage, giant screens above rows of gaming PCs, crowd in glowsticks",
+        "a team practice room lined with monitors and RGB-lit rigs",
+        "a soundproof player booth on a tournament stage, headset lights glowing",
+        "the main stage after a grand final, confetti over the trophy",
+    ],
     # "Other" keeps a take about darts, chess boxing or anything else out of
     # a basketball arena: neutral enough to host any sport's story.
     "Other": [

@@ -24,7 +24,7 @@ from .db import Base
 # option rather than a gap — a take about darts should still make a video, and
 # the pipeline degrades to a generic venue rather than refusing.
 SPORTS = ("Soccer", "NBA", "NFL", "MLB", "NHL", "Tennis", "F1",
-          "Cricket", "Golf", "Boxing", "MMA", "Other")
+          "Cricket", "Golf", "Boxing", "MMA", "Esports", "Other")
 TONES = ("Funny", "Savage", "Roast", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 
