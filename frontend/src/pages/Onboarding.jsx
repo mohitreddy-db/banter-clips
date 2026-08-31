@@ -17,8 +17,8 @@ const PLATFORMS = [
   { name: "X", key: "x", sub: "Video post with caption", connectable: false, tile: "#0f1524", glyph: "x" },
 ];
 
-const FREE_FEATURES = ["5 videos a month", "One-click publish to Instagram & TikTok", "Funny · Savage · Hype tones", "Watermark on every clip"];
-const CREATOR_FEATURES = ["30 videos a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
+const FREE_FEATURES = ["Welcome credits — your first video on us", "One-click publish to Instagram & TikTok", "All five tones, Funny to Roast", "Watermark on every clip"];
+const CREATOR_FEATURES = ["150 credits every month", "Full HD 1080p quality", "30-second videos", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none" };

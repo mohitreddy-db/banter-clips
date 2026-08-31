@@ -233,11 +233,12 @@ export function Terms() {
 
       <H>Plans and billing</H>
       <UL>
-        <LI>Free: 5 successful videos per month, published with a watermark,
-          720p, up to 15 seconds. Creator ($19/month): 150 credits monthly, 1080p
-          available, up to 30 seconds, watermark-free downloads.</LI>
-        <LI>Only successful videos count against your allowance — failures and
-          retries are free.</LI>
+        <LI>Free: one-time welcome credits on signup, published with a
+          watermark, 720p, up to 15 seconds. Creator ($19/month): 150 credits
+          monthly, 1080p available, up to 30 seconds, watermark-free downloads.
+          Credit top-up packs are available to both plans and never expire.</LI>
+        <LI>Credits are charged only when a video completes — failures,
+          abandoned scripts and retries release the reservation in full.</LI>
         <LI>Billing runs through Stripe. Upgrades apply immediately;
           cancellation applies at the end of the paid period. Your videos are
           never deleted for billing reasons.</LI>
