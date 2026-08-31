@@ -14,8 +14,8 @@ spot-checked against each model page's listed per-second price.
 | Model (OpenRouter ID) | 480p | 720p | 1080p | Duration | Latency P50 |
 |---|---|---|---|---|---|
 | `bytedance/seedance-2.0-mini` ¹ | $0.013 | **$0.030** | — (720p max) | 4–15s | ~154s |
-| `bytedance/seedance-1-5-pro` (no audio) | $0.012 | $0.026 | **$0.058** | 4–12s | ~105s |
-| `bytedance/seedance-1-5-pro` (with audio) | $0.023 | $0.052 | $0.117 | 4–12s | ~105s |
+| `bytedance/seedance-1-5-pro` (with audio) ² | $0.023 | $0.052 | **$0.117** | 4–12s | ~105s |
+| `bytedance/seedance-1-5-pro` (no audio) | $0.012 | $0.026 | $0.058 | 4–12s | ~105s |
 | `bytedance/seedance-2.0-fast` | $0.040 | $0.091 | $0.204 | 4–15s | ~145s |
 | `bytedance/seedance-2.0` | $0.067 | $0.151 | $0.340 | 4–15s | ~160s |
 | `bytedance/seedance-2.5` | $0.103 | $0.231 | — (720p max) | 4–30s | ~343s |
@@ -23,7 +23,15 @@ spot-checked against each model page's listed per-second price.
 
 ¹ Mini's $1.40/M-token rate carries a "60% discount" badge today. At
 full rate it's ~$0.076/s at 720p — still under Grok. Don't build the
-pricing page on the promo number.
+pricing page on the promo number. Mini charges the same with or
+without audio, so its numbers already include the voice track.
+
+² Audio must stay **on**: the banter voices, ambience and SFX come
+from the video model itself (Grok today, Seedance after) — the live
+pipeline has no separate TTS; assembly only normalises and concats
+(`app/video/runner.py:433`). The no-audio rate is reachable only if
+voiceover ever moves to standalone TTS (a dormant OpenAI TTS module
+exists at `app/pipeline/audio.py`, unused by the live path).
 
 All Seedance variants do image-to-video with first-frame control and
 9:16 — exactly what `animate()` sends. Single provider ("Seed"),
@@ -31,25 +39,28 @@ All Seedance variants do image-to-video with first-frame control and
 
 ## 2. Unit economics if we route to Seedance
 
-Picks: **2.0 Mini for Standard 720p**, **1.5 Pro (audio off) for HD
-1080p**. Assumes non-video overhead (keyframes, planning, retries)
-stays ~$0.03/s — the gap between our measured $0.148/s all-in and
-Grok's video-only rate. Verify against `provenance` after the pilot.
+Picks: **2.0 Mini for Standard 720p**, **1.5 Pro with audio for HD
+1080p** (audio on — the clips' voices come from the model, see ²).
+Assumes non-video overhead (keyframes, planning, retries) stays
+~$0.03/s — the gap between our measured $0.148/s all-in and Grok's
+video-only rate. Verify against `provenance` after the pilot.
 
 - All-in 720p: ~$0.148/s → **~$0.06/s** · per credit $0.037 → **~$0.015**
-- All-in 1080p: ~$0.256/s → **~$0.09/s** · per credit $0.037 → **~$0.013**
+- All-in 1080p: ~$0.256/s → **~$0.147/s** · per credit $0.037 → **~$0.021**
 
 | What | Credits | User pays | Cost today | Cost on Seedance | Margin today → new |
 |---|---|---|---|---|---|
 | 15s Standard | 60 | $6.00 | $2.39 | **~$0.90** | 60% → **~85%** |
 | 30s Standard | 120 | $12.00 | $4.41 | **~$1.80** | 63% → **~85%** |
-| 15s HD | 105 | $10.50 | $4.15 | **~$1.35** | 60% → **~87%** |
-| 30s HD | 210 | $21.00 | $7.79 | **~$2.64** | 63% → **~87%** |
+| 15s HD | 105 | $10.50 | $4.15 | **~$2.21** | 60% → **~79%** |
+| 30s HD | 210 | $21.00 | $7.79 | **~$4.41** | 63% → **~79%** |
 | Free signup grant (60 cr) | — | $0 | ≤$2.39 | **≤$0.90** | 2.6× cheaper CAC |
 
 At the worst pack rate ($0.065/cr) Standard margin goes **38–43% →
-~77%**. This is the "path to 85%" row in `UNIT-ECONOMICS-TABLE.md`,
-without touching a single price.
+~77%**. Standard hits the "path to 85%" row in
+`UNIT-ECONOMICS-TABLE.md` outright; HD lands ~79% — the with-audio
+rate is the price of model-generated voices. All without touching a
+single price.
 
 **The trade:** speed. Grok returns a scene in ~33s; Seedance takes
 2–3 minutes (2.5: ~6). Scenes run in a threadpool so wall time ≈
@@ -73,8 +84,10 @@ manual pilot.
 **Phase 1 — model capability table (~30 lines).** In `providers.py`,
 a small per-model dict: `{min_s, max_s, max_res, generate_audio}`.
 Clamp duration per model (floor 4 for Seedance, cap 12 for 1.5 Pro),
-send `generate_audio: false` explicitly (it defaults on and doubles
-1.5 Pro's price; we add our own audio in ffmpeg anyway). Record the
+and send `generate_audio: true` explicitly — the banter voices live
+inside the model's output; turning it off ships silent clips. (Mini
+costs the same either way; 1.5 Pro's with-audio rate is what the
+tables above assume.) Record the
 model used in each scene's `provenance` asset entry
 (`runner.py:569`) so admin cost reporting can split by model.
 
@@ -110,9 +123,10 @@ default. Keep Grok as `fallback` permanently.
 **Later, optional:** OpenRouter `callback_url` webhooks instead of
 8s polling (matters more at Seedance latencies); `seedance-2.5` for
 single-pass 4–30s clips (one coherent take instead of stitched
-scenes — pricier per second, but no seams); 1.5 Pro's native audio +
-multilingual lip-sync for the dialogue-anchor scenes in
-`VIDEO-REALISM-PLAN.md` step 8.
+scenes — pricier per second, but no seams). During the pilot, judge
+1.5 Pro's lip-sync against Grok's — voice quality across stitched
+scenes is the known weak spot (`runner.py:212` already warns about
+speaker drift) and relevant to `VIDEO-REALISM-PLAN.md` step 8.
 
 ## 4. Decisions to make
 
