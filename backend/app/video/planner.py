@@ -121,7 +121,7 @@ def _ask_model(inp: ResolvedInput, roster, venues, client,
     user = prompts.planner_user_message(
         inp.take, inp.sport, inp.tone, roster, venues,
         focus_note=_focus_note(inp), storyline=storyline,
-        also_sports=inp.also_sports, subjects=inp.subjects,
+        also_sports=inp.also_sports, subjects=inp.subjects, direction=inp.direction,
     )
     if rejected_note:
         user += (
@@ -223,7 +223,10 @@ def _template(inp: ResolvedInput, roster, venues) -> VideoPlan:
             index=i,
             beat=beat,
             venue=venues[i % len(venues)],
-            action=actions.get(beat, actions["escalation"]),
+            action=(
+                f"{inp.direction}. {actions.get(beat, actions['escalation'])}"
+                if i == 0 and inp.direction else actions.get(beat, actions["escalation"])
+            ),
             shot_size="full shot" if i % 2 == 0 else "wide shot",
             camera_angle="low angle" if i % 2 == 0 else "eye level",
             camera_move="slow push-in" if i % 2 == 0 else "locked-off static frame",

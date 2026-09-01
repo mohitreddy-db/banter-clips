@@ -185,6 +185,10 @@ class Clip(Base):
     sport: Mapped[str] = mapped_column(Text, nullable=False)
     sports: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     subjects: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    # Optional guided-builder context. Kept separate so captions and library
+    # cards still show the creator's actual take, not production directions.
+    direction: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    reference_key: Mapped[str | None] = mapped_column(Text)
     tone: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     stage_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -260,8 +264,7 @@ class SocialAccount(Base):
     handle: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="connected")
     access_token: Mapped[str | None] = mapped_column(Text)
-    # TikTok only: its access tokens last 24h and roll via this year-long
-    # refresh token. Instagram's long-lived token refreshes itself, so NULL.
+    # TikTok and YouTube refresh tokens; Instagram refreshes its access token.
     refresh_token: Mapped[str | None] = mapped_column(Text)
     # The platform-side user id (IG professional account id / TikTok open_id).
     platform_user_id: Mapped[str | None] = mapped_column(Text)

@@ -102,6 +102,8 @@ export default function Studio() {
   const [sports, setSports] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [subjectInput, setSubjectInput] = useState("");
+  const [direction, setDirection] = useState("");
+  const [reference, setReference] = useState(null);
   const [tone, setTone] = useState("Funny");
   const [duration, setDuration] = useState(15);
   const [resolution, setResolution] = useState("720p");
@@ -156,7 +158,11 @@ export default function Studio() {
   // state — live status while it renders, the player when it is done.
   useEffect(() => {
     const id = new URLSearchParams(search).get("clip");
-    if (!id) return;
+    const prompt = new URLSearchParams(search).get("prompt");
+    if (!id) {
+      if (prompt) setTake(prompt.slice(0, 280));
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -270,10 +276,15 @@ export default function Studio() {
 
   const generate = async () => {
     if (!valid) return;
+    if (credits < thisPrice) {
+      setTopupOpen(true);
+      return;
+    }
     setError("");
     setBusy(true);
     try {
-      const c = await api.createClip(activeTake, sports, tone, duration, resolution, subjects);
+      const uploaded = reference ? await api.uploadReference(reference) : null;
+      const c = await api.createClip(activeTake, sports, tone, duration, resolution, subjects, direction, uploaded?.key);
       setClip(c);
       refreshClips(); // the new in-flight clip shows up in My Clips immediately
       watchClip(c.id, new Date(c.created_at).getTime());
@@ -311,6 +322,8 @@ export default function Studio() {
     setError("");
     setScriptOpen(false);
     setScriptFeedback("");
+    setDirection("");
+    setReference(null);
   };
 
   // A trending suggestion fills the take like the user typed it (real flow),
@@ -341,11 +354,12 @@ export default function Studio() {
             <span style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 16px", borderRadius: 999, background: "rgba(34,211,238,.1)", border: "1px solid rgba(34,211,238,.35)", color: "var(--app-cyan)", fontSize: 12, fontWeight: 700, letterSpacing: ".08em" }}>
               ⚡ NEW CLIP
             </span>
-            <h1 style={{ fontSize: "clamp(28px, 7vw, 42px)", fontWeight: 800, color: "var(--app-text)", margin: "18px 0 10px" }}>What’s your sports take?</h1>
-            <div style={{ fontSize: "clamp(14px, 3.8vw, 16px)", color: "var(--app-muted)" }}>One sentence. We’ll do the hook, voice, captions and video.</div>
+            <h1 style={{ fontSize: "clamp(28px, 7vw, 42px)", fontWeight: 800, color: "var(--app-text)", margin: "18px 0 10px" }}>Build your banter</h1>
+            <div style={{ fontSize: "clamp(14px, 3.8vw, 16px)", color: "var(--app-muted)" }}>Simple choices in. A production-ready video prompt out.</div>
           </div>
 
           {/* take input */}
+          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>WHAT DO YOU WANT TO SAY?</span>
           <div style={{ position: "relative" }}>
             <textarea
               value={take}
@@ -358,6 +372,42 @@ export default function Studio() {
             <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12, color: take.length > 280 ? "var(--app-error)" : "var(--app-muted2)" }}>
               {take.length} / 280
             </span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>WHAT HAPPENS?</span>
+              <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>optional · describe the setting or action</span>
+            </div>
+            <textarea
+              value={direction}
+              onChange={(e) => setDirection(e.target.value.slice(0, 400))}
+              placeholder="Press room after the derby. The manager stays calm while the mascot celebrates behind him."
+              rows={3}
+              className="panel"
+              style={{ width: "100%", boxSizing: "border-box", padding: "13px 14px", resize: "vertical", fontSize: 14.5, color: "var(--app-text)" }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>REFERENCE PHOTO OR VIDEO</span>
+              <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>optional · JPEG or MP4 · up to 15 MB</span>
+            </div>
+            <label className="panel" style={{ padding: "12px 14px", cursor: "pointer", color: reference ? "var(--app-text)" : "var(--app-muted)", fontSize: 14 }}>
+              {reference ? `✓ ${reference.name}` : "+ Choose a reference"}
+              <input
+                type="file"
+                accept="image/jpeg,video/mp4"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (file && file.size > 15 * 1024 * 1024) setError("Reference must be 15 MB or smaller.");
+                  else { setReference(file); setError(""); }
+                }}
+              />
+            </label>
+            {reference && <button type="button" onClick={() => setReference(null)} style={{ alignSelf: "flex-start", border: 0, background: "none", color: "var(--app-muted)", cursor: "pointer", padding: 0 }}>Remove reference</button>}
           </div>
 
           {/* Enhance: offered, never imposed. The typed take above is
@@ -464,7 +514,7 @@ export default function Studio() {
               requirement for the script, not a suggestion. */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>TEAMS & PLAYERS</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>WHO IS IN IT?</span>
               <span style={{ fontSize: 11.5, color: "var(--app-muted2)" }}>optional · anyone you add will be in the video</span>
             </div>
             {subjects.length > 0 && (
@@ -500,7 +550,7 @@ export default function Studio() {
 
           {/* tone cards */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>TONE</span>
+            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>STYLE</span>
             <div className="tone-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 14 }}>
               {TONES.map((t) => {
                 const on = tone === t.key;
@@ -601,7 +651,7 @@ export default function Studio() {
 
           {/* generate */}
           <button className="grad-btn" style={{ padding: 18, fontSize: 17, borderRadius: 16 }} disabled={!valid || busy} onClick={generate}>
-            {busy ? "Starting…" : "🪄 Generate BanterClip"}
+            {busy ? (reference ? "Uploading reference…" : "Starting…") : "🪄 Build My Banter"}
           </button>
           <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", marginTop: -8 }}>
             Hot Take format · cinematic scenes · {duration}s vertical MP4 · {resolution}

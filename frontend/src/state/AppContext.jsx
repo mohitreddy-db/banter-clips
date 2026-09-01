@@ -228,7 +228,7 @@ export function AppProvider({ children }) {
 
   const connectSocial = useCallback(
     async (platform) => {
-      if (platform === "instagram" || platform === "tiktok") {
+      if (["instagram", "tiktok", "youtube"].includes(platform)) {
         // Real OAuth when the platform app is configured — the whole tab
         // goes to the platform's consent screen and comes back.
         try {
@@ -276,6 +276,7 @@ export function AppProvider({ children }) {
   const onboarded = !!user?.preferences?.onboarding_completed;
   const instagram = socials.find((s) => s.platform === "instagram") || null;
   const tiktok = socials.find((s) => s.platform === "tiktok") || null;
+  const youtube = socials.find((s) => s.platform === "youtube") || null;
 
   const value = {
     booted,
@@ -314,6 +315,7 @@ export function AppProvider({ children }) {
     socials,
     instagram,
     tiktok,
+    youtube,
     connected: !!instagram,
     connectSocial,
     disconnectSocial,

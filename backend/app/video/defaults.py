@@ -51,11 +51,13 @@ class ResolvedInput:
     # players they explicitly asked to see. Requirements when present.
     also_sports: list[str] = field(default_factory=list)
     subjects: list[str] = field(default_factory=list)
+    direction: str = ""
 
     def to_dict(self) -> dict:
         return {
             "take": self.take, "sport": self.sport, "tone": self.tone,
             "also_sports": self.also_sports, "subjects": self.subjects,
+            "direction": self.direction,
             "seconds": self.seconds, "scene_count": self.scene_count,
             "focus": self.focus.to_dict(),
         }
@@ -68,6 +70,7 @@ def resolve(
     seconds: object = None,
     also_sports: list | None = None,
     subjects: list | None = None,
+    direction: object = None,
 ) -> ResolvedInput:
     """Turn whatever we were given into a complete, valid brief."""
     clean_take = _clean(take)
@@ -100,6 +103,7 @@ def resolve(
         focus=detected,
         also_sports=[s for s in (also_sports or []) if s in SPORTS and s != resolved_sport],
         subjects=[str(s).strip()[:60] for s in (subjects or []) if str(s).strip()][:8],
+        direction=_clean(direction)[:400],
     )
 
 

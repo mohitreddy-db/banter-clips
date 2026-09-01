@@ -8,11 +8,19 @@ import tiktokLogo from "../assets/tiktok.svg";
  */
 
 const LOGOS = { instagram: instagramLogo, tiktok: tiktokLogo };
-const NAMES = { instagram: "Instagram", tiktok: "TikTok" };
+const NAMES = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
 
 export const platformName = (platform) => NAMES[platform] || platform || "";
 
 export function SocialIcon({ platform, size = 20, title, style }) {
+  if (platform === "youtube") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="YouTube" title={title || "YouTube"} style={{ display: "block", flexShrink: 0, ...style }}>
+        <rect x="2" y="5" width="20" height="14" rx="4" fill="#ff0033" />
+        <path d="m10 9 5 3-5 3Z" fill="#fff" />
+      </svg>
+    );
+  }
   const src = LOGOS[platform];
   if (!src) return null;
   return (

@@ -20,7 +20,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
-from app.services import markers, spend, storage  # noqa: E402
+from app.routers.clips import reference_matches  # noqa: E402
+from app.services import markers, spend, storage, youtube  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
 
 
@@ -53,6 +54,18 @@ def test_stripping_still_satisfies_the_database_minimum():
 def test_stripping_leaves_an_unmarked_take_alone():
     take = "The Lakers are frauds and everyone knows it"
     assert markers.strip(take) == take
+
+
+def test_youtube_metadata_uses_first_line_as_title_and_clamps_it():
+    title, description = youtube.metadata("A" * 120 + "\nFull description", "fallback")
+    assert len(title) == 100
+    assert description == "Full description"
+
+
+def test_reference_upload_checks_file_signatures():
+    assert reference_matches(b"\xff\xd8\xffphoto", ".jpg")
+    assert reference_matches(b"\x00\x00\x00\x18ftypmp42", ".mp4")
+    assert not reference_matches(b"not really a video", ".mp4")
 
 
 # ------------------------------------------------------------------ storage

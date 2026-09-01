@@ -13,11 +13,11 @@ const ROLES = [
 const PLATFORMS = [
   { name: "Instagram", key: "instagram", sub: "Publishes as Reels · beta launch platform", connectable: true, tile: "linear-gradient(140deg,#7b2ff7,#f0546c)", glyph: "ig" },
   { name: "TikTok", key: "tiktok", sub: "Direct post · beta", connectable: true, tile: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", glyph: "note" },
-  { name: "YouTube", key: "youtube", sub: "Shorts", connectable: false, tile: "#1a1114", glyph: "yt" },
+  { name: "YouTube", key: "youtube", sub: "Upload directly as Shorts · beta", connectable: true, tile: "#1a1114", glyph: "yt" },
   { name: "X", key: "x", sub: "Video post with caption", connectable: false, tile: "#0f1524", glyph: "x" },
 ];
 
-const FREE_FEATURES = ["Welcome credits — your first video on us", "One-click publish to Instagram & TikTok", "All five tones, Funny to Roast", "Watermark on every clip"];
+const FREE_FEATURES = ["Welcome credits — your first video on us", "One-click publish to Instagram, TikTok & YouTube", "All five tones, Funny to Roast", "Watermark on every clip"];
 const CREATOR_FEATURES = ["150 credits every month", "Full HD 1080p quality", "30-second videos", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
@@ -78,18 +78,19 @@ export default function Onboarding() {
 
 function OnboardingFlow() {
   const nav = useNavigate();
-  const { profile, savePreferences, instagram, tiktok, connectSocial, plan, upgrade, startCheckout } = useApp();
-  const accounts = { instagram, tiktok };
+  const { profile, savePreferences, instagram, tiktok, youtube, connectSocial, plan, upgrade, startCheckout } = useApp();
+  const accounts = { instagram, tiktok, youtube };
   // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
   // resume at the connect step instead of restarting the flow.
   const [searchParams] = useSearchParams();
   const igReturn = searchParams.get("ig");
   const ttReturn = searchParams.get("tt");
-  const oauthReturn = igReturn || ttReturn;
+  const ytReturn = searchParams.get("yt");
+  const oauthReturn = igReturn || ttReturn || ytReturn;
   const [step, setStep] = useState(oauthReturn ? 4 : 1);
   const [igNotice] = useState(
     oauthReturn && oauthReturn !== "connected"
-      ? `${igReturn ? "Instagram" : "TikTok"} connect ${oauthReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
+      ? `${igReturn ? "Instagram" : ttReturn ? "TikTok" : "YouTube"} connect ${oauthReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
       : ""
   );
   const [sports, setSports] = useState(profile.sports || []);

@@ -615,6 +615,7 @@ def planner_user_message(
     take: str, sport: str, tone: str, roster: list, venues: list,
     focus_note: str = "", storyline: str = "",
     also_sports: list | None = None, subjects: list | None = None,
+    direction: str = "",
 ) -> str:
     names = "\n".join(f"  - id={m.id!r} name={m.name!r} ({m.look})" for m in roster)
     places = "\n".join(f"  - {v}" for v in venues)
@@ -632,6 +633,8 @@ def planner_user_message(
     if wanted:
         extra += (f"MUST feature: {', '.join(wanted)}. Cast them by name and "
                   f"give them something to do — this is what the user asked for.\n")
+    if direction:
+        extra += f"Creator's scene direction: {direction}. Follow it unless unsafe.\n"
     return (
         f"Sport: {sport}\n"
         f"Tone: {tone}\n"

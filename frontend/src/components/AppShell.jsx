@@ -1,7 +1,7 @@
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 
-const TITLES = { "/studio": "Create Studio", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing" };
+const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing" };
 
 function Icon({ d, size = 18, color = "currentColor" }) {
   return (
@@ -13,6 +13,7 @@ function Icon({ d, size = 18, color = "currentColor" }) {
 
 const icons = {
   create: <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  prompts: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M8.5 14.5A6 6 0 1 1 15.5 14.5c-.9.6-1.5 1.4-1.5 2.5h-4c0-1.1-.6-1.9-1.5-2.5Z" /></>,
   catalog: (
     <>
       <circle cx="9" cy="7" r="3" />
@@ -112,6 +113,9 @@ export default function AppShell({ children }) {
         <NavLink to="/studio" style={navItem}>
           <Icon d={icons.create} /> Create
         </NavLink>
+        <NavLink to="/prompts" style={navItem}>
+          <Icon d={icons.prompts} /> Prompts
+        </NavLink>
         <NavLink to="/clips" style={navItem}>
           <Icon d={icons.clips} /> My Clips
         </NavLink>
@@ -187,6 +191,7 @@ export default function AppShell({ children }) {
       <nav className="app-bottomnav app-font">
         {[
           ["/studio", "Create", icons.create],
+          ["/prompts", "Prompts", icons.prompts],
           ["/clips", "My Clips", icons.clips],
           ["/pricing", "Pricing", icons.pricing],
           ["/account", "Account", icons.account],

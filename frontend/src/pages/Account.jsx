@@ -17,7 +17,7 @@ export default function Account() {
   const nav = useNavigate();
   const {
     user, plan, credits, videoPrice, profile, signOut, cancelPlan, refreshUser,
-    refreshUsage, instagram, tiktok, connected, connectSocial, disconnectSocial,
+    refreshUsage, instagram, tiktok, youtube, connected, connectSocial, disconnectSocial,
   } = useApp();
   const isCreator = plan === "creator";
   const [busy, setBusy] = useState(false);
@@ -28,7 +28,7 @@ export default function Account() {
 
   // Result of an OAuth round-trip (?ig=... for Instagram, ?tt=... for TikTok).
   useEffect(() => {
-    for (const [param, name, at] of [["ig", "Instagram", "@"], ["tt", "TikTok", ""]]) {
+    for (const [param, name, at] of [["ig", "Instagram", "@"], ["tt", "TikTok", ""], ["yt", "YouTube", ""]]) {
       const result = params.get(param);
       if (!result) continue;
       if (result === "connected") setIgNotice({ ok: true, text: `${name} connected${params.get("handle") ? ` as ${at}${params.get("handle")}` : ""}.` });
@@ -189,6 +189,7 @@ export default function Account() {
         {[
           { key: "instagram", name: "Instagram", account: instagram, blurb: "Connected · clips publish as Reels · explicit per-clip publishing only" },
           { key: "tiktok", name: "TikTok", account: tiktok, blurb: "Connected · clips post to your TikTok · explicit per-clip publishing only" },
+          { key: "youtube", name: "YouTube", account: youtube, blurb: "Connected · vertical clips upload as Shorts · explicit per-clip publishing only" },
         ].map(({ key, name, account, blurb }) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <SocialIcon platform={key} size={36} />
@@ -211,7 +212,7 @@ export default function Account() {
             )}
           </div>
         ))}
-        <div style={{ fontSize: 12, color: "var(--app-muted2)" }}>Two platforms in beta — YouTube and X arrive after launch.</div>
+        <div style={{ fontSize: 12, color: "var(--app-muted2)" }}>Instagram, TikTok and YouTube are available in beta. X arrives later.</div>
       </div>
 
       {/* preferences */}

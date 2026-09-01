@@ -199,16 +199,17 @@ export function UpgradeModal({ onClose, reason }) {
 
 export function PublishModal({ clip, onClose }) {
   const nav = useNavigate();
-  const { instagram, tiktok, connectSocial, watermarked, refreshClips } = useApp();
+  const { instagram, tiktok, youtube, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
   const [connecting, setConnecting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   // Where this clip goes. Defaults to the first connected platform.
-  const [platform, setPlatform] = useState(instagram ? "instagram" : tiktok ? "tiktok" : "instagram");
+  const [platform, setPlatform] = useState(instagram ? "instagram" : tiktok ? "tiktok" : youtube ? "youtube" : "instagram");
   const PLATFORMS = [
     { key: "instagram", name: "Instagram", account: instagram, how: "publishes as a Reel" },
     { key: "tiktok", name: "TikTok", account: tiktok, how: "posts to your TikTok" },
+    { key: "youtube", name: "YouTube", account: youtube, how: "uploads as a YouTube Short" },
   ];
   const selected = PLATFORMS.find((p) => p.key === platform);
   const connected = !!selected.account;

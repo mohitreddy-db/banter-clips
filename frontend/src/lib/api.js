@@ -47,6 +47,16 @@ async function request(path, { method = "GET", body } = {}) {
   return data;
 }
 
+async function upload(path, file) {
+  const headers = { "content-type": file.type };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data?.detail?.code, data?.detail?.message || data?.detail || `Upload failed (${res.status})`);
+  return data;
+}
+
 // Build a querystring, dropping empty/undefined values.
 const qs = (params = {}) => {
   const pairs = Object.entries(params).filter(
@@ -85,10 +95,11 @@ export const api = {
   trending: (sport) => request(`/clips/trending?sport=${encodeURIComponent(sport)}`),
   // `sports` and `subjects` are optional hints — the server infers the sport
   // from the take when nothing is picked.
-  createClip: (take, sports = [], tone, duration = 15, resolution = "720p", subjects = []) =>
+  uploadReference: (file) => upload("/clips/reference", file),
+  createClip: (take, sports = [], tone, duration = 15, resolution = "720p", subjects = [], direction = "", reference_key = null) =>
     request("/clips", {
       method: "POST",
-      body: { take, sports, subjects, tone, duration, resolution },
+      body: { take, sports, subjects, tone, duration, resolution, direction, reference_key },
     }),
   getClip: (id) => request(`/clips/${id}`),
   // Three written caption options to pick between when publishing.
@@ -110,7 +121,7 @@ export const api = {
 
   // socials
   listSocials: () => request("/socials"),
-  // Real OAuth consent URL for a platform (instagram | tiktok); 503 when
+  // Real OAuth consent URL for a platform; 503 when
   // that platform's app isn't configured server-side.
   oauthUrl: (platform, next) => request(`/socials/${platform}/oauth-url?next=${encodeURIComponent(next || "/account")}`),
   connectSocial: (platform) => request("/socials/connect", { method: "POST", body: { platform } }),

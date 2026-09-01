@@ -1,7 +1,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -23,6 +23,13 @@ from ..services.publishing import start_publish
 log = logging.getLogger("banter.clips")
 
 router = APIRouter(prefix="/clips", tags=["clips"])
+
+REFERENCE_LIMIT = 15 * 1024 * 1024
+REFERENCE_TYPES = {"image/jpeg": ".jpg", "video/mp4": ".mp4"}
+
+
+def reference_matches(payload: bytes, suffix: str) -> bool:
+    return payload.startswith(b"\xff\xd8\xff") if suffix == ".jpg" else payload[4:8] == b"ftyp"
 
 
 def _own_clip(clip_id: uuid.UUID, user: User, db: Session) -> Clip:
@@ -208,6 +215,7 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
         sport=primary,
         sports=list(dict.fromkeys(picked)),
         subjects=subjects,
+        direction=body.direction.strip(),
         credits_quoted=price,
         tone=body.tone,
         duration_target=body.duration,
@@ -216,11 +224,54 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
         watermarked=user.plan != "creator",
     )
     db.add(clip)
+    db.flush()
+    if body.reference_key:
+        expected = f"users/{user.id}/uploads/"
+        if not body.reference_key.startswith(expected):
+            raise HTTPException(400, "Invalid reference upload")
+        store = storage.get()
+        payload = store.open(body.reference_key)
+        if payload is None:
+            raise HTTPException(400, "Reference upload expired — choose it again")
+        suffix = ".mp4" if body.reference_key.endswith(".mp4") else ".jpg"
+        key = f"{storage.clip_prefix(user.id, clip.id)}/reference{suffix}"
+        store.put(key, payload, "video/mp4" if suffix == ".mp4" else "image/jpeg")
+        store.delete(body.reference_key)
+        clip.reference_key = key
     db.commit()
     record_event(db, "generation_started", user, sport=primary, tone=body.tone,
                  duration=body.duration, inferred_sport=not picked)
     start_generation(clip.id)
     return _serialize(clip)
+
+
+@router.post("/reference", status_code=201)
+async def upload_reference(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """One optional JPEG or MP4 reference for the guided prompt builder.
+
+    Raw-body upload avoids a multipart dependency. The key is temporary and
+    is moved under the clip when POST /clips succeeds.
+    """
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    suffix = REFERENCE_TYPES.get(content_type)
+    if not suffix:
+        raise HTTPException(415, "Reference must be a JPEG image or MP4 video")
+    payload = bytearray()
+    async for chunk in request.stream():
+        payload.extend(chunk)
+        if len(payload) > REFERENCE_LIMIT:
+            raise HTTPException(413, "Reference must be between 1 byte and 15 MB")
+    payload = bytes(payload)
+    if not payload:
+        raise HTTPException(413, "Reference must be between 1 byte and 15 MB")
+    if not reference_matches(payload, suffix):
+        raise HTTPException(415, "Reference file contents do not match its type")
+    key = f"users/{user.id}/uploads/{uuid.uuid4()}{suffix}"
+    storage.get().put(key, payload, content_type)
+    return {"key": key}
 
 
 @router.get("/{clip_id}", response_model=ClipOut)

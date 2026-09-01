@@ -59,6 +59,13 @@ class Settings(BaseSettings):
     # public posting is allowed.
     TIKTOK_UNAUDITED: bool = True
 
+    # YouTube Data API OAuth + videos.insert. Unverified API projects may have
+    # uploads forced private by Google even when public is requested.
+    YOUTUBE_CLIENT_ID: str = ""
+    YOUTUBE_CLIENT_SECRET: str = ""
+    YOUTUBE_REDIRECT_URI: str = ""
+    YOUTUBE_PRIVACY_STATUS: str = "public"
+
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
     # Where generated artifacts live. "local" writes under MEDIA_DIR and
@@ -129,6 +136,12 @@ class Settings(BaseSettings):
     IMAGE_MODEL: str = "x-ai/grok-imagine-image-quality"
     VIDEO_PROVIDER: str = "stub"        # "stub" | "openrouter"
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
+    # OpenRouter model per output tier. JSON in env; VIDEO_MODEL remains the
+    # fallback and lets any other OpenRouter video generator work unchanged.
+    VIDEO_MODEL_ROUTES: dict[str, str] = {
+        "720p": "bytedance/seedance-2.0-mini",
+        "1080p": "bytedance/seedance-1-5-pro",
+    }
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
     # Script approval: generation pauses after the script is written

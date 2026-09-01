@@ -20,7 +20,7 @@ import httpx
 from ..config import settings
 from ..db import SessionLocal
 from ..models import Publish
-from . import tiktok
+from . import tiktok, youtube
 
 FAIL_MARKER = "[fail]"
 MOCK_TOKEN = "mock-oauth-token"
@@ -76,7 +76,9 @@ def _publish_tiktok(db, pub) -> None:
     # 2. Fetch the finished clip's bytes — we push them, TikTok never needs
     # to reach our storage, so this works from local dev too.
     try:
-        video = httpx.get(_public_video_url(pub.clip), timeout=120).content
+        response = httpx.get(_public_video_url(pub.clip), timeout=120)
+        response.raise_for_status()
+        video = response.content
     except httpx.HTTPError:
         return _fail(db, pub, "Could not read the finished video from storage. Retrying is free.")
 
@@ -118,6 +120,30 @@ def _publish_tiktok(db, pub) -> None:
             reason = (body.get("data") or {}).get("fail_reason") or "TikTok could not process the video."
             return _fail(db, pub, f"{reason} Retrying is free.")
     return _fail(db, pub, "TikTok is taking too long to process the video. Retry in a minute.")
+
+
+def _publish_youtube(db, pub) -> None:
+    try:
+        response = httpx.get(_public_video_url(pub.clip), timeout=120)
+        response.raise_for_status()
+        video = response.content
+    except httpx.HTTPError:
+        return _fail(db, pub, "Could not read the finished video from storage. Retrying is free.")
+    title, description = youtube.metadata(pub.caption or "", pub.clip.take)
+    try:
+        video_id = youtube.upload_short(
+            pub.account.access_token,
+            video,
+            title=title,
+            description=description,
+        )
+    except httpx.HTTPError:
+        return _fail(db, pub, "YouTube rejected or interrupted the upload. Check the channel connection and retry — it's free.")
+    pub.status = "published"
+    pub.error = None
+    pub.published_at = datetime.now(timezone.utc)
+    pub.external_url = f"https://www.youtube.com/shorts/{video_id}"
+    db.commit()
 
 
 def _real_publish(db, pub) -> None:
@@ -207,6 +233,8 @@ def _mock_publish(db, pub) -> None:
     pub.external_url = (
         f"https://www.tiktok.com/@banterclips/video/72{str(pub.id.int)[:14]}"
         if pub.account and pub.account.platform == "tiktok"
+        else f"https://www.youtube.com/shorts/BC{str(pub.id)[:8]}"
+        if pub.account and pub.account.platform == "youtube"
         else f"https://www.instagram.com/reel/BC{str(pub.id)[:8]}/"
     )
     db.commit()
@@ -237,7 +265,12 @@ def _run_publish(publish_id: uuid.UUID) -> None:
             pub.status = "uploading"
             db.commit()
             try:
-                _publish_tiktok(db, pub) if platform == "tiktok" else _real_publish(db, pub)
+                if platform == "tiktok":
+                    _publish_tiktok(db, pub)
+                elif platform == "youtube":
+                    _publish_youtube(db, pub)
+                else:
+                    _real_publish(db, pub)
             except httpx.HTTPError:
                 _fail(db, pub, f"Could not reach {platform.title()}. Check your connection and retry — it's free.")
         else:

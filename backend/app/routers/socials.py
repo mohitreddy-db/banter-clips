@@ -22,12 +22,12 @@ from ..db import get_db
 from ..deps import get_current_user, record_event
 from ..models import SocialAccount, User
 from ..schemas import SocialAccountOut, SocialConnectRequest
-from ..services import tiktok
+from ..services import tiktok, youtube
 
 router = APIRouter(prefix="/socials", tags=["socials"])
 
 # Beta platforms (BR-13); the rest are visible but locked.
-CONNECTABLE = {"instagram", "tiktok"}
+CONNECTABLE = {"instagram", "tiktok", "youtube"}
 
 IG_AUTHORIZE = "https://www.instagram.com/oauth/authorize"
 IG_TOKEN = "https://api.instagram.com/oauth/access_token"
@@ -45,6 +45,8 @@ def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
     and before each real publish; dispatches per platform."""
     if account.platform == "tiktok":
         return tiktok.maybe_refresh_token(db, account)
+    if account.platform == "youtube":
+        return youtube.maybe_refresh_token(db, account)
     if account.platform == "instagram":
         return _maybe_refresh_instagram(db, account)
 
@@ -105,7 +107,8 @@ def _upsert_account(
         db.add(account)
     account.handle = handle
     account.access_token = token
-    account.refresh_token = refresh_token
+    if refresh_token is not None:
+        account.refresh_token = refresh_token
     account.platform_user_id = platform_user_id
     account.token_expires_at = (
         datetime.now(timezone.utc) + timedelta(seconds=expires_in) if expires_in else None
@@ -250,6 +253,28 @@ def tiktok_oauth_url(
     return {"url": f"{tiktok.AUTHORIZE}?{query}"}
 
 
+@router.get("/youtube/oauth-url")
+def youtube_oauth_url(
+    next: str = "/account",
+    user: User = Depends(get_current_user),
+):
+    if not youtube.configured():
+        raise HTTPException(503, detail={"code": "oauth_not_configured", "message": "YouTube OAuth is not configured."})
+    query = urlencode(
+        {
+            "client_id": settings.YOUTUBE_CLIENT_ID,
+            "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": youtube.SCOPE,
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
+            "state": _oauth_state(user, "yt_oauth", next),
+        }
+    )
+    return {"url": f"{youtube.AUTHORIZE}?{query}"}
+
+
 @router.get("/tiktok/callback")
 def tiktok_callback(
     code: str | None = None,
@@ -302,6 +327,50 @@ def tiktok_callback(
     return bounce(next_path, tt="connected", handle=display_name)
 
 
+@router.get("/youtube/callback")
+def youtube_callback(
+    code: str | None = None,
+    state: str = "",
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+):
+    def bounce(next_path: str, **params) -> RedirectResponse:
+        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+
+    try:
+        claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        assert claims.get("purpose") == "yt_oauth"
+        user_id = claims["sub"]
+        next_path = claims.get("next", "/account")
+    except Exception:
+        return bounce("/account", yt="error", reason="invalid_state")
+    if error or not code:
+        return bounce(next_path, yt="denied", reason=error_description or error or "cancelled")
+
+    try:
+        tok = youtube.exchange_code(code)
+        token = tok["access_token"]
+    except Exception:
+        return bounce(next_path, yt="error", reason="token_exchange_failed")
+
+    user = db.get(User, user_id)
+    if user is None:
+        return bounce(next_path, yt="error", reason="unknown_user")
+    _upsert_account(
+        db,
+        user.id,
+        platform="youtube",
+        handle="YouTube channel",
+        token=token,
+        platform_user_id="me",
+        expires_in=tok.get("expires_in", 3600),
+        refresh_token=tok.get("refresh_token"),
+    )
+    record_event(db, "social_connected", user, platform="youtube", real=True)
+    return bounce(next_path, yt="connected", handle="YouTube channel")
+
+
 @router.get("", response_model=list[SocialAccountOut])
 def list_accounts(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     accounts = db.scalars(
@@ -321,7 +390,7 @@ def connect(body: SocialConnectRequest, user: User = Depends(get_current_user), 
             400,
             detail={
                 "code": "platform_locked",
-                "message": f"{body.platform} arrives after the beta — Instagram and TikTok are the launch platforms.",
+                "message": f"{body.platform} is not connectable yet.",
             },
         )
 

@@ -5,6 +5,7 @@ import ResetPassword from "./pages/ResetPassword.jsx";
 import Onboarding from "./pages/Onboarding.jsx";
 import AppShell from "./components/AppShell.jsx";
 import Studio from "./pages/Studio.jsx";
+import Prompts from "./pages/Prompts.jsx";
 import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
@@ -43,6 +44,7 @@ export default function App() {
       <Route path="/showcase/:slug" element={<ShowcaseClip />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
+        <Route path="/prompts" element={<Prompts />} />
         <Route path="/clips" element={<Clips />} />
         <Route path="/account" element={<Account />} />
       </Route>

@@ -88,6 +88,7 @@ class Result:
     poster_path: Path | None = None
     duration: float = 0.0
     resolution: str = ""
+    video_model: str = ""
     cost_usd: float = 0.0
     plan: VideoPlan | None = None
     assets: list[SceneAsset] = field(default_factory=list)
@@ -117,6 +118,7 @@ def generate_video(
     resolution: str | None = None,
     plan: VideoPlan | None = None,
     budget: float | None = None,
+    user_reference: Path | None = None,
 ) -> Result:
     """Run the whole pipeline. Never raises.
 
@@ -312,7 +314,7 @@ def generate_video(
         # Exactly ONE still per person. Padding a solo shot with a second
         # still of the same face is what taught the model to compose that
         # person twice (two Mbappés in one frame, observed 2026-08-28).
-        refs: list[Path] = []
+        refs: list[Path] = [user_reference] if user_reference and user_reference.exists() else []
         for member in prompts.visible_cast(plan, scene):
             refs += catalog.select_references(references.get(member.id), scene.camera)[:1]
         if scene.index > 0 and venue_anchor:
@@ -394,6 +396,7 @@ def generate_video(
     # ------------------------------------------------------ 5. animation
     stage(STAGE_ANIMATE)
     video = providers.video_provider(resolution)
+    result.video_model = getattr(video, "model", "stub")
     using_stub = isinstance(video, providers.StubVideoProvider)
     if using_stub:
         result.warn("video generation is off; animating keyframes locally")
@@ -618,7 +621,7 @@ def _provenance(result: Result) -> dict:
             "plan": getattr(settings, "OPENAI_PLAN_MODEL", ""),
             "review": getattr(settings, "OPENAI_REVIEW_MODEL", ""),
             "image": getattr(settings, "IMAGE_MODEL", ""),
-            "video": getattr(settings, "VIDEO_MODEL", ""),
+            "video": result.video_model or getattr(settings, "VIDEO_MODEL", ""),
             "resolution": result.resolution or getattr(settings, "VIDEO_RESOLUTION", ""),
         },
         "scenes": [
@@ -702,6 +705,7 @@ def _write_script(db, clip) -> None:
         # What the user asked for beyond the take: other sports the story may
         # cross into, and any teams or players they named.
         also_sports=list(clip.sports or []), subjects=list(clip.subjects or []),
+        direction=getattr(clip, "direction", ""),
     )
     pack = context_mod.get_pack(resolved.take, resolved.sport)
     clip.current_step = "Writing your script"
@@ -839,6 +843,22 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
 
         work = Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
         out = work / "final.mp4"
+        user_reference = None
+        if getattr(clip, "reference_key", None):
+            try:
+                from ..services import storage
+
+                payload = storage.get().open(clip.reference_key)
+                if payload:
+                    source = work / ("reference.mp4" if clip.reference_key.endswith(".mp4") else "reference.jpg")
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_bytes(payload)
+                    user_reference = (
+                        media.poster(source, work / "reference_frame.jpg", at=0.5)
+                        if source.suffix == ".mp4" else source
+                    )
+            except Exception:  # noqa: BLE001 — a reference is helpful, never load-bearing
+                log.exception("could not load reference for clip %s", clip_id)
         result = generate_video(
             clip.take, clip.sport, clip.tone, clip.duration_target,
             work_dir=work, out_path=out,
@@ -848,6 +868,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             resolution=getattr(clip, "resolution", None),
             plan=approved_plan,
             budget=_job_budget(db),
+            user_reference=user_reference,
         )
 
         clip.cost_usd = round(result.cost_usd, 3)

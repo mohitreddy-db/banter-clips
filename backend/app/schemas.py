@@ -96,6 +96,8 @@ class ClipCreate(BaseModel):
     sports: list[Sport] = Field(default_factory=list, max_length=4)
     # Optional teams/players the user wants in it, in their own words.
     subjects: list[str] = Field(default_factory=list, max_length=8)
+    direction: str = Field(default="", max_length=400)
+    reference_key: str | None = Field(default=None, max_length=300)
     tone: Tone
     duration: Literal[10, 15, 30] = 15
     resolution: Literal["720p", "1080p"] = "720p"

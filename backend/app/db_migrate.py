@@ -41,6 +41,8 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "subjects", "text[] NOT NULL DEFAULT '{}'"),
     ("clips", "credits_quoted", "integer NOT NULL DEFAULT 0"),
     ("social_accounts", "refresh_token", "text"),
+    ("clips", "direction", "text NOT NULL DEFAULT ''"),
+    ("clips", "reference_key", "text"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied

@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import mimetypes
 import time
 from pathlib import Path
 
@@ -179,7 +180,8 @@ class ImageProvider:
 
 
 def _data_uri(path: str | Path) -> str:
-    return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+    kind = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+    return f"data:{kind};base64," + base64.b64encode(Path(path).read_bytes()).decode()
 
 
 class StubImageProvider:
@@ -218,11 +220,11 @@ class VideoProvider:
                 first_frame: Path | None = None) -> tuple[Path | None, float]:
         if not self.available:
             return None, 0.0
+        options = video_options(self.model, seconds, self.resolution)
         body: dict = {
             "model": self.model,
             "prompt": prompt,
-            "duration": max(1, min(15, int(round(seconds)))),
-            "resolution": self.resolution,
+            **options,
             "aspect_ratio": "9:16",
         }
         if first_frame and first_frame.exists():
@@ -287,6 +289,29 @@ class StubVideoProvider:
 
 # ----------------------------------------------------------------- factories
 
+SEEDANCE_CAPABILITIES = {
+    "bytedance/seedance-2.0-mini": (4, 15, "720p"),
+    "bytedance/seedance-1-5-pro": (4, 12, "1080p"),
+    "bytedance/seedance-2.0-fast": (4, 15, "1080p"),
+    "bytedance/seedance-2.0": (4, 15, "1080p"),
+    "bytedance/seedance-2.5": (4, 30, "720p"),
+}
+
+
+def video_options(model: str, seconds: float, resolution: str) -> dict:
+    """Model-specific bounds; unknown OpenRouter models keep the old contract."""
+    minimum, maximum, max_resolution = SEEDANCE_CAPABILITIES.get(model, (1, 15, "1080p"))
+    selected = resolution
+    if max_resolution == "720p" and resolution == "1080p":
+        selected = "720p"
+    options = {
+        "duration": max(minimum, min(maximum, int(round(seconds)))),
+        "resolution": selected,
+    }
+    if model in SEEDANCE_CAPABILITIES:
+        options["generate_audio"] = True
+    return options
+
 def text_client() -> TextClient | NullTextClient:
     """The planner's client — a capable model; script quality starts here."""
     key = getattr(settings, "OPENAI_API_KEY", "")
@@ -317,9 +342,11 @@ def video_provider(resolution: str | None = None):
     mode = getattr(settings, "VIDEO_PROVIDER", "stub")
     key = getattr(settings, "OPENROUTER_API_KEY", "")
     if mode == "openrouter" and key:
+        selected_resolution = resolution or getattr(settings, "VIDEO_RESOLUTION", "720p")
+        routes = getattr(settings, "VIDEO_MODEL_ROUTES", {}) or {}
         return VideoProvider(
             key,
-            getattr(settings, "VIDEO_MODEL", ""),
-            resolution or getattr(settings, "VIDEO_RESOLUTION", "720p"),
+            routes.get(selected_resolution) or getattr(settings, "VIDEO_MODEL", ""),
+            selected_resolution,
         )
     return StubVideoProvider()

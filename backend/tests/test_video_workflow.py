@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.video import catalog, defaults, focus, library, media, planner, prompts  # noqa: E402
-from app.video import enhancer, prompt_registry, review, shotwriter  # noqa: E402
+from app.video import enhancer, prompt_registry, providers, review, shotwriter  # noqa: E402
 from app.video.types import CastMember, Scene, VideoPlan  # noqa: E402
 
 
@@ -59,6 +59,24 @@ def test_resolve_clamps_duration_and_scales_scenes():
 
 def test_resolve_truncates_an_overlong_take():
     assert len(defaults.resolve("x" * 5000).take) <= 280
+
+
+def test_guided_direction_reaches_the_planner_prompt():
+    resolved = defaults.resolve("Messi is still the GOAT", direction="A tense press room")
+    message = prompts.planner_user_message(
+        resolved.take, resolved.sport, resolved.tone, [], [], direction=resolved.direction
+    )
+    assert "A tense press room" in message
+
+
+def test_seedance_capabilities_keep_audio_and_valid_bounds():
+    mini = providers.video_options("bytedance/seedance-2.0-mini", 2, "1080p")
+    assert mini == {"duration": 4, "resolution": "720p", "generate_audio": True}
+    pro = providers.video_options("bytedance/seedance-1-5-pro", 20, "1080p")
+    assert pro["duration"] == 12 and pro["generate_audio"] is True
+    assert providers.video_options("another/provider", 2, "1080p") == {
+        "duration": 2, "resolution": "1080p"
+    }
 
 
 # --------------------------------------------------------------------- library
