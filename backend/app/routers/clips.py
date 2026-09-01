@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
@@ -14,7 +15,7 @@ from ..models import Clip, Publish, SocialAccount, User
 from ..schemas import (
     CaptionSuggestions,
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
-    TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation,
+    TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation, Tone,
 )
 from ..services import markers, storage
 from ..services.generation import start_generation
@@ -331,6 +332,12 @@ class ScriptRegenerate(BaseModel):
     # Optional note telling the writer what was wrong ("less cringe",
     # "make it about the derby") — folded into the rewrite prompt.
     feedback: str = Field(default="", max_length=400)
+    # Rewrite with different options: swap the tone, length or quality and
+    # write the script for THOSE settings. Omitted fields keep the clip's
+    # current value; a change re-quotes the video at the menu price.
+    tone: Tone | None = None
+    duration: Literal[10, 15, 30] | None = None
+    resolution: Literal["720p", "1080p"] | None = None
 
 
 @router.post("/{clip_id}/script/approve", response_model=ClipOut)
@@ -357,9 +364,43 @@ def regenerate_script(
 ):
     """Reject the current script and write a different one. Free — only the
     render costs real money, and it hasn't started."""
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
     if clip.status != "script_ready" or not clip.script:
         raise HTTPException(409, "This clip has no script awaiting approval.")
+
+    # New options ride along with the rewrite. Same gates as create — plan
+    # capabilities and the balance are checked against the NEW quote before
+    # anything is queued. Still charge-on-completion: nothing moves here.
+    tone = body.tone or clip.tone
+    duration = body.duration or clip.duration_target
+    resolution = body.resolution or clip.resolution
+    options_changed = (tone, duration, resolution) != (
+        clip.tone, clip.duration_target, clip.resolution)
+    if options_changed:
+        if duration > 15 and user.plan != "creator":
+            raise HTTPException(403, detail={
+                "code": "upgrade_required",
+                "message": "Videos longer than 15 seconds are a Creator feature.",
+            })
+        if resolution == "1080p" and user.plan != "creator":
+            raise HTTPException(403, detail={
+                "code": "upgrade_required",
+                "message": "1080p video is a Creator feature — Free renders at 720p.",
+            })
+        price = 0 if clip.is_simulated else credits.video_price(db, duration, resolution)
+        if user.credits < price:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"This video needs {price} credits — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
+        clip.tone = tone
+        clip.duration_target = duration
+        clip.resolution = resolution
+        clip.credits_quoted = price
+
     history = list(clip.script_history or [])
     history.append({"script": clip.script, "feedback": body.feedback.strip()})
     clip.script_history = history[-10:]   # rejected drafts, capped
@@ -369,7 +410,8 @@ def regenerate_script(
     clip.stage_index = 0
     db.commit()
     record_event(db, "script_regenerated", user, clip_id=str(clip.id),
-                 with_feedback=bool(body.feedback.strip()))
+                 with_feedback=bool(body.feedback.strip()),
+                 options_changed=options_changed)
     start_generation(clip.id)
     return _serialize(clip)
 

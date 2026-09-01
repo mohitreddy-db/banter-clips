@@ -205,6 +205,114 @@ def test_depth_reports_every_status():
         db.close()
 
 
+# ---- regenerate-with-different-options, at the script approval gate --------
+
+def _script_clip(db, *, plan="free", balance=200):
+    """A clip parked at the approval gate, plus its owner in a known state."""
+    user = _user(db)
+    user.plan = plan
+    user.credits = balance
+    clip = Clip(
+        user_id=user.id,
+        take="A script options test take that is long enough.",
+        sport="NBA", tone="Funny", duration_target=15, resolution="720p",
+        status="script_ready", credits_quoted=60,
+        script={"title": "t", "scenes": [{"seconds": 4.0, "line": "hi", "action": "waves"}]},
+    )
+    db.add(clip)
+    db.commit()
+    return user, clip
+
+
+def _quiet_generation():
+    """Swap the router's start_generation for a noop; returns the original."""
+    from app.routers import clips as clips_router
+
+    real = clips_router.start_generation
+    clips_router.start_generation = lambda cid: None
+    return clips_router, real
+
+
+def test_regenerate_with_new_options_requotes_and_updates_the_clip():
+    """Changing tone/length/quality at the approval gate must re-quote the
+    video at the exact menu price — and still charge nothing (rule 3)."""
+    from app.services import credits
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        user, clip = _script_clip(db, plan="creator", balance=500)
+        clips_router.regenerate_script(
+            clip.id,
+            clips_router.ScriptRegenerate(tone="Roast", duration=30, resolution="1080p"),
+            user, db)
+        db.refresh(clip)
+        assert (clip.tone, clip.duration_target, clip.resolution) == ("Roast", 30, "1080p")
+        assert clip.credits_quoted == credits.video_price(db, 30, "1080p")
+        assert clip.status == "queued" and clip.script is None
+        db.refresh(user)
+        assert user.credits == 500  # charge-on-completion: wallet untouched
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+def test_regenerate_options_respect_plan_gates_and_change_nothing_on_refusal():
+    """A Free user asking for 30s or 1080p at the gate is told to upgrade,
+    and the clip stays exactly as it was — same script, same quote."""
+    from fastapi import HTTPException
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        user, clip = _script_clip(db, plan="free", balance=500)
+        for body in (clips_router.ScriptRegenerate(duration=30),
+                     clips_router.ScriptRegenerate(resolution="1080p")):
+            try:
+                clips_router.regenerate_script(clip.id, body, user, db)
+                raise AssertionError("expected a 403 upgrade_required")
+            except HTTPException as exc:
+                assert exc.status_code == 403
+        db.refresh(clip)
+        assert clip.status == "script_ready"
+        assert (clip.duration_target, clip.resolution, clip.credits_quoted) == (15, "720p", 60)
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+def test_regenerate_options_check_the_balance_against_the_new_quote():
+    """Upsizing past the wallet is refused with a top-up 402 — but a plain
+    rewrite (no option change) stays free even on a low balance."""
+    from fastapi import HTTPException
+    from app.services import credits
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        needed = credits.video_price(db, 15, "1080p")
+        user, clip = _script_clip(db, plan="creator", balance=needed - 1)
+        try:
+            clips_router.regenerate_script(
+                clip.id, clips_router.ScriptRegenerate(resolution="1080p"), user, db)
+            raise AssertionError("expected a 402 insufficient_credits")
+        except HTTPException as exc:
+            assert exc.status_code == 402
+        db.refresh(clip)
+        assert clip.status == "script_ready" and clip.resolution == "720p"
+
+        clips_router.regenerate_script(
+            clip.id, clips_router.ScriptRegenerate(feedback="less cringe"), user, db)
+        db.refresh(clip)
+        assert clip.status == "queued"  # rewriting itself never needs credits
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
 if __name__ == "__main__":
     if not _reachable():
         print("database not reachable — skipping queue tests")

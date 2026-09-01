@@ -116,6 +116,12 @@ export default function Studio() {
   const [scriptOpen, setScriptOpen] = useState(false);      // "Show script" dialog
   const [scriptFeedback, setScriptFeedback] = useState(""); // regenerate note
   const [scriptBusy, setScriptBusy] = useState("");
+  // "Rewrite with different options": tone/length/quality editable at the
+  // approval gate, seeded from the clip whenever a script arrives.
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optTone, setOptTone] = useState("Funny");
+  const [optDuration, setOptDuration] = useState(15);
+  const [optResolution, setOptResolution] = useState("720p");
   // Editable working copy of the script: the user can rewrite any dialogue
   // line or action before approving; diffs are saved on approve.
   const [draft, setDraft] = useState(null);
@@ -123,6 +129,10 @@ export default function Studio() {
   useEffect(() => {
     if (clip?.status === "script_ready" && clip.script) {
       setDraft(JSON.parse(JSON.stringify(clip.script)));
+      setOptTone(clip.tone);
+      setOptDuration(clip.duration_target);
+      setOptResolution(clip.resolution);
+      setOptionsOpen(false);
     }
   }, [clip?.status, clip?.script]);
 
@@ -165,8 +175,30 @@ export default function Studio() {
     setError("");
     setScriptOpen(false);
     setScriptFeedback("");
+    setOptionsOpen(false);
     setDirection("");
     setReference(null);
+  };
+
+  // Cancel at the approval gate: delete the clip (nothing rendered, nothing
+  // charged) and put the take back in the composer via ?prompt= so it isn't
+  // lost. reset() also runs inline for the case where the URL doesn't change
+  // and the search effect won't refire.
+  const cancelScript = async () => {
+    if (!clip) return;
+    setScriptBusy("cancel");
+    setError("");
+    try {
+      const keep = clip.take || "";
+      await api.deleteClip(clip.id);
+      reset();
+      setTake(keep);
+      nav(`/studio?prompt=${encodeURIComponent(keep)}`, { replace: true });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setScriptBusy("");
+    }
   };
 
   // Opened from My Clips as /studio?clip=<id>: jump straight to that clip's
@@ -219,6 +251,11 @@ export default function Studio() {
   };
   // Exact menu price of the configured video (PRICING §7) — never estimated.
   const thisPrice = videoPrice(duration, resolution);
+  // Whether the approval-gate options differ from what the clip was created
+  // with — drives the "rewrite with new options" path and the new quote line.
+  const optChanged =
+    clip?.status === "script_ready" &&
+    (optTone !== clip.tone || optDuration !== clip.duration_target || optResolution !== clip.resolution);
 
   const watchClip = useCallback(
     (id, startedAtMs) => {
@@ -858,6 +895,88 @@ export default function Studio() {
                   placeholder="Optional: what should change? e.g. “funnier, and set it in the press room”"
                   style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 13.5, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 9 }}
                 />
+
+                <button
+                  onClick={() => setOptionsOpen((o) => !o)}
+                  style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 0", alignSelf: "flex-start", fontSize: 13, fontWeight: 700, color: optChanged ? "var(--app-cyan)" : "var(--app-muted)", display: "inline-flex", alignItems: "center", gap: 7 }}
+                >
+                  ⚙ Different options {optionsOpen ? "▴" : "▾"}
+                  {optChanged && !optionsOpen && (
+                    <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".05em", padding: "2px 7px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                      CHANGED
+                    </span>
+                  )}
+                </button>
+
+                {optionsOpen && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 12px", borderRadius: 10, background: "var(--app-surface)", border: "1px solid var(--app-border)" }}>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: "var(--app-muted2)", width: 54, flexShrink: 0 }}>STYLE</span>
+                      {TONES.map((t) => (
+                        <button
+                          key={t.key}
+                          className={`chip${optTone === t.key ? " on" : ""}`}
+                          style={{ padding: "7px 11px", fontSize: 12.5 }}
+                          onClick={() => setOptTone(t.key)}
+                        >
+                          {t.icon} {t.key}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: "var(--app-muted2)", width: 54, flexShrink: 0 }}>LENGTH</span>
+                      {DURATIONS.map((d) => {
+                        const locked = d > FREE_MAX_DURATION && plan !== "creator";
+                        return (
+                          <button
+                            key={d}
+                            className={`chip${optDuration === d ? " on" : ""}`}
+                            style={{ padding: "7px 11px", fontSize: 12.5, ...(locked ? { color: "var(--app-muted2)", borderStyle: "dashed", display: "inline-flex", alignItems: "center", gap: 5 } : {}) }}
+                            title={locked ? "Videos longer than 15 seconds are a Creator feature" : undefined}
+                            onClick={() => (locked ? setUpgradeOpen(true) : setOptDuration(d))}
+                          >
+                            {d}s
+                            {locked && (
+                              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                                CREATOR
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, color: "var(--app-muted2)", width: 54, flexShrink: 0 }}>QUALITY</span>
+                      {RESOLUTIONS.map((r) => {
+                        const locked = r.key === "1080p" && plan !== "creator";
+                        return (
+                          <button
+                            key={r.key}
+                            className={`chip${optResolution === r.key ? " on" : ""}`}
+                            style={{ padding: "7px 11px", fontSize: 12.5, ...(locked ? { color: "var(--app-muted2)", borderStyle: "dashed", display: "inline-flex", alignItems: "center", gap: 5 } : {}) }}
+                            title={locked ? "1080p video is a Creator feature — Free renders at 720p" : undefined}
+                            onClick={() => (locked ? setUpgradeOpen(true) : setOptResolution(r.key))}
+                          >
+                            {r.key} · {r.sub}
+                            {locked && (
+                              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: ".05em", padding: "2px 6px", borderRadius: 999, background: "rgba(34,211,238,.12)", color: "var(--app-cyan)" }}>
+                                CREATOR
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {optChanged && (
+                      <div style={{ fontSize: 12.5, color: "var(--app-muted)" }}>
+                        ⚡ New quote: <b style={{ color: "var(--app-text)" }}>{videoPrice(optDuration, optResolution)} credits</b>
+                        {" · was "}{videoPrice(clip.duration_target, clip.resolution)}
+                        {" · still charged only when the video completes"}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button
                   className="ghost-btn"
                   style={{ padding: "11px 16px", fontSize: 14 }}
@@ -866,7 +985,10 @@ export default function Studio() {
                     setScriptBusy("regen");
                     setError("");
                     try {
-                      const c = await api.regenerateScript(clip.id, scriptFeedback.trim());
+                      const options = optChanged
+                        ? { tone: optTone, duration: optDuration, resolution: optResolution }
+                        : {};
+                      const c = await api.regenerateScript(clip.id, scriptFeedback.trim(), options);
                       setClip(c);
                       setScriptFeedback("");
                       watchClip(c.id, Date.now());
@@ -877,9 +999,21 @@ export default function Studio() {
                     }
                   }}
                 >
-                  {scriptBusy === "regen" ? "Rewriting…" : "↻ Write a different script (free)"}
+                  {scriptBusy === "regen"
+                    ? "Rewriting…"
+                    : optChanged
+                      ? "↻ Rewrite with new options (free)"
+                      : "↻ Write a different script (free)"}
                 </button>
               </div>
+
+              <button
+                disabled={!!scriptBusy}
+                onClick={cancelScript}
+                style={{ alignSelf: "center", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--app-muted2)", padding: 6 }}
+              >
+                {scriptBusy === "cancel" ? "Cancelling…" : "✕ Cancel this video — nothing has been charged"}
+              </button>
             </>
           )}
 

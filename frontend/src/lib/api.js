@@ -110,8 +110,10 @@ export const api = {
   approveScript: (id) => request(`/clips/${id}/script/approve`, { method: "POST" }),
   // Edit dialogue/actions before approving; lines are fitted server-side.
   updateScript: (id, body) => request(`/clips/${id}/script`, { method: "PATCH", body }),
-  regenerateScript: (id, feedback = "") =>
-    request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback } }),
+  // `options` may carry {tone, duration, resolution} to rewrite the script
+  // for different settings (re-quoted server-side, still free to rewrite).
+  regenerateScript: (id, feedback = "", options = {}) =>
+    request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback, ...options } }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),
 
   // publishing
