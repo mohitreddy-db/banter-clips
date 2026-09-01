@@ -154,12 +154,28 @@ export default function Studio() {
   }, []);
   useEffect(() => stopTimers, [stopTimers]);
 
+  const reset = () => {
+    stopTimers();
+    setPhase("input");
+    setTake("");
+    setClip(null);
+    setVariations([]);
+    setChosen(-1);
+    setRound(0);
+    setError("");
+    setScriptOpen(false);
+    setScriptFeedback("");
+    setDirection("");
+    setReference(null);
+  };
+
   // Opened from My Clips as /studio?clip=<id>: jump straight to that clip's
   // state — live status while it renders, the player when it is done.
   useEffect(() => {
     const id = new URLSearchParams(search).get("clip");
     const prompt = new URLSearchParams(search).get("prompt");
     if (!id) {
+      reset();
       if (prompt) setTake(prompt.slice(0, 280));
       return;
     }
@@ -309,21 +325,6 @@ export default function Studio() {
       if (e.code === "insufficient_credits") setTopupOpen(true);
       else setError(e.message);
     }
-  };
-
-  const reset = () => {
-    stopTimers();
-    setPhase("input");
-    setTake("");
-    setClip(null);
-    setVariations([]);
-    setChosen(-1);
-    setRound(0);
-    setError("");
-    setScriptOpen(false);
-    setScriptFeedback("");
-    setDirection("");
-    setReference(null);
   };
 
   // A trending suggestion fills the take like the user typed it (real flow),
