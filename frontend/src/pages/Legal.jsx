@@ -11,7 +11,7 @@ import { useSeo } from "../lib/seo.js";
  * page in the same PR.
  */
 
-const EFFECTIVE = "August 14, 2026";
+const EFFECTIVE = "September 1, 2026";
 const CONTACT = "support@banterclips.com";
 
 function Layout({ title, children }) {
@@ -69,18 +69,20 @@ export function Privacy() {
         <LI><B>Account details.</B> Your email address, display name, and a
           password (stored only as a secure hash by our authentication
           provider). If you sign in with Google, we receive your name, email
-          address and basic profile from Google — nothing else from your
-          Google account, and we never use it for advertising.</LI>
+          address and basic profile from Google for authentication. Connecting
+          YouTube is a separate, optional authorization described below.</LI>
         <LI><B>Preferences.</B> Optional onboarding choices: favourite sports,
           teams, players, and your creator role. All skippable, editable, and
           used only to pre-fill defaults.</LI>
         <LI><B>Your content.</B> The takes you write, the videos and thumbnails
           we generate from them, the captions you write, and your publish
-          history. Your videos are private to you and are never made public
-          by us.</LI>
-        <LI><B>Instagram connection.</B> If you explicitly connect Instagram,
-          we store your Instagram account ID, handle and an access token so we
-          can publish a Reel when — and only when — you press publish. Nothing
+          history. Your videos remain private unless you explicitly publish
+          them to a connected social account.</LI>
+        <LI><B>Social connections.</B> If you explicitly connect Instagram,
+          TikTok or YouTube, we store the connection record and OAuth tokens
+          needed to publish. For YouTube this includes an access token, refresh
+          token and expiry for the <code>youtube.upload</code> permission. We do
+          not read your existing YouTube videos or channel content, and nothing
           is ever posted automatically.</LI>
         <LI><B>Payment details.</B> Payments run through Stripe. Your card
           number never touches our servers; we store only your Stripe customer
@@ -118,27 +120,42 @@ export function Privacy() {
         <LI><B>Stripe</B> — payments and subscriptions.</LI>
         <LI><B>OpenAI</B> and <B>OpenRouter / xAI</B> — AI models that write
           the script and generate the video from your take.</LI>
-        <LI><B>Meta (Instagram)</B> — receives your video and caption when you
-          press publish, under your own Instagram account.</LI>
+        <LI><B>Meta (Instagram)</B>, <B>TikTok</B>, and <B>Google/YouTube</B> —
+          receive the video and caption, title or description you selected only
+          when you press Publish for that platform.</LI>
         <LI><B>Resend</B> — delivers account emails.</LI>
       </UL>
       <P>We do not sell personal data, and we do not share it with data brokers or advertisers.</P>
 
       <H>Google user data</H>
-      <P>
-        Google sign-in is used solely to create and access your BanterClips
-        account. We request only your basic profile (name, email, picture),
-        request no other Google scopes, and use of information received from
-        Google APIs adheres to the Google API Services User Data Policy,
-        including its Limited Use requirements.
-      </P>
+      <UL>
+        <LI><B>Google sign-in.</B> We use your basic profile (name, email and
+          picture) solely to create and authenticate your BanterClips account.</LI>
+        <LI><B>YouTube publishing.</B> If you separately connect YouTube, we
+          request only <code>https://www.googleapis.com/auth/youtube.upload</code>.
+          We use it solely to upload the completed video, title and description
+          you selected after you explicitly press Publish. We do not read your
+          existing videos, publish in the background, or take actions unrelated
+          to that upload.</LI>
+        <LI><B>Storage and sharing.</B> OAuth access and refresh tokens are kept
+          server-side while the connection is active and are never exposed to
+          the browser. The selected video and metadata are sent to Google/YouTube
+          only to complete your requested upload.</LI>
+        <LI><B>Limited use.</B> Google user data is never sold, used for
+          advertising, or used to train AI models. Our use of information from
+          Google APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}>Google API Services User Data Policy</a>,
+          including its Limited Use requirements.</LI>
+      </UL>
 
       <H>Retention and deletion</H>
       <UL>
         <LI>Your content is kept while your account is active. Deleting a clip
           removes its video files, not just the listing.</LI>
-        <LI>Disconnecting Instagram deletes our stored access token. You can
-          also revoke BanterClips from your Instagram settings at any time.</LI>
+        <LI>Disconnecting a social account immediately deletes its stored access
+          token, refresh token, expiry and platform identifier. Publish history
+          remains with the clip until you delete that clip or your account.</LI>
+        <LI>You can also revoke Google access at any time from your
+          <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.</LI>
         <LI>You can request full deletion of your account — including your
           videos, preferences, events, and billing identity at Stripe — by
           emailing <B>{CONTACT}</B>. We complete deletion within 30 days.</LI>

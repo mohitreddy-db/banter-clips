@@ -14,6 +14,7 @@ import json
 import shutil
 import sys
 import tempfile
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings  # noqa: E402
 from app.routers.clips import reference_matches  # noqa: E402
+from app.routers.socials import _clear_credentials  # noqa: E402
 from app.services import markers, spend, storage, youtube  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
 
@@ -66,6 +68,18 @@ def test_reference_upload_checks_file_signatures():
     assert reference_matches(b"\xff\xd8\xffphoto", ".jpg")
     assert reference_matches(b"\x00\x00\x00\x18ftypmp42", ".mp4")
     assert not reference_matches(b"not really a video", ".mp4")
+
+
+def test_social_disconnect_removes_every_credential():
+    account = SimpleNamespace(
+        access_token="access", refresh_token="refresh",
+        platform_user_id="platform-user", token_expires_at="later",
+    )
+    _clear_credentials(account)
+    assert account.access_token is None
+    assert account.refresh_token is None
+    assert account.platform_user_id is None
+    assert account.token_expires_at is None
 
 
 # ------------------------------------------------------------------ storage

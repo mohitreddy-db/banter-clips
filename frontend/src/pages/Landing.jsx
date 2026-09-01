@@ -25,7 +25,7 @@ const features = [
   { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — real players, real kits.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
   { key: "voice",    title: "AI Voiceovers",       desc: "Characters speak their own lines, lip-synced, with crowd noise underneath.", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
   { key: "captions", title: "Animated Captions",   desc: "Burned in and timed to the dialogue, so it lands with the sound off.", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
-  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram or TikTok the moment it renders. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
+  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram, TikTok or YouTube Shorts when you press Publish. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
   { key: "tone",     title: "Tone Control",        desc: "Funny, savage, hype or bold — the tone changes the script and the lighting.", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
 ];
 
@@ -360,7 +360,7 @@ export default function Landing() {
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent2)", boxShadow: "0 0 10px var(--accent2)" }} /> AI sports video studio
             </div>
             <h1 className="hero-h1" style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(33px, 8vw, 54px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: "0 0 22px", textWrap: "balance" }}>
-              Turn Any Sports Opinion Into A <span style={{ background: "var(--grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Viral Video</span> In Seconds.
+              BanterClips Turns Any Sports Opinion Into A <span style={{ background: "var(--grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Viral Video</span> In Seconds.
             </h1>
             <p style={{ fontSize: "clamp(15.5px, 4.2vw, 18.5px)", lineHeight: 1.55, color: "var(--muted)", margin: "0 0 32px", maxWidth: 520 }}>
               Create AI-powered sports banter, predictions, reactions and debates — ready for TikTok, Instagram Reels and YouTube Shorts.

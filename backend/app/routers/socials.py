@@ -40,6 +40,14 @@ MOCK_TOKEN = "mock-oauth-token"
 REFRESH_WINDOW = timedelta(days=15)
 
 
+def _clear_credentials(account: SocialAccount) -> None:
+    """Remove every credential and platform identifier on disconnect/mock."""
+    account.access_token = None
+    account.refresh_token = None
+    account.platform_user_id = None
+    account.token_expires_at = None
+
+
 def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
     """Keep a connected account's token alive. Called on every /socials read
     and before each real publish; dispatches per platform."""
@@ -401,6 +409,7 @@ def connect(body: SocialConnectRequest, user: User = Depends(get_current_user), 
     )
     handle = "@" + (user.display_name or user.email.split("@")[0]).lower().replace(" ", "")
     if existing:
+        _clear_credentials(existing)
         existing.status = "connected"
         existing.revoked_at = None
         existing.handle = handle
@@ -430,7 +439,7 @@ def disconnect(platform: str, user: User = Depends(get_current_user), db: Sessio
         raise HTTPException(404, "No connected account for that platform")
     account.status = "revoked"
     account.revoked_at = datetime.now(timezone.utc)
-    account.access_token = None
+    _clear_credentials(account)
     db.commit()
     record_event(db, "social_disconnected", user, platform=platform)
     return account
