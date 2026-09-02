@@ -90,6 +90,23 @@ def _run(args: list[str], what: str) -> None:
         raise MediaError(f"{what} failed: {result.stderr.strip()[-400:]}")
 
 
+def fit_frame(src: str | Path, out: Path, width: int = 720, height: int = 1280) -> Path | None:
+    """Cover-crop a frame to exactly width x height, centred.
+
+    Chat-based image models (the identity route) return whatever aspect they
+    like; the animation stage expects the keyframe to match the video's 9:16
+    canvas, and a mismatched first frame gets stretched or letterboxed."""
+    try:
+        _run(["ffmpeg", "-y", "-i", str(src), "-vf",
+              f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+              f"crop={width}:{height}", "-frames:v", "1", "-q:v", "2", str(out)],
+             "frame fit")
+    except MediaError:
+        log.exception("could not fit frame %s", src)
+        return None
+    return out if out.exists() else None
+
+
 def probe(path: str | Path) -> dict:
     """Duration, dimensions and stream presence. Returns {} if unreadable."""
     args = ["ffprobe", "-v", "error", "-print_format", "json",

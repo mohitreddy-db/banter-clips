@@ -61,6 +61,47 @@ def test_reference_person_is_cast_by_the_planner_and_bound_in_the_keyframe():
     assert "a Philly die-hard" in line and "EXACTLY" in line
 
 
+def test_identity_route_exists_only_with_a_real_provider_and_model():
+    """Reference scenes render on a chat-shaped identity model (Grok ignores
+    attached faces). Stub mode and an empty model both disable the route so
+    development and the standard pipeline never touch it."""
+    from app.config import settings
+
+    old = (settings.IMAGE_PROVIDER, settings.OPENROUTER_API_KEY,
+           settings.IMAGE_IDENTITY_MODEL)
+    try:
+        settings.IMAGE_PROVIDER = "openrouter"
+        settings.OPENROUTER_API_KEY = "test-key"
+        settings.IMAGE_IDENTITY_MODEL = "google/gemini-2.5-flash-image"
+        p = providers.identity_image_provider()
+        assert isinstance(p, providers.ChatImageProvider) and p.available
+
+        settings.IMAGE_IDENTITY_MODEL = ""
+        assert providers.identity_image_provider() is None
+
+        settings.IMAGE_IDENTITY_MODEL = "google/gemini-2.5-flash-image"
+        settings.IMAGE_PROVIDER = "stub"
+        assert providers.identity_image_provider() is None
+    finally:
+        (settings.IMAGE_PROVIDER, settings.OPENROUTER_API_KEY,
+         settings.IMAGE_IDENTITY_MODEL) = old
+
+
+def test_fit_frame_covers_any_canvas_to_the_916_frame():
+    """Chat image models pick their own canvas; the animator needs 720x1280
+    exactly, cover-cropped rather than stretched or letterboxed."""
+    if not media.available():
+        return
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "wide.jpg"
+        media._run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=640x480",
+                    "-frames:v", "1", str(src)], "test frame")
+        out = media.fit_frame(src, Path(td) / "fit.jpg")
+        assert out is not None
+        info = media.probe(out)
+        assert (info["width"], info["height"]) == (720, 1280)
+
+
 def test_resolve_infers_sport_per_league():
     assert defaults.resolve("Wemby can't find Brunson").sport == "NBA"
     assert defaults.resolve("that quarterback threw a pick six").sport == "NFL"

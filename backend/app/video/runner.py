@@ -219,6 +219,10 @@ def generate_video(
     # discovering a new character may buy its reference stills, and that
     # spend must count against the same per-job ceiling as everything else.
     images = providers.image_provider()
+    # Scenes casting the uploaded reference render on the identity model —
+    # the standard one treats an attached face as decoration and draws a
+    # stranger. None when no reference or in stub mode.
+    identity_images = providers.identity_image_provider() if user_reference else None
     ledger = _Ledger(budget)
     references: dict[str, catalog.Character | None] = {}
     for member in plan.cast:
@@ -358,8 +362,15 @@ def generate_video(
                 base_prompt, best_hard
             )
             target = work_dir / f"scene{scene.index}_kf{attempt}.jpg"
+            # Reference scenes render on the identity model; the LAST attempt
+            # falls back to the standard one so a refusal degrades the face,
+            # never the whole video.
+            generator = images
+            if (ref_member is not None and identity_images is not None
+                    and attempt < MAX_KEYFRAME_ATTEMPTS):
+                generator = identity_images
             try:
-                path, cost = images.generate(prompt, target, references=refs)
+                path, cost = generator.generate(prompt, target, references=refs)
             except providers.OutOfCredits:
                 _pause(f"scene {scene.index}: image provider out of credits")
                 asset.note("provider out of credits; job paused")

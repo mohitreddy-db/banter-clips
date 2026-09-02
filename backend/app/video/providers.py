@@ -184,6 +184,73 @@ def _data_uri(path: str | Path) -> str:
     return f"data:{kind};base64," + base64.b64encode(Path(path).read_bytes()).decode()
 
 
+class ChatImageProvider:
+    """Image generation through /chat/completions, for models that only work
+    in the multimodal chat shape (Gemini 2.5 Flash Image).
+
+    This is the IDENTITY route: unlike the /images models — Grok accepts
+    `image_urls` and then draws a different person entirely (verified
+    2026-09-03) — Gemini reproduces the exact person in an attached photo.
+    Used only for scenes that cast the user's uploaded reference."""
+
+    def __init__(self, api_key: str, model: str, timeout: float = 180.0):
+        self.api_key, self.model, self.timeout = api_key, model, timeout
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def generate(
+        self, prompt: str, out: Path, references: list[Path] | None = None,
+        aspect_ratio: str = "9:16",
+    ) -> tuple[Path | None, float]:
+        if not self.available:
+            return None, 0.0
+        content: list[dict] = [{"type": "text", "text":
+                                f"{prompt} Output one photoreal {aspect_ratio} "
+                                f"vertical photograph."}]
+        for p in (references or [])[:3]:
+            if Path(p).exists():
+                content.append({"type": "image_url",
+                                "image_url": {"url": _data_uri(p)}})
+        body = {"model": self.model,
+                "messages": [{"role": "user", "content": content}],
+                "modalities": ["image", "text"]}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{OPENROUTER}/chat/completions", json=body,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+            _raise_if_out_of_credits(resp)
+            if resp.status_code >= 400:
+                log.warning("identity image gen -> %s %s",
+                            resp.status_code, resp.text[:300])
+                return None, 0.0
+            data = resp.json()
+            message = (data.get("choices") or [{}])[0].get("message") or {}
+            images = message.get("images") or []
+            url = (images[0].get("image_url") or {}).get("url", "") if images else ""
+            if not url.startswith("data:"):
+                # The model answered with text (usually a refusal) — surface it.
+                log.warning("identity image gen returned no image: %s",
+                            str(message.get("content"))[:200])
+                return None, 0.0
+            raw = out.with_name(out.stem + "_raw.jpg")
+            raw.write_bytes(base64.b64decode(url.split(",", 1)[1]))
+            # Chat models pick their own canvas; the animator needs 9:16.
+            if media.fit_frame(raw, out) is None:
+                out.write_bytes(raw.read_bytes())
+            raw.unlink(missing_ok=True)
+            cost = float((data.get("usage") or {}).get("cost") or 0.0)
+            return out, cost
+        except OutOfCredits:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("identity image generation failed")
+            return None, 0.0
+
+
 class StubImageProvider:
     available = True
 
@@ -334,6 +401,18 @@ def image_provider():
     if mode == "openrouter" and key:
         return ImageProvider(key, getattr(settings, "IMAGE_MODEL", ""))
     return StubImageProvider()
+
+
+def identity_image_provider() -> ChatImageProvider | None:
+    """The keyframe generator for scenes that cast the user's reference photo.
+    None in stub mode or when no identity model is configured — callers fall
+    back to the standard image provider."""
+    mode = getattr(settings, "IMAGE_PROVIDER", "stub")
+    key = getattr(settings, "OPENROUTER_API_KEY", "")
+    model = getattr(settings, "IMAGE_IDENTITY_MODEL", "")
+    if mode == "openrouter" and key and model:
+        return ChatImageProvider(key, model)
+    return None
 
 
 def video_provider(resolution: str | None = None):

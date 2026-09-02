@@ -134,6 +134,10 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     IMAGE_PROVIDER: str = "stub"        # "stub" | "openrouter"
     IMAGE_MODEL: str = "x-ai/grok-imagine-image-quality"
+    # Keyframes for scenes casting the user's reference photo. Grok ignores
+    # attached faces (drew a different person, verified 2026-09-03); Gemini
+    # reproduces them. Empty string disables the identity route entirely.
+    IMAGE_IDENTITY_MODEL: str = "google/gemini-2.5-flash-image"
     VIDEO_PROVIDER: str = "stub"        # "stub" | "openrouter"
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     # OpenRouter model per output tier. JSON in env; VIDEO_MODEL remains the
