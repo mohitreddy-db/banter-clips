@@ -89,6 +89,20 @@ Return ONLY JSON:
 ]}"""
 
 
+# Words that mark a filming direction referring to the user's uploaded
+# reference. Sentences containing one are staging, not banter, and must
+# survive enhancement — the prompt rule alone proved too weak at these
+# temperatures, so the direction is also re-attached in code below.
+_DIRECTION_MARKERS = re.compile(
+    r"\b(reference|photo|pic|picture|image|upload(?:ed)?)\b", re.I)
+
+
+def _direction_sentences(take: str) -> str:
+    """The staging sentences a rewrite must not lose ('' when none)."""
+    parts = re.split(r"(?<=[.!?])\s+", take)
+    return " ".join(p.strip() for p in parts if _DIRECTION_MARKERS.search(p))
+
+
 def variations(take: str, sport: str, tone: str, client=None, round_index: int = 0) -> list[dict]:
     """Two enhanced takes. Never raises; returns [] when nothing is available.
 
@@ -100,6 +114,7 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
     if not take or client is None or not getattr(client, "available", False):
         return []
 
+    direction = _direction_sentences(take)
     temperature = min(MAX_TEMPERATURE, BASE_TEMPERATURE + TEMPERATURE_STEP * max(0, round_index))
     user = (
         f"Sport: {sport}\n"
@@ -107,6 +122,12 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
         f"The fan's original take: {take}\n\n"
         f"Give me two sharper versions, in different angles."
     )
+    if direction:
+        user += (
+            f"\n\nThe take includes a filming direction about the user's uploaded "
+            f"reference: \"{direction}\" — every variation MUST keep that direction, "
+            f"essentially word-for-word."
+        )
     try:
         raw = client.complete_json(
             TAKE_ENHANCER_SYSTEM, user, max_tokens=2000, temperature=temperature
@@ -121,6 +142,13 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
         text = _clean(item.get("take"))[:MAX_TAKE_CHARS]
         if not text or text.lower() == take.lower():
             continue
+        if direction and not _DIRECTION_MARKERS.search(text):
+            # The model wrote pure banter anyway: put the direction back,
+            # trimming the banter (never the direction) to stay under the cap.
+            room = MAX_TAKE_CHARS - len(direction) - 1
+            if len(text) > room:
+                text = text[:room].rsplit(" ", 1)[0].rstrip(".,;:!? ")
+            text = f"{text.rstrip()} {direction}"[:MAX_TAKE_CHARS]
         out.append({
             "take": text,
             "angle": _clean(item.get("angle"))[:40],

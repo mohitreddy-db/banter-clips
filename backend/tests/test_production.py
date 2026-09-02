@@ -255,23 +255,34 @@ def test_take_enhancement_is_told_to_keep_staging_directions():
 
     captured = {}
 
-    class Echo:
+    class DropsDirection:
         available = True
 
         def complete_json(self, system, user, **_k):
             captured["user"] = user
             return json.dumps({"takes": [
-                {"take": "Banter. The person in the reference sits courtside.",
+                {"take": "LeBron treats every arrival like a movie premiere.",
                  "angle": "absurd", "why": "w"},
-                {"take": "Other banter. The person in the reference sits courtside.",
+                {"take": "Pure banter with no staging in it at all. " * 8,
                  "angle": "prediction", "why": "w"},
             ]})
 
     staged = ("LeBron pulls up in this new toy. "
               "The person in the reference sits in the audience and smirks.")
-    out = takes.variations(staged, "NBA", "Funny", client=Echo())
-    assert "the person in the reference sits in the audience" in captured["user"].lower()
-    assert len(out) == 2 and all("reference" in o["take"].lower() for o in out)
+    out = takes.variations(staged, "NBA", "Funny", client=DropsDirection())
+    # The model is warned explicitly, and when it drops the direction anyway
+    # the code puts it back — trimmed banter, intact direction, under the cap.
+    assert "filming direction" in captured["user"].lower()
+    assert "sits in the audience and smirks" in captured["user"]
+    assert len(out) == 2
+    for o in out:
+        assert o["take"].endswith("The person in the reference sits in the audience and smirks.")
+        assert len(o["take"]) <= takes.MAX_TAKE_CHARS
+
+    # A take with no staging direction gets no direction treatment at all.
+    plain = takes.variations("The Lakers are frauds and everyone knows it",
+                             "NBA", "Funny", client=DropsDirection())
+    assert all("reference" not in o["take"].lower() for o in plain)
 
 
 # ---------------------------------------------------------------- captions
