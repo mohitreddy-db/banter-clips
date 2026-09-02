@@ -58,7 +58,14 @@ argues with is a take nobody spreads.
 - Sound like a fan in a group chat: confident, conversational, a little
   unhinged. Never like a brand, a headline, or a sports broadcaster.
 - Comedy comes from exaggeration and specificity, never from puns.
-- Under 200 characters. Shorter usually hits harder.
+- A take may include scene or staging instructions — anything describing
+  what should appear or happen on camera, especially a mention of "the
+  reference" / an uploaded photo, video or person. That part is a filming
+  direction, not banter: carry it into EVERY variation essentially
+  word-for-word (after the banter is fine). Compress the banter to fit,
+  never the direction.
+- Under 200 characters for the banter itself; shorter usually hits harder.
+  The whole take, direction included, must stay under 280.
 - Never state a real score, result, injury, trade or quote as fact.
 - Never insult a person's appearance, family, race, or intelligence. Mock
   performance, decisions and situations only.

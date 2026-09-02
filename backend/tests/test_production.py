@@ -240,6 +240,40 @@ def test_sample_is_delivered_under_the_clips_own_key():
         shutil.rmtree(root, ignore_errors=True)
 
 
+# ------------------------------------------------------------ take enhancer
+
+def test_take_enhancement_is_told_to_keep_staging_directions():
+    """A take may end with a filming direction ("the person in the reference
+    sits in the audience…"). The enhancer once rewrote takes as pure banter
+    and dropped it; the rule that forbids that must stay in the prompt, and
+    the full take — direction included — must reach the model."""
+    from app.video import takes
+
+    rule = " ".join(takes.TAKE_ENHANCER_SYSTEM.lower().split())
+    assert "filming direction" in rule and "the reference" in rule
+    assert "every variation" in rule
+
+    captured = {}
+
+    class Echo:
+        available = True
+
+        def complete_json(self, system, user, **_k):
+            captured["user"] = user
+            return json.dumps({"takes": [
+                {"take": "Banter. The person in the reference sits courtside.",
+                 "angle": "absurd", "why": "w"},
+                {"take": "Other banter. The person in the reference sits courtside.",
+                 "angle": "prediction", "why": "w"},
+            ]})
+
+    staged = ("LeBron pulls up in this new toy. "
+              "The person in the reference sits in the audience and smirks.")
+    out = takes.variations(staged, "NBA", "Funny", client=Echo())
+    assert "the person in the reference sits in the audience" in captured["user"].lower()
+    assert len(out) == 2 and all("reference" in o["take"].lower() for o in out)
+
+
 # ---------------------------------------------------------------- captions
 
 def test_captions_always_returns_three_even_with_no_model():
