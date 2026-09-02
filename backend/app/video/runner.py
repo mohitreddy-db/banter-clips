@@ -168,7 +168,8 @@ def generate_video(
     stage(STAGE_PLANNING)
     text = providers.text_client()
     if brief is None:
-        resolved = defaults.resolve(take, sport, tone, seconds)
+        resolved = defaults.resolve(take, sport, tone, seconds,
+                                    has_reference=user_reference is not None)
     else:
         resolved = enhancer.resolved_from(brief)
     if plan is not None:
@@ -221,6 +222,14 @@ def generate_video(
     ledger = _Ledger(budget)
     references: dict[str, catalog.Character | None] = {}
     for member in plan.cast:
+        if member.id == "reference":
+            # This person IS the user's uploaded photo. Their identity never
+            # comes from the catalog or the web — no research, no persistence,
+            # no generated stills; make_keyframe binds the photo instead.
+            if not member.wardrobe:
+                member.wardrobe = "casual clothes that fit the scene"
+            references[member.id] = None
+            continue
         if not member.wardrobe:
             member.wardrobe = "an authentic team kit with crest, name and number"
         char = catalog.get_character(member.id)
@@ -314,8 +323,18 @@ def generate_video(
         # Exactly ONE still per person. Padding a solo shot with a second
         # still of the same face is what taught the model to compose that
         # person twice (two Mbappés in one frame, observed 2026-08-28).
-        refs: list[Path] = [user_reference] if user_reference and user_reference.exists() else []
-        for member in prompts.visible_cast(plan, scene):
+        #
+        # The user's uploaded photo is attached ONLY when its cast member
+        # ('reference') is in this shot, and the prompt says outright who the
+        # photo is — an unexplained extra face was ignored (a generic stand-in
+        # got drawn) or blended into the wrong person.
+        visible = prompts.visible_cast(plan, scene)
+        ref_member = next((m for m in visible if m.id == "reference"), None)
+        refs: list[Path] = []
+        if ref_member is not None and user_reference and user_reference.exists():
+            refs.append(user_reference)
+            base_prompt += prompts.reference_binding(ref_member)
+        for member in visible:
             refs += catalog.select_references(references.get(member.id), scene.camera)[:1]
         if scene.index > 0 and venue_anchor:
             refs = refs[:2] + [venue_anchor[0]]
@@ -706,6 +725,7 @@ def _write_script(db, clip) -> None:
         # cross into, and any teams or players they named.
         also_sports=list(clip.sports or []), subjects=list(clip.subjects or []),
         direction=getattr(clip, "direction", ""),
+        has_reference=bool(getattr(clip, "reference_key", None)),
     )
     pack = context_mod.get_pack(resolved.take, resolved.sport)
     clip.current_step = "Writing your script"

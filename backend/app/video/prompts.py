@@ -268,6 +268,18 @@ def first_shot(camera: str) -> str:
     return head or "medium wide shot, eye level"
 
 
+def reference_binding(member) -> str:
+    """Ties the user's uploaded photo to its cast member in a keyframe prompt.
+
+    The runner attaches that photo as the FIRST reference image only for
+    scenes where the 'reference' member is visible; this sentence is what
+    stops the model treating the extra face as decoration — without it the
+    model drew a generic stand-in instead of the person (2026-09-02)."""
+    return (f" IDENTITY LOCK: the first attached image is a photo of the real "
+            f"person playing {member.name} — render EXACTLY that person, the "
+            f"same face, hair and build, never a lookalike.")
+
+
 def build_image_prompt(plan: VideoPlan, scene: Scene) -> str:
     """The keyframe. One frame, one camera position — no motion, no dialogue.
 
@@ -615,7 +627,7 @@ def planner_user_message(
     take: str, sport: str, tone: str, roster: list, venues: list,
     focus_note: str = "", storyline: str = "",
     also_sports: list | None = None, subjects: list | None = None,
-    direction: str = "",
+    direction: str = "", has_reference: bool = False,
 ) -> str:
     names = "\n".join(f"  - id={m.id!r} name={m.name!r} ({m.look})" for m in roster)
     places = "\n".join(f"  - {v}" for v in venues)
@@ -635,6 +647,14 @@ def planner_user_message(
                   f"give them something to do — this is what the user asked for.\n")
     if direction:
         extra += f"Creator's scene direction: {direction}. Follow it unless unsafe.\n"
+    if has_reference:
+        extra += (
+            "A reference photo of a real person is attached to this job — the "
+            "take may call them \"the person in the reference/photo\". Cast them "
+            "with EXACTLY id='reference', a name that fits their role, and the "
+            "screen time the take asks for. Describe only their role, wardrobe "
+            "and actions — never their face, hair or build: their exact "
+            "appearance comes from the photo.\n")
     return (
         f"Sport: {sport}\n"
         f"Tone: {tone}\n"

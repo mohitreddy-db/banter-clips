@@ -205,6 +205,9 @@ class ClipOut(BaseModel):
     # A real frame from the clip, for thumbnails. None for clips made before
     # posters were stored, so the client keeps its gradient fallback.
     poster_url: str | None = None
+    # The user's uploaded reference photo/video, shown with the clip so it is
+    # always clear what the generation was anchored to. None when none given.
+    reference_url: str | None = None
     # The credit receipt (PRICING rule 4): what this video charged. 0 after a
     # refund and for clips that predate the credit system.
     credits_charged: int = 0

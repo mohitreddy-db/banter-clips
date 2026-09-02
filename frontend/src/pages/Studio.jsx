@@ -1085,6 +1085,21 @@ export default function Studio() {
           <div className="panel" style={{ padding: "14px 18px", borderRadius: 12, fontSize: 14.5, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.5 }}>
             “{clip.take}”
           </div>
+          {clip.reference_url && (
+            <div className="panel" style={{ padding: "10px 14px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
+              <a href={clip.reference_url} target="_blank" rel="noreferrer" title="Open the reference in full">
+                {clip.reference_url.includes(".mp4") ? (
+                  <video src={clip.reference_url} muted style={{ width: 46, height: 46, borderRadius: 10, objectFit: "cover", border: "1px solid var(--app-border)", display: "block" }} />
+                ) : (
+                  <img src={clip.reference_url} alt="Reference" style={{ width: 46, height: 46, borderRadius: 10, objectFit: "cover", border: "1px solid var(--app-border)", display: "block" }} />
+                )}
+              </a>
+              <div style={{ fontSize: 12.5, color: "var(--app-muted)" }}>
+                <b style={{ color: "var(--app-text)" }}>📎 Reference</b> — this {clip.reference_url.includes(".mp4") ? "video" : "photo"} anchored
+                the person in your video
+              </div>
+            </div>
+          )}
           <div className="result-grid" style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 28, alignItems: "start" }}>
             <div className="card" style={{ padding: 20, display: "grid", placeItems: "center" }}>
               <div className="result-player" style={{ position: "relative", width: "100%", aspectRatio: "9/16", borderRadius: 16, overflow: "hidden", background: "#000" }}>

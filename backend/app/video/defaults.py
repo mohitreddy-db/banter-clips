@@ -52,12 +52,15 @@ class ResolvedInput:
     also_sports: list[str] = field(default_factory=list)
     subjects: list[str] = field(default_factory=list)
     direction: str = ""
+    # The user attached a reference photo of a person: the planner must cast
+    # them (id 'reference') and the keyframes bind the photo to that member.
+    has_reference: bool = False
 
     def to_dict(self) -> dict:
         return {
             "take": self.take, "sport": self.sport, "tone": self.tone,
             "also_sports": self.also_sports, "subjects": self.subjects,
-            "direction": self.direction,
+            "direction": self.direction, "has_reference": self.has_reference,
             "seconds": self.seconds, "scene_count": self.scene_count,
             "focus": self.focus.to_dict(),
         }
@@ -71,6 +74,7 @@ def resolve(
     also_sports: list | None = None,
     subjects: list | None = None,
     direction: object = None,
+    has_reference: bool = False,
 ) -> ResolvedInput:
     """Turn whatever we were given into a complete, valid brief."""
     clean_take = _clean(take)
@@ -104,6 +108,7 @@ def resolve(
         also_sports=[s for s in (also_sports or []) if s in SPORTS and s != resolved_sport],
         subjects=[str(s).strip()[:60] for s in (subjects or []) if str(s).strip()][:8],
         direction=_clean(direction)[:400],
+        has_reference=bool(has_reference),
     )
 
 

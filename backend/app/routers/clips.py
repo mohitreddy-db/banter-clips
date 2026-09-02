@@ -53,6 +53,11 @@ def _serialize(clip: Clip) -> ClipOut:
             out.poster_url = storage.get().url(clip.poster_key)
         except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
             log.warning("could not build a poster URL for clip %s", clip.id)
+    if clip.reference_key:
+        try:
+            out.reference_url = storage.get().url(clip.reference_key)
+        except Exception:  # noqa: BLE001 — same rule as the poster
+            log.warning("could not build a reference URL for clip %s", clip.id)
     return out
 
 

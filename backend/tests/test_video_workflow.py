@@ -39,6 +39,28 @@ def test_resolve_rejects_junk_without_failing():
     assert r.seconds == defaults.DEFAULT_SECONDS
 
 
+def test_reference_person_is_cast_by_the_planner_and_bound_in_the_keyframe():
+    """The user's uploaded photo must flow all the way through: resolve
+    carries the flag, the planner is told to cast id='reference' without
+    describing the face, and the keyframe prompt names the photo as that
+    member's identity. Before this, the model drew a generic stand-in."""
+    r = defaults.resolve("A take about the person in the reference photo.",
+                         "NBA", "Funny", 15, has_reference=True)
+    assert r.has_reference is True
+    assert defaults.resolve("Plain take with no photo attached here.").has_reference is False
+
+    told = prompts.planner_user_message("t", "NBA", "Funny", [], [], has_reference=True)
+    assert "id='reference'" in told
+    assert "never their face" in told.lower()
+    assert "id='reference'" not in prompts.planner_user_message("t", "NBA", "Funny", [], [])
+
+    member = CastMember(id="reference", name="a Philly die-hard",
+                        look="", wardrobe="courtside casual", voice="")
+    line = prompts.reference_binding(member)
+    assert "first attached image" in line.lower()
+    assert "a Philly die-hard" in line and "EXACTLY" in line
+
+
 def test_resolve_infers_sport_per_league():
     assert defaults.resolve("Wemby can't find Brunson").sport == "NBA"
     assert defaults.resolve("that quarterback threw a pick six").sport == "NFL"

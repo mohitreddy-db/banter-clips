@@ -161,6 +161,17 @@ export default function Clips() {
                 <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
                   {c.sport} · {c.tone?.toUpperCase()}
                 </div>
+                {/* The uploaded reference, so it's always visible which photo
+                    a clip was anchored to. Images only — a video ref gets its
+                    full preview when the clip is opened. */}
+                {c.reference_url && !c.reference_url.includes(".mp4") && (
+                  <img
+                    src={c.reference_url}
+                    alt=""
+                    title="Generated with a reference photo"
+                    style={{ position: "absolute", top: 10, right: 10, width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(255,255,255,.85)", pointerEvents: "none" }}
+                  />
+                )}
               </div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
                 {/* Fixed two-line title box so action rows align across cards.

@@ -122,6 +122,7 @@ def _ask_model(inp: ResolvedInput, roster, venues, client,
         inp.take, inp.sport, inp.tone, roster, venues,
         focus_note=_focus_note(inp), storyline=storyline,
         also_sports=inp.also_sports, subjects=inp.subjects, direction=inp.direction,
+        has_reference=bool(getattr(inp, "has_reference", False)),
     )
     if rejected_note:
         user += (
