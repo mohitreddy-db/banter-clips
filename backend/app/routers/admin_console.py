@@ -38,6 +38,7 @@ from ..models import (
     StripeEvent,
     User,
 )
+from ..models import FEEDBACK_STATUSES, Feedback
 from ..services import admin_allowlist
 from ..services import jobs as jobsvc
 from ..services import provider_balance, runtime_settings, spend, storage
@@ -1016,6 +1017,63 @@ def audit_log(page: int = Query(1, ge=1), action: str = "", admin_email: str = "
             for a in rows
         ],
     }
+
+
+# ----------------------------------------------------------------- feedback
+
+
+@router.get("/feedback")
+def feedback_list(page: int = Query(1, ge=1), status: str = "", category: str = "",
+                  admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Every note left on the public Feedback page, newest first, with the
+    status counts the inbox header needs."""
+    stmt = select(Feedback)
+    if status:
+        stmt = stmt.where(Feedback.status == status)
+    if category:
+        stmt = stmt.where(Feedback.category == category)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.execute(
+        stmt.order_by(Feedback.created_at.desc())
+        .limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)
+    ).scalars().all()
+    counts = dict(db.execute(select(Feedback.status, func.count()).group_by(Feedback.status)).all())
+    avg = db.scalar(select(func.avg(Feedback.rating)).where(Feedback.rating.isnot(None)))
+    return {
+        "total": total, "page": page, "page_size": PAGE_SIZE,
+        "counts": {s: int(counts.get(s, 0)) for s in FEEDBACK_STATUSES},
+        "avg_rating": round(float(avg), 2) if avg is not None else None,
+        "entries": [
+            {"id": str(f.id), "at": _iso(f.created_at), "category": f.category,
+             "rating": f.rating, "message": f.message, "email": f.email,
+             "name": f.name, "user_id": str(f.user_id) if f.user_id else None,
+             "page": f.page, "status": f.status, "admin_note": f.admin_note,
+             "user_agent": f.user_agent}
+            for f in rows
+        ],
+    }
+
+
+class FeedbackUpdate(BaseModel):
+    status: str | None = None
+    admin_note: str | None = None
+
+
+@router.patch("/feedback/{feedback_id}")
+def feedback_update(feedback_id: uuid.UUID, body: FeedbackUpdate,
+                    admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = db.get(Feedback, feedback_id)
+    if row is None:
+        raise HTTPException(404, "Feedback not found")
+    if body.status is not None:
+        if body.status not in FEEDBACK_STATUSES:
+            raise HTTPException(400, f"status must be one of {', '.join(FEEDBACK_STATUSES)}")
+        row.status = body.status
+    if body.admin_note is not None:
+        row.admin_note = body.admin_note.strip()[:1000]
+    db.commit()
+    _audit(db, admin, "feedback.update", target=str(row.id), reason=body.status or "note")
+    return {"ok": True, "status": row.status, "admin_note": row.admin_note}
 
 
 # ------------------------------------------------------------------- admins

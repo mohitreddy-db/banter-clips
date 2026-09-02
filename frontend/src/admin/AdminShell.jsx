@@ -28,6 +28,7 @@ const GROUPS = [
     ],
   },
   { label: "SOCIAL", items: [{ to: "/admin/publishing", label: "Publishing" }] },
+  { label: "COMMUNITY", items: [{ to: "/admin/feedback", label: "Feedback" }] },
   {
     label: "SYSTEM",
     items: [

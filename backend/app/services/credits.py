@@ -22,6 +22,7 @@ Money never appears user-side; dollars exist only in the admin console.
 from __future__ import annotations
 
 import json
+import math
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -73,6 +74,14 @@ def video_price(db: Session, duration: int, resolution: str) -> int:
     cfg = prices(db)
     per_s = cfg["per_second"].get(str(resolution or "720p"), cfg["per_second"]["720p"])
     return int(per_s) * max(1, int(duration or 15))
+
+
+def scene_price(db: Session, seconds: float, resolution: str) -> int:
+    """Exact price to re-render ONE scene of a finished video: its length at
+    the same per-second rate as the video, rounded up to a whole credit."""
+    cfg = prices(db)
+    per_s = cfg["per_second"].get(str(resolution or "720p"), cfg["per_second"]["720p"])
+    return max(1, math.ceil(float(seconds or 0.0) * int(per_s)))
 
 
 def pack(db: Session, key: str) -> dict | None:
@@ -128,6 +137,19 @@ def charge_on_completion(db: Session, user: User, clip: Clip) -> int:
     clip.credits_charged = amount
     apply(db, user, -amount, "video_charge", clip=clip,
           note=f"{clip.duration_target}s {clip.resolution}", allow_negative=True)
+    return amount
+
+
+def charge_edit(db: Session, user: User, clip: Clip, amount: int, note: str = "") -> int:
+    """The single charge for a finished scene edit — same rules as the video
+    charge: only once the new cut exists, and never refused (the balance was
+    checked when the edit was requested)."""
+    amount = int(amount or 0)
+    if clip.is_simulated or amount <= 0:
+        return 0
+    clip.credits_edits = int(clip.credits_edits or 0) + amount
+    apply(db, user, -amount, "edit_charge", clip=clip,
+          note=note or "scene edit", allow_negative=True)
     return amount
 
 

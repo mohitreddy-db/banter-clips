@@ -1,7 +1,7 @@
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 
-const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing" };
+const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing", "/feedback": "Feedback" };
 
 function Icon({ d, size = 18, color = "currentColor" }) {
   return (
@@ -13,6 +13,7 @@ function Icon({ d, size = 18, color = "currentColor" }) {
 
 const icons = {
   create: <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  feedback: <><path d="M21 12a8 8 0 0 1-8 8H8l-5 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" /><path d="M9 11h6" /><path d="M9 14h4" /></>,
   prompts: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M8.5 14.5A6 6 0 1 1 15.5 14.5c-.9.6-1.5 1.4-1.5 2.5h-4c0-1.1-.6-1.9-1.5-2.5Z" /></>,
   catalog: (
     <>
@@ -121,6 +122,9 @@ export default function AppShell({ children }) {
         </NavLink>
         <NavLink to="/pricing" style={navItem}>
           <Icon d={icons.pricing} /> Pricing
+        </NavLink>
+        <NavLink to="/feedback" style={navItem}>
+          <Icon d={icons.feedback} /> Feedback
         </NavLink>
         <NavLink to="/account" style={navItem}>
           <Icon d={icons.account} /> Account

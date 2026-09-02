@@ -156,7 +156,7 @@ export default function Account() {
         {!isCreator ? (
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="ghost-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
-              Creator plan — 1080p, 30s, no watermark, 150 credits/mo
+              Creator plan — 1080p, 30s, 500-char prompts, no watermark, 150 credits/mo
             </button>
           </div>
         ) : user?.cancel_at_period_end ? (

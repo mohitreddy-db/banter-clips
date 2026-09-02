@@ -18,7 +18,7 @@ const PLATFORMS = [
 ];
 
 const FREE_FEATURES = ["Welcome credits — your first video on us", "One-click publish to Instagram, TikTok & YouTube", "All five tones, Funny to Roast", "Watermark on every clip"];
-const CREATOR_FEATURES = ["150 credits every month", "Full HD 1080p quality", "30-second videos", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
+const CREATOR_FEATURES = ["150 credits every month", "Full HD 1080p quality", "30-second videos", "500-character prompts", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none" };

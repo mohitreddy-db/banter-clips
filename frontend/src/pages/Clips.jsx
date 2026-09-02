@@ -194,7 +194,9 @@ export default function Clips() {
                       ? `${c.duration_seconds || 14}s`
                       : c.status === "failed"
                         ? "failed · retry is free"
-                        : STATUS_LABEL[c.status]}
+                        : c.edit_pending
+                          ? "✂️ re-rendering scenes…"
+                          : STATUS_LABEL[c.status]}
                   </span>
                   {c.status === "ready" && pubInFlight && (
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>

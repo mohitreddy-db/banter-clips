@@ -9,6 +9,7 @@ import Prompts from "./pages/Prompts.jsx";
 import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
+import Feedback from "./pages/Feedback.jsx";
 import { Privacy, Terms } from "./pages/Legal.jsx";
 import { ShowcaseIndex, ShowcaseClip } from "./pages/Showcase.jsx";
 import AdminCatalog from "./pages/AdminCatalog.jsx";
@@ -23,6 +24,7 @@ import AdminCredits from "./admin/Credits.jsx";
 import AdminPublishing from "./admin/Publishing.jsx";
 import AdminAudit from "./admin/Audit.jsx";
 import AdminAdmins from "./admin/Admins.jsx";
+import AdminFeedback from "./admin/Feedback.jsx";
 
 export default function App() {
   return (
@@ -38,6 +40,7 @@ export default function App() {
           to /signin. The page itself puts the app chrome back for signed-in
           users (AppShell children mode). */}
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/feedback" element={<Feedback />} />
       {/* Public clip pages — /showcase, not /clips, which is the gated user
           library. One URL per clip so each carries its own VideoObject. */}
       <Route path="/showcase" element={<ShowcaseIndex />} />
@@ -60,6 +63,7 @@ export default function App() {
         <Route path="publishing" element={<AdminPublishing />} />
         <Route path="catalog" element={<AdminCatalog />} />
         <Route path="admins" element={<AdminAdmins />} />
+        <Route path="feedback" element={<AdminFeedback />} />
         <Route path="audit" element={<AdminAudit />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

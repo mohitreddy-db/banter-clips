@@ -121,7 +121,8 @@ def test_resolve_clamps_duration_and_scales_scenes():
 
 
 def test_resolve_truncates_an_overlong_take():
-    assert len(defaults.resolve("x" * 5000).take) <= 280
+    # The Creator ceiling; the per-plan gate (280 on Free) lives in the API.
+    assert len(defaults.resolve("x" * 5000).take) <= 500
 
 
 def test_guided_direction_reaches_the_planner_prompt():

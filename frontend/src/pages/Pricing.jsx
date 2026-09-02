@@ -18,6 +18,7 @@ const FREE = [
   [true, "One-click publish to Instagram & TikTok"],
   [true, "Funny · Savage · Hype tones"],
   [true, "Free retries — failures never count"],
+  [true, "Prompts up to 280 characters"],
   [false, "720p HD only"],
   [false, "Publishes with BanterClips watermark"],
   [false, "No downloads"],
@@ -25,6 +26,7 @@ const FREE = [
 const CREATOR = [
   [true, "150 credits added every month"],
   [true, "Full HD 1080p quality"],
+  [true, "Prompts up to 500 characters"],
   [true, "Download in HD — no watermark"],
   [true, "Publish without the watermark"],
   [true, "Priority render queue"],

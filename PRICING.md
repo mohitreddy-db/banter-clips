@@ -82,6 +82,7 @@ so future model tiers (Cinematic, Ultra) slot in without relabeling.
 | Caption suggestions + regenerate | **0** | helps publishing |
 | Publish to Instagram | **0** | it's the product's point |
 | Retry a failed video | **0 net** | rule 3 |
+| ✂️ Re-render a scene of a finished video | **length × rate, per scene** | 4/s Standard, 7/s HD, rounded up per scene (a 5s scene = 20 / 35); untouched scenes reused free; charged only when the new cut lands; available 7 days while the working files exist |
 | Download (Creator) | **0** | plan capability |
 
 ## 5. Plans (MVP: only these two)
@@ -101,8 +102,8 @@ so future model tiers (Cinematic, Ultra) slot in without relabeling.
 ### Creator — $19/month
 
 - **150 credits added every month.**
-- Capabilities: HD (1080p), 30-second videos, watermark-free publishing,
-  downloads, priority queue.
+- Capabilities: HD (1080p), 30-second videos, prompts up to 500 characters
+  (Free: 280), watermark-free publishing, downloads, priority queue.
 - **Rollover:** unused plan credits carry one extra month. Top-up credits
   never expire.
 - Cancelling stops future monthly credits; the remaining balance stays
@@ -147,6 +148,9 @@ unchanged.
 |---|---|
 | Generation starts | balance checked against the exact quote; **nothing is charged** |
 | Video completes | the quoted price is charged, once; receipt attached |
+| Scene edit requested on a finished video | quoted per re-rendered scene; balance checked; **nothing charged**; the original video stays live while it renders |
+| Scene edit completes | the per-scene quote is charged once; receipt shows it as a separate line ("+ 20 scene edits") |
+| Scene edit fails | nothing charged; the original video is untouched and the reason is shown on it |
 | Job fails | nothing was charged; retry is free |
 | Provider runs out of credits mid-render | job **pauses** with the reason shown; finished scenes are checkpointed; resume is free and never re-bills them |
 | User abandons at script stage (deletes clip / never approves) | nothing was charged; the few cents of script cost are ours |

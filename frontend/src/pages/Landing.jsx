@@ -578,6 +578,7 @@ export default function Landing() {
             <span>© 2026 BanterClips · Every sports opinion deserves a viral video. · All videos are AI-generated parody.</span>
             <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Privacy</a>
             <a href="/terms" style={{ color: "var(--muted)", textDecoration: "none" }}>Terms</a>
+            <a href="/feedback" style={{ color: "var(--muted)", textDecoration: "none" }}>Feedback</a>
             {/* Google's Preferred Sources deeplink — the visitor confirms on
                 Google's side and our content gets a "preferred" badge in THEIR
                 results (Top Stories / AI Mode / AI Overviews). Per-user

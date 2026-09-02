@@ -227,6 +227,12 @@ class Clip(Base):
     # wallet is untouched — a paused or failed clip costs nothing.
     credits_quoted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     credits_charged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Scene edits — re-rendering chosen scenes of a FINISHED video. The
+    # pending request ({scenes, credits}) rides the row through the queue;
+    # credits_edits is the running total those edits have charged, kept
+    # apart from the video's own charge so the receipt itemises them.
+    edit_pending: Mapped[dict | None] = mapped_column(JSONB)
+    credits_edits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     # Simulated clips ([mock] in the take, or dummy mode) never reach a real
     # audience: publishing is refused and no allowance is consumed.
@@ -246,7 +252,7 @@ class Clip(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("char_length(take) BETWEEN 10 AND 280", name="clips_take_len"),
+        CheckConstraint("char_length(take) BETWEEN 10 AND 500", name="clips_take_len"),
         CheckConstraint(f"sport IN {SPORTS!r}", name="clips_sport_check"),
         CheckConstraint(f"tone IN {TONES!r}", name="clips_tone_check"),
         Index("clips_owner_month", "user_id", "status", "completed_at"),
@@ -447,6 +453,7 @@ CREDIT_KINDS = (
     "video_charge",    # reservation when a generation starts
     "video_refund",    # release when it fails or is abandoned
     "enhance_charge",  # per press of "Enhance take"
+    "edit_charge",     # scene edits of a finished video, charged on completion
 )
 
 
@@ -488,3 +495,41 @@ class TrendingPack(Base):
     sport: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     pack: Mapped[dict] = mapped_column(JSONB, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------- feedback
+
+FEEDBACK_CATEGORIES = ("bug", "idea", "praise", "other")
+FEEDBACK_STATUSES = ("new", "seen", "resolved")
+
+
+class Feedback(Base):
+    """A note from anyone — signed in or not — left on the public Feedback
+    page and read in the admin console. The text stays exactly as typed;
+    admins annotate it with a status and a private note."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    email: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default="other")
+    rating: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Where in the product it was written, and from what — context for bugs.
+    page: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    user_agent: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="new")
+    admin_note: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(f"category IN {FEEDBACK_CATEGORIES!r}", name="feedback_category_check"),
+        CheckConstraint(f"status IN {FEEDBACK_STATUSES!r}", name="feedback_status_check"),
+        CheckConstraint("char_length(message) BETWEEN 5 AND 2000", name="feedback_message_len"),
+        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="feedback_rating_range"),
+        Index("feedback_created", "created_at"),
+    )

@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -17,7 +18,7 @@ from ..schemas import (
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
     TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation, Tone,
 )
-from ..services import markers, storage
+from ..services import markers, plans, storage
 from ..services.generation import start_generation
 from ..services.publishing import start_publish
 
@@ -51,6 +52,10 @@ def _serialize(clip: Clip) -> ClipOut:
     if clip.poster_key:
         try:
             out.poster_url = storage.get().url(clip.poster_key)
+            if clip.completed_at:
+                # Posters are re-uploaded under the same key after a scene
+                # edit; the version tag keeps browsers from showing the old one.
+                out.poster_url += f"?v={int(clip.completed_at.timestamp())}"
         except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
             log.warning("could not build a poster URL for clip %s", clip.id)
     if clip.reference_key:
@@ -130,6 +135,7 @@ def enhance_take_variations(
     options = takes.variations(
         body.take, sports_mod.resolve(body.sport, body.take), body.tone or "Funny",
         client=providers.text_client(), round_index=body.round,
+        max_chars=plans.take_limit(user.plan),
     )
     return TakeEnhanceResponse(
         original=body.take.strip(),
@@ -176,6 +182,16 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
                 "message": f"This video needs {price} credits — you have {user.credits}.",
                 "needed": price,
                 "balance": user.credits,
+            },
+        )
+
+    # Longer prompts are a Creator feature (Free tops out at 280 characters).
+    if len(markers.strip(body.take)) > plans.take_limit(user.plan):
+        raise HTTPException(
+            403,
+            detail={
+                "code": "upgrade_required",
+                "message": f"Prompts over {plans.FREE_TAKE_CHARS} characters are a Creator feature.",
             },
         )
 
@@ -280,9 +296,24 @@ async def upload_reference(
     return {"key": key}
 
 
+def _editable(clip: Clip) -> bool:
+    """Scene edits need the untouched scenes still on disk (housekeeping
+    keeps work files 7 days) — otherwise there is nothing to reuse and the
+    honest answer is a new video."""
+    if clip.status != "ready" or clip.is_simulated or not clip.script:
+        return False
+    from ..video import runner as runner_mod
+
+    count = len(clip.script.get("scenes") or [])
+    return count > 0 and set(range(count)) <= runner_mod.checkpointed_scenes(clip.id)
+
+
 @router.get("/{clip_id}", response_model=ClipOut)
 def get_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _serialize(_own_clip(clip_id, user, db))
+    clip = _own_clip(clip_id, user, db)
+    out = _serialize(clip)
+    out.editable = _editable(clip)
+    return out
 
 
 class SceneEdit(BaseModel):
@@ -421,6 +452,78 @@ def regenerate_script(
     return _serialize(clip)
 
 
+class SceneRerender(BaseModel):
+    # Every listed scene is re-rendered; line/action are optional edits to
+    # apply first. Listing a scene with no edits simply re-rolls it.
+    scenes: list[SceneEdit] = Field(min_length=1, max_length=20)
+
+
+@router.post("/{clip_id}/scenes/rerender", response_model=ClipOut)
+def rerender_scenes(
+    clip_id: uuid.UUID,
+    body: SceneRerender,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Edit or re-roll chosen scenes of a FINISHED video without paying for
+    the rest. Priced per scene at the video's per-second rate (PRICING §4),
+    quoted here and charged only when the new cut lands; the untouched
+    scenes are reused from disk. A failed edit leaves the original video
+    exactly as it was."""
+    from ..services import credits
+    from ..video import runner as runner_mod
+    from ..video.types import Scene
+
+    clip = _own_clip(clip_id, user, db)
+    if clip.status != "ready" or not clip.script:
+        raise HTTPException(409, "Only finished videos can have scenes edited.")
+    if clip.is_simulated:
+        raise HTTPException(409, "Demo videos can't be edited.")
+    scenes = [dict(s) for s in clip.script.get("scenes") or []]
+    wanted = sorted({e.index for e in body.scenes})
+    if not scenes or any(i >= len(scenes) for i in wanted):
+        raise HTTPException(400, "That scene doesn't exist in this video.")
+    keep = set(range(len(scenes))) - set(wanted)
+    if not keep <= runner_mod.checkpointed_scenes(clip.id):
+        raise HTTPException(409, detail={
+            "code": "edit_unavailable",
+            "message": "This video's working files have expired, so single scenes "
+                       "can't be re-rendered any more — generate a new video instead.",
+        })
+    price = sum(
+        credits.scene_price(db, float(scenes[i].get("seconds") or 4.0), clip.resolution)
+        for i in wanted
+    )
+    if user.credits < price:
+        raise HTTPException(402, detail={
+            "code": "insufficient_credits",
+            "message": f"Re-rendering these scenes needs {price} credits — you have {user.credits}.",
+            "needed": price, "balance": user.credits,
+        })
+    for edit in body.scenes:
+        scene = scenes[edit.index]
+        if edit.action is not None and edit.action.strip():
+            scene["action"] = edit.action.strip()
+        if edit.line is not None:
+            fitted = Scene(seconds=float(scene.get("seconds") or 4.0), line=edit.line.strip())
+            scene["line"] = fitted.trimmed_line() if fitted.line else ""
+    script = dict(clip.script)
+    script["scenes"] = scenes
+    script["edited"] = True
+    clip.script = script
+    clip.edit_pending = {"scenes": wanted, "credits": price,
+                         "requested_at": datetime.now(timezone.utc).isoformat()}
+    clip.status = "queued"
+    clip.stage_index = 0
+    clip.error = None
+    clip.current_step = None
+    db.commit()
+    record_event(db, "scenes_rerendered", user, clip_id=str(clip.id),
+                 scenes=len(wanted), credits=price)
+    start_generation(clip.id)
+    return _serialize(clip)
+
+
 @router.post("/{clip_id}/retry", response_model=ClipOut)
 def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from ..services import credits
@@ -432,9 +535,10 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
     # and the single charge happens when the video completes. The balance
     # check just keeps that completion charge from landing on an empty
     # wallet the user already spent elsewhere.
-    if not clip.is_simulated and clip.credits_charged <= 0:
-        price = clip.credits_quoted or credits.video_price(
-            db, clip.duration_target, clip.resolution)
+    edit = clip.edit_pending if isinstance(clip.edit_pending, dict) else None
+    if not clip.is_simulated and (edit or clip.credits_charged <= 0):
+        price = int(edit.get("credits") or 0) if edit else (
+            clip.credits_quoted or credits.video_price(db, clip.duration_target, clip.resolution))
         if user.credits < price:
             raise HTTPException(402, detail={
                 "code": "insufficient_credits",

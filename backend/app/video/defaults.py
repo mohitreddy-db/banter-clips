@@ -82,7 +82,7 @@ def resolve(
         # Empty, or too short to dramatise ("no", "lol"). Either way a video is
         # still owed, so substitute a generic take rather than failing.
         clean_take = GENERIC_TAKE
-    clean_take = clean_take[:280]
+    clean_take = clean_take[:500]
 
     resolved_sport = _pick(sport, SPORTS) or _infer_sport(clean_take) or DEFAULT_SPORT
     resolved_tone = _pick(tone, TONES) or DEFAULT_TONE

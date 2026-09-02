@@ -87,7 +87,7 @@ class UserOut(BaseModel):
 
 # ---------- clips ----------
 class ClipCreate(BaseModel):
-    take: str = Field(min_length=10, max_length=280)
+    take: str = Field(min_length=10, max_length=500)
     # Optional, not a gate: most takes name a league, club or player, so the
     # sport is inferred from the words when nothing is ticked (video/sports.py).
     # `sports` carries a multi-select — a take can straddle two ("NBA + NFL")
@@ -108,7 +108,7 @@ class EnhanceRequest(BaseModel):
     """Anything the user has typed so far. Every field is optional except the
     take, because the point of enhancement is to work out what is missing."""
 
-    take: str = Field(max_length=280, default="")
+    take: str = Field(max_length=500, default="")
     sport: Sport | None = None
     tone: Tone | None = None
     duration: int | None = None
@@ -211,6 +211,13 @@ class ClipOut(BaseModel):
     # The credit receipt (PRICING rule 4): what this video charged. 0 after a
     # refund and for clips that predate the credit system.
     credits_charged: int = 0
+    # Scene edits: what re-rendering chosen scenes has charged so far, the
+    # edit currently in flight (if any), and whether one can be requested —
+    # the untouched scenes must still be on disk (7 days), so this is
+    # computed only for GET /clips/{id}.
+    credits_edits: int = 0
+    edit_pending: dict | None = None
+    editable: bool = False
 
 
 class CaptionSuggestions(BaseModel):
@@ -218,7 +225,7 @@ class CaptionSuggestions(BaseModel):
 
 
 class TakeEnhanceRequest(BaseModel):
-    take: str = Field(min_length=1, max_length=280)
+    take: str = Field(min_length=1, max_length=500)
     sport: Sport | None = None
     tone: Tone | None = None
     # How many times the user has already asked. Only widens the search, so

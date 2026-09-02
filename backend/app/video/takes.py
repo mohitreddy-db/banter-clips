@@ -24,7 +24,7 @@ from .types import _clean
 log = logging.getLogger("banter.video.takes")
 
 VARIATIONS = 2
-MAX_TAKE_CHARS = 280
+MAX_TAKE_CHARS = 500
 # Round 1 is already loose; later rounds push further so repeat clicks feel
 # like new ideas rather than rephrasings of the same one.
 BASE_TEMPERATURE = 0.9
@@ -65,7 +65,8 @@ argues with is a take nobody spreads.
   word-for-word (after the banter is fine). Compress the banter to fit,
   never the direction.
 - Under 200 characters for the banter itself; shorter usually hits harder.
-  The whole take, direction included, must stay under 280.
+  The whole take, direction included, must stay within the hard length
+  limit given in the request.
 - Never state a real score, result, injury, trade or quote as fact.
 - Never insult a person's appearance, family, race, or intelligence. Mock
   performance, decisions and situations only.
@@ -103,7 +104,8 @@ def _direction_sentences(take: str) -> str:
     return " ".join(p.strip() for p in parts if _DIRECTION_MARKERS.search(p))
 
 
-def variations(take: str, sport: str, tone: str, client=None, round_index: int = 0) -> list[dict]:
+def variations(take: str, sport: str, tone: str, client=None, round_index: int = 0,
+               max_chars: int = MAX_TAKE_CHARS) -> list[dict]:
     """Two enhanced takes. Never raises; returns [] when nothing is available.
 
     `round_index` is how many times the user has already asked, and only
@@ -120,7 +122,8 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
         f"Sport: {sport}\n"
         f"Tone to write in: {tone}\n"
         f"The fan's original take: {take}\n\n"
-        f"Give me two sharper versions, in different angles."
+        f"Give me two sharper versions, in different angles.\n"
+        f"Hard length limit: {max_chars} characters per take."
     )
     if direction:
         user += (
@@ -139,16 +142,16 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
 
     out: list[dict] = []
     for item in parsed[:VARIATIONS]:
-        text = _clean(item.get("take"))[:MAX_TAKE_CHARS]
+        text = _clean(item.get("take"))[:max_chars]
         if not text or text.lower() == take.lower():
             continue
         if direction and not _DIRECTION_MARKERS.search(text):
             # The model wrote pure banter anyway: put the direction back,
             # trimming the banter (never the direction) to stay under the cap.
-            room = MAX_TAKE_CHARS - len(direction) - 1
+            room = max_chars - len(direction) - 1
             if len(text) > room:
                 text = text[:room].rsplit(" ", 1)[0].rstrip(".,;:!? ")
-            text = f"{text.rstrip()} {direction}"[:MAX_TAKE_CHARS]
+            text = f"{text.rstrip()} {direction}"[:max_chars]
         out.append({
             "take": text,
             "angle": _clean(item.get("angle"))[:40],

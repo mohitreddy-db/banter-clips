@@ -86,6 +86,8 @@ export default function Studio() {
   const nav = useNavigate();
   const { search } = useLocation();
   const { profile, credits, videoPrice, prices, plan, refreshClips, refreshUsage, clips, canDownload, watermarked } = useApp();
+  // Prompt length is a plan capability: 280 characters on Free, 500 on Creator.
+  const takeLimit = plan === "creator" ? 500 : 280;
   // input → generating → result | failed. Enhancement happens on the input
   // page, before anything is generated.
   const [phase, setPhase] = useState("input");
@@ -125,6 +127,12 @@ export default function Studio() {
   // Editable working copy of the script: the user can rewrite any dialogue
   // line or action before approving; diffs are saved on approve.
   const [draft, setDraft] = useState(null);
+  // Scene editor on a finished video: a working copy of the scenes, which
+  // ones to re-render, and the request in flight.
+  const [sceneEditOpen, setSceneEditOpen] = useState(false);
+  const [sceneDraft, setSceneDraft] = useState([]);
+  const [sceneSel, setSceneSel] = useState([]);
+  const [sceneBusy, setSceneBusy] = useState(false);
 
   useEffect(() => {
     if (clip?.status === "script_ready" && clip.script) {
@@ -201,6 +209,44 @@ export default function Studio() {
     }
   };
 
+  // Scene editing: exact per-scene quote at the video's own rate (the same
+  // per-second price the video was quoted at), rounded up per scene.
+  const scenePrice = (s) => Math.max(1, Math.ceil((Number(s?.seconds) || 4) * videoPrice(1, clip?.resolution || "720p")));
+  const openSceneEditor = () => {
+    setSceneDraft((clip?.script?.scenes || []).map((s) => ({ line: s.line || "", action: s.action || "", seconds: s.seconds })));
+    setSceneSel([]);
+    setError("");
+    setSceneEditOpen(true);
+  };
+  const editScene = (i, field, value) => {
+    setSceneDraft((d) => d.map((s, k) => (k === i ? { ...s, [field]: value } : s)));
+    setSceneSel((sel) => (sel.includes(i) ? sel : [...sel, i]));
+  };
+  const toggleScene = (i) => setSceneSel((sel) => (sel.includes(i) ? sel.filter((k) => k !== i) : [...sel, i]));
+  const sceneQuote = sceneSel.reduce((sum, i) => sum + scenePrice(clip?.script?.scenes?.[i]), 0);
+  const submitSceneEdits = async () => {
+    if (!clip || !sceneSel.length) return;
+    setSceneBusy(true);
+    setError("");
+    try {
+      const scenes = sceneSel.slice().sort((a, b) => a - b).map((i) => {
+        const orig = clip.script.scenes[i] || {};
+        const s = { index: i };
+        if ((sceneDraft[i]?.line || "") !== (orig.line || "")) s.line = sceneDraft[i].line;
+        if ((sceneDraft[i]?.action || "") !== (orig.action || "")) s.action = sceneDraft[i].action;
+        return s;
+      });
+      const c = await api.rerenderScenes(clip.id, scenes);
+      setSceneEditOpen(false);
+      setClip(c);
+      watchClip(c.id, Date.now());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSceneBusy(false);
+    }
+  };
+
   // Opened from My Clips as /studio?clip=<id>: jump straight to that clip's
   // state — live status while it renders, the player when it is done.
   useEffect(() => {
@@ -208,7 +254,7 @@ export default function Studio() {
     const prompt = new URLSearchParams(search).get("prompt");
     if (!id) {
       reset();
-      if (prompt) setTake(prompt.slice(0, 280));
+      if (prompt) setTake(prompt.slice(0, takeLimit));
       return;
     }
     let cancelled = false;
@@ -236,7 +282,7 @@ export default function Studio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const valid = take.trim().length >= 10 && take.length <= 280;
+  const valid = take.trim().length >= 10 && take.length <= takeLimit;
   // Trending and enhancement need one sport to key off. The user's pick wins,
   // then what they follow, then the app's busiest sport.
   const primarySport = sports[0] || profile.sports?.[0] || "Soccer";
@@ -407,8 +453,12 @@ export default function Studio() {
               className="panel"
               style={{ width: "100%", padding: "clamp(16px, 4vw, 22px) clamp(16px, 4vw, 24px)", fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 500, color: "var(--app-text)", resize: "vertical", background: "var(--app-surface)", border: "1.5px solid var(--app-border)", borderRadius: 20, lineHeight: 1.45, boxSizing: "border-box" }}
             />
-            <span style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12, color: take.length > 280 ? "var(--app-error)" : "var(--app-muted2)" }}>
-              {take.length} / 280
+            <span
+              onClick={() => plan !== "creator" && take.length > takeLimit && setUpgradeOpen(true)}
+              style={{ position: "absolute", right: 16, bottom: 14, fontSize: 12, color: take.length > takeLimit ? "var(--app-error)" : "var(--app-muted2)", cursor: plan !== "creator" && take.length > takeLimit ? "pointer" : "default" }}
+            >
+              {take.length} / {takeLimit}
+              {plan !== "creator" && take.length > takeLimit && " · up to 500 on Creator →"}
             </span>
           </div>
 
@@ -1078,6 +1128,7 @@ export default function Studio() {
               {clip.sport} · {clip.tone}
               {clip.credits_charged > 0 &&
                 ` · ⚡ ${clip.credits_charged} credits (${clip.duration_target}s ${clip.resolution === "1080p" ? "HD" : "Standard"})`}
+              {clip.credits_edits > 0 && ` + ${clip.credits_edits} scene edits`}
             </span>
           </div>
           {/* Full take, untruncated — opened from My Clips this is the only
@@ -1085,6 +1136,11 @@ export default function Studio() {
           <div className="panel" style={{ padding: "14px 18px", borderRadius: 12, fontSize: 14.5, fontWeight: 600, color: "var(--app-text)", lineHeight: 1.5 }}>
             “{clip.take}”
           </div>
+          {clip.error && (
+            <div style={{ padding: "11px 14px", borderRadius: 12, fontSize: 13, color: "var(--app-text)", background: "rgba(225,158,60,.12)", border: "1px solid rgba(225,158,60,.4)" }}>
+              ⚠️ {clip.error}
+            </div>
+          )}
           {clip.reference_url && (
             <div className="panel" style={{ padding: "10px 14px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
               <a href={clip.reference_url} target="_blank" rel="noreferrer" title="Open the reference in full">
@@ -1161,6 +1217,15 @@ export default function Studio() {
                   📝 Show script
                 </button>
               )}
+              {clip.editable ? (
+                <button className="ghost-btn" style={{ padding: 14, fontSize: 15, borderColor: sceneEditOpen ? "var(--app-cyan)" : undefined }} onClick={() => (sceneEditOpen ? setSceneEditOpen(false) : openSceneEditor())}>
+                  ✂️ Edit scenes — re-render only what you change
+                </button>
+              ) : !clip.is_simulated && (
+                <div style={{ fontSize: 12, color: "var(--app-muted2)", lineHeight: 1.5 }}>
+                  ✂️ Scene editing is available for 7 days after a video is made.
+                </div>
+              )}
               <button className="ghost-btn" style={{ padding: 14, fontSize: 15 }} onClick={reset}>
                 ↻ Generate another
               </button>
@@ -1186,6 +1251,58 @@ export default function Studio() {
               {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
             </div>
           </div>
+
+          {sceneEditOpen && clip.script && (
+            <div className="card" style={{ padding: "clamp(14px, 3vw, 22px)", display: "flex", flexDirection: "column", gap: 14, borderColor: "rgba(34,211,238,.35)" }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 17, color: "var(--app-text)" }}>✂️ Edit scenes</div>
+                <div style={{ fontSize: 12.5, color: "var(--app-muted)", marginTop: 4, lineHeight: 1.5 }}>
+                  Tick the scenes to re-render, and change their line or action if you like. Untouched scenes are reused as they are — you only pay for what's re-rendered, and only once the new cut lands. Your current video stays until then.
+                </div>
+              </div>
+              {clip.script.scenes.map((s, i) => {
+                const on = sceneSel.includes(i);
+                return (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 14px", borderRadius: 12, background: on ? "rgba(34,211,238,.06)" : "var(--app-surface)", border: `1.5px solid ${on ? "var(--app-cyan)" : "var(--app-border)"}` }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13.5, fontWeight: 700, color: "var(--app-text)" }}>
+                      <input type="checkbox" checked={on} onChange={() => toggleScene(i)} style={{ width: 16, height: 16 }} />
+                      Scene {i + 1} · {s.seconds}s
+                      <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: on ? "var(--app-cyan)" : "var(--app-muted2)" }}>⚡ {scenePrice(s)} credits to re-render</span>
+                    </label>
+                    <textarea
+                      value={sceneDraft[i]?.line ?? ""}
+                      onChange={(e) => editScene(i, "line", e.target.value.slice(0, 220))}
+                      placeholder="(silent — no line in this shot)"
+                      rows={2}
+                      style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", fontSize: 13.5, color: "var(--app-text)", background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 9, resize: "vertical", lineHeight: 1.45 }}
+                    />
+                    <textarea
+                      value={sceneDraft[i]?.action ?? ""}
+                      onChange={(e) => editScene(i, "action", e.target.value.slice(0, 400))}
+                      placeholder="What happens in the shot"
+                      rows={2}
+                      style={{ width: "100%", boxSizing: "border-box", padding: "9px 11px", fontSize: 12.5, color: "var(--app-muted)", background: "var(--app-bg)", border: "1px solid var(--app-border)", borderRadius: 9, resize: "vertical", lineHeight: 1.45 }}
+                    />
+                  </div>
+                );
+              })}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
+                  {sceneSel.length ? <>Re-render <b style={{ color: "var(--app-text)" }}>{sceneSel.length} scene{sceneSel.length > 1 ? "s" : ""}</b> · <b style={{ color: "var(--app-text)" }}>{sceneQuote} credits</b> · you have {credits.toLocaleString()}</> : "Tick at least one scene"}
+                </span>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                  <button className="ghost-btn" style={{ padding: "11px 16px", fontSize: 14 }} onClick={() => setSceneEditOpen(false)} disabled={sceneBusy}>Cancel</button>
+                  {sceneSel.length > 0 && credits < sceneQuote ? (
+                    <button className="grad-btn" style={{ padding: "11px 18px", fontSize: 14 }} onClick={() => setTopupOpen(true)}>⚡ Top up credits</button>
+                  ) : (
+                    <button className="grad-btn" style={{ padding: "11px 18px", fontSize: 14 }} disabled={!sceneSel.length || sceneBusy} onClick={submitSceneEdits}>
+                      {sceneBusy ? "Starting…" : `✨ Re-render ${sceneSel.length || ""} scene${sceneSel.length === 1 ? "" : "s"} · ${sceneQuote} credits`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

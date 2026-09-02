@@ -47,10 +47,10 @@ def test_markers_never_survive_into_the_stored_take():
 
 
 def test_stripping_still_satisfies_the_database_minimum():
-    # clips_take_len requires 10..280 characters; stripping must not go under.
+    # clips_take_len requires 10..500 characters; stripping must not go under.
     assert len(markers.strip("[mock]")) >= markers.MIN_TAKE_CHARS
     assert len(markers.strip("[mock] hi")) >= markers.MIN_TAKE_CHARS
-    assert len(markers.strip("[mock] " + "x" * 500)) <= 280
+    assert len(markers.strip("[mock] " + "x" * 600)) <= 500
 
 
 def test_stripping_leaves_an_unmarked_take_alone():

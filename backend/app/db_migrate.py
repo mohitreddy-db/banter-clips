@@ -43,6 +43,8 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("social_accounts", "refresh_token", "text"),
     ("clips", "direction", "text NOT NULL DEFAULT ''"),
     ("clips", "reference_key", "text"),
+    ("clips", "edit_pending", "jsonb"),
+    ("clips", "credits_edits", "integer NOT NULL DEFAULT 0"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied
@@ -65,6 +67,10 @@ def _statements() -> tuple[str, ...]:
         "UPDATE clips SET status = 'failed', "
         "error = COALESCE(error, 'interrupted by a deploy') "
         "WHERE status = 'creating_voice'",
+        # Creator prompts run to 500 characters; the plan gate is in the API.
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_len",
+        "ALTER TABLE clips ADD CONSTRAINT clips_take_len "
+        "CHECK (char_length(take) BETWEEN 10 AND 500)",
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_status_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_status_check "
         f"CHECK (status IN {CLIP_STATUSES!r})",

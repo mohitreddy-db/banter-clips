@@ -793,6 +793,57 @@ def _park_paused(db, clip, progress: str) -> None:
     db.commit()
 
 
+def work_dir_for(clip_id) -> Path:
+    return Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
+
+
+def checkpointed_scenes(clip_id) -> set[int]:
+    """Scene indices whose animated clip is still on disk — what a scene edit
+    can reuse for free. Empty once housekeeping has expired the work dir."""
+    path = work_dir_for(clip_id) / "checkpoint.json"
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return {
+        int(k) for k, v in data.items()
+        if str(k).isdigit() and isinstance(v, dict) and v.get("clip") and Path(v["clip"]).exists()
+    }
+
+
+def _invalidate_checkpoint(work: Path, indices) -> None:
+    """Forget the recorded keyframe and clip for these scenes, so the next
+    run renders them again while every other scene is reused verbatim."""
+    path = work / "checkpoint.json"
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    for i in indices or []:
+        data.pop(str(int(i)), None)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+
+
+def _settle_failure(db, clip, message: str) -> None:
+    """A failed run costs nothing. A failed SCENE EDIT also keeps the original
+    video: the clip goes back to ready with the reason attached, instead of
+    turning a finished video into a failed one."""
+    if isinstance(clip.edit_pending, dict):
+        clip.status = "ready"
+        clip.error = ("Scene edit failed — your original video is unchanged and "
+                      f"nothing was charged. ({message})")[:500]
+        clip.edit_pending = None
+        clip.current_step = None
+        db.commit()
+        return
+    clip.status = "failed"
+    clip.error = message[:500]
+    clip.current_step = None
+    db.commit()
+    _release_credits(db, clip)
+
+
 def _release_credits(db, clip) -> None:
     """A failed clip is free (PRICING rule 3). Idempotent and non-fatal."""
     try:
@@ -872,8 +923,14 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             clip.current_step = public
             db.commit()
 
-        work = Path(settings.MEDIA_DIR).parent / "work" / str(clip_id)
+        work = work_dir_for(clip_id)
         out = work / "final.mp4"
+        # A scene edit: forget the chosen scenes' checkpoints so they render
+        # again; every other scene is reused from disk at no cost.
+        edit = clip.edit_pending if isinstance(clip.edit_pending, dict) else None
+        if edit:
+            _invalidate_checkpoint(work, edit.get("scenes") or [])
+            log.info("clip %s: scene edit — re-rendering scenes %s", clip_id, edit.get("scenes"))
         user_reference = None
         if getattr(clip, "reference_key", None):
             try:
@@ -902,7 +959,8 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             user_reference=user_reference,
         )
 
-        clip.cost_usd = round(result.cost_usd, 3)
+        # An edit adds to what the video already cost; a fresh run replaces it.
+        clip.cost_usd = round((float(clip.cost_usd or 0.0) if edit else 0.0) + result.cost_usd, 3)
         clip.provenance = _provenance(result)
         # Every video keeps its script ("Show script"), whether or not the
         # approval flow wrote one first.
@@ -917,9 +975,13 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             clip.video_key = stored.get("video_key")
             clip.poster_key = stored.get("poster_key")
             clip.video_url = stored.get("video_url") or clip.video_url
+            if edit and clip.video_url:
+                # Same storage key as before — bust caches so the new cut shows.
+                clip.video_url = f"{clip.video_url.split('?', 1)[0]}?v={int(time.time())}"
             from datetime import datetime, timezone
             clip.completed_at = datetime.now(timezone.utc)
             clip.current_step = None
+            clip.edit_pending = None
             db.commit()
             # The one and only charge: the finished video exists. Non-fatal —
             # a billing hiccup must not un-deliver a delivered video.
@@ -928,7 +990,12 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
                 from ..services import credits as credit_svc
 
                 user = db.get(User, clip.user_id)
-                if user is not None:
+                if user is not None and edit:
+                    charged = credit_svc.charge_edit(
+                        db, user, clip, int(edit.get("credits") or 0),
+                        note=f"{len(edit.get('scenes') or [])} scene(s) re-rendered")
+                    db.commit()
+                elif user is not None:
                     charged = credit_svc.charge_on_completion(db, user, clip)
                     db.commit()
                     log.info("clip %s charged %d credits on completion", clip_id, charged)
@@ -939,11 +1006,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             _park_paused(db, clip, f"{done}/{len(result.assets) or '?'} scenes completed")
             return
         else:
-            clip.status = "failed"
-            clip.error = (result.error or "generation failed")[:500]
-            clip.current_step = None
-            db.commit()
-            _release_credits(db, clip)
+            _settle_failure(db, clip, result.error or "generation failed")
         log.info("clip %s finished in %.1fs ok=%s cost=$%.3f warnings=%d",
                  clip_id, time.time() - started, result.ok, result.cost_usd,
                  len(result.warnings))
@@ -952,10 +1015,7 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
         try:
             clip = db.get(Clip, clip_id)
             if clip is not None:
-                clip.status = "failed"
-                clip.error = str(exc)[:500]
-                db.commit()
-                _release_credits(db, clip)
+                _settle_failure(db, clip, str(exc))
         except Exception:  # noqa: BLE001
             log.exception("could not record failure for %s", clip_id)
     finally:

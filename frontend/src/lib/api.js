@@ -115,6 +115,12 @@ export const api = {
   regenerateScript: (id, feedback = "", options = {}) =>
     request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback, ...options } }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),
+  // Re-render chosen scenes of a finished video (optionally edited first).
+  // Quoted per scene server-side; charged only when the new cut lands.
+  rerenderScenes: (id, scenes) =>
+    request(`/clips/${id}/scenes/rerender`, { method: "POST", body: { scenes } }),
+  // Public feedback — works signed out too (the session header is optional).
+  sendFeedback: (body) => request("/feedback", { method: "POST", body }),
 
   // publishing
   publishClip: (clipId, social_account_id, caption) =>
@@ -183,6 +189,8 @@ export const api = {
     request("/admin/admins/add", { method: "POST", body: { email, reason } }),
   adminRemoveAdmin: (email, reason) =>
     request("/admin/admins/remove", { method: "POST", body: { email, reason } }),
+  adminFeedback: (params = {}) => request(`/admin/feedback${qs(params)}`),
+  adminFeedbackUpdate: (id, body) => request(`/admin/feedback/${id}`, { method: "PATCH", body }),
   adminCredits: () => request("/admin/credits"),
   adminGrantCredits: (email, delta, reason) =>
     request("/admin/credits/grant", { method: "POST", body: { email, delta, reason } }),

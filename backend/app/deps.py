@@ -99,3 +99,17 @@ def record_event(db: Session, name: str, user: User | None = None, **props) -> N
     """BR-11 product analytics — server-side event log, no dashboard."""
     db.add(Event(user_id=user.id if user else None, name=name, props=props))
     db.commit()
+
+
+def get_optional_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """The signed-in user when a valid session is presented, otherwise None —
+    for public endpoints that attach identity when they can (feedback)."""
+    if creds is None:
+        return None
+    try:
+        return get_current_user(creds, db)
+    except HTTPException:
+        return None
