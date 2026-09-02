@@ -138,9 +138,13 @@ class Settings(BaseSettings):
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
     # OpenRouter model per output tier. JSON in env; VIDEO_MODEL remains the
     # fallback and lets any other OpenRouter video generator work unchanged.
+    # Both tiers stay on Grok: Seedance rejects any input frame containing a
+    # photoreal person (InputImageSensitiveContentDetected, 2026-09-01), and
+    # every BanterClips scene stars one — its cheap rates are unreachable for
+    # this product. Route back only if that filter ever changes.
     VIDEO_MODEL_ROUTES: dict[str, str] = {
-        "720p": "bytedance/seedance-2.0-mini",
-        "1080p": "bytedance/seedance-1-5-pro",
+        "720p": "x-ai/grok-imagine-video-1.5",
+        "1080p": "x-ai/grok-imagine-video-1.5",
     }
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
@@ -170,15 +174,17 @@ class Settings(BaseSettings):
     VIDEO_DISCLOSURE: str = ""
 
     # Hard ceiling per job. Cost scales with duration AND resolution, so a
-    # runaway plan is expensive; the pipeline degrades to stills rather than
-    # exceeding this. Sized for the dearest legitimate job — 30s at 1080p
+    # runaway plan is expensive; a job that would exceed this stops rather
+    # than overspending. Sized for the dearest legitimate job — 30s at 1080p
     # (~2x the measured $0.147/s at 720p) — so the cap only catches runaways,
     # never a job a Creator was allowed to ask for.
     MAX_JOB_COST_USD: float = 14.0
-    # Render preflight: below this OpenRouter balance the per-call pre-auth
-    # starts refusing unpredictably, so jobs pause up front instead of two
-    # scenes in (measured: fine at $8, refused at $9.65 with charges settling).
-    PROVIDER_MIN_BALANCE_USD: float = 8.0
+    # Render preflight floor. 0 by request: run the balance all the way down —
+    # a scene that 402s mid-render pauses with its checkpoint and resumes free,
+    # so the floor only guards the pointless case (balance already ≤ 0, where
+    # every submit is doomed). Raise via env if pre-auth flakiness ever needs
+    # headroom again (2026-08: refusals seen with as much as $9.65 left).
+    PROVIDER_MIN_BALANCE_USD: float = 0.0
     # Ceiling across ALL jobs in a rolling 24 hours. The per-job limit stops
     # one runaway clip; this stops a normal day from emptying the account,
     # which at ~$2.40 a clip takes very few users. Past it, generation is

@@ -792,14 +792,14 @@ def run_clip_job(clip_id: uuid.UUID) -> None:
             return
 
         # ---- Phase 2: render ------------------------------------------
-        # Provider-balance preflight. Below this floor OpenRouter's per-call
-        # pre-auth starts refusing unpredictably (measured across the two
-        # incidents: fine at $8, refused at $9.65), so don't start a render
-        # that will pause two scenes in — pause it now, before any spend.
+        # Provider-balance preflight. Floor defaults to 0: renders run the
+        # balance all the way down (a mid-render 402 pauses with checkpoints
+        # and resumes free), and this only skips the doomed case where the
+        # balance is already spent before any submit.
         if getattr(settings, "OPENROUTER_API_KEY", ""):
             from ..services import provider_balance
 
-            floor = float(getattr(settings, "PROVIDER_MIN_BALANCE_USD", 8.0))
+            floor = float(getattr(settings, "PROVIDER_MIN_BALANCE_USD", 0.0))
             info = provider_balance.get()
             if info is not None and info.get("balance_usd", floor) < floor:
                 log.error("provider balance $%.2f below the $%.2f floor; pausing clip %s",
