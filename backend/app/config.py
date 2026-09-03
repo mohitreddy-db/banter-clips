@@ -47,7 +47,13 @@ class Settings(BaseSettings):
     # Scopes requested at authorize time. Every scope listed here must be
     # enabled on the TikTok app or the consent screen errors out, so trim
     # via env rather than code if the portal config differs.
-    TIKTOK_SCOPES: str = "user.info.basic,video.publish,video.upload"
+    #
+    # Exactly what we use, and no more: TikTok's audit treats a scope the
+    # integration cannot be seen exercising as a reason to reject. video.publish
+    # covers Direct Post (/post/publish/video/init/), which is our only publish
+    # path; video.upload is the draft-to-inbox scope, and we never post drafts.
+    # Add it back the day we offer "send to your TikTok drafts".
+    TIKTOK_SCOPES: str = "user.info.basic,video.publish"
     # Optional HTTP forward proxy for ALL TikTok API traffic (authorize URL
     # excluded — that's the user's browser). TikTok is ISP-blocked in India
     # and geo-sensitive about request origin, so TikTok calls can ride a US
