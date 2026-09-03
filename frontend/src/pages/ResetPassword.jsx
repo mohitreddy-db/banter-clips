@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { supabase, supabaseEnabled } from "../lib/supabase.js";
+import BrandMark from "../components/BrandMark.jsx";
 
 import { useSeo } from "../lib/seo.js";
 const label = { fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" };
@@ -72,16 +73,7 @@ export default function ResetPassword() {
     <div className="app-font" style={{ minHeight: "100vh", background: "var(--app-bg)", display: "grid", placeItems: "center", padding: "clamp(14px, 4vw, 24px)" }}>
       <div className="card auth-card" style={{ width: "100%", maxWidth: 430, padding: "40px 36px", display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <svg width="32" height="32" viewBox="0 0 34 34">
-            <defs>
-              <linearGradient id="rplg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#22d3ee" />
-                <stop offset="1" stopColor="#34e27a" />
-              </linearGradient>
-            </defs>
-            <rect width="34" height="34" rx="9" fill="url(#rplg)" />
-            <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-          </svg>
+          <BrandMark size={32} />
           <span style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>BanterClips</span>
         </div>
 

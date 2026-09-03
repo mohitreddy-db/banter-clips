@@ -1,5 +1,6 @@
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
+import BrandMark from "./BrandMark.jsx";
 
 const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing", "/feedback": "Feedback" };
 
@@ -94,16 +95,7 @@ export default function AppShell({ children }) {
       {/* sidebar */}
       <aside className="app-sidebar" style={{ background: "var(--app-sidebar)", borderRight: "1px solid var(--app-border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 6, position: "sticky", top: 0, height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 16px", cursor: "pointer" }} onClick={() => nav("/")}>
-          <svg width="28" height="28" viewBox="0 0 34 34">
-            <defs>
-              <linearGradient id="sblg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#22d3ee" />
-                <stop offset="1" stopColor="#34e27a" />
-              </linearGradient>
-            </defs>
-            <rect width="34" height="34" rx="9" fill="url(#sblg)" />
-            <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-          </svg>
+          <BrandMark size={28} />
           <span style={{ fontWeight: 700, fontSize: 18, color: "var(--app-text)" }}>BanterClips</span>
         </div>
 

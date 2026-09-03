@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import AppShell from "../components/AppShell.jsx";
+import Logo from "../components/BrandMark.jsx";
 import { useSeo } from "../lib/seo.js";
 
 /**
@@ -17,14 +18,6 @@ const CATEGORIES = [
   { key: "praise", icon: "🎉", label: "Loved something" },
   { key: "other", icon: "💬", label: "Other" },
 ];
-
-function Logo({ size = 26 }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.3, background: "linear-gradient(135deg,#22d3ee,#34e27a)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="#04121a"><path d="M8 5v14l11-7z" /></svg>
-    </div>
-  );
-}
 
 function FeedbackForm({ signedIn, userEmail }) {
   const { search } = useLocation();

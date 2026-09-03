@@ -6,21 +6,23 @@ a real, crawlable URL — a `data:` URI does not count — so these have to exis
 files in `public/`, not as inline SVG. Same story for `og:image`: crawlers fetch
 it, they do not render the page to invent one.
 
-Everything is drawn from the same two constants as the app's CSS (`--accent`,
-`--accent2`) so the mark in a search result matches the mark in the product.
+The selected full lockup lives in `frontend/logos`; small-context assets use
+the same lockup's extracted B/play mark so the wordmark never becomes a blur.
+The generated background uses the app's CSS accent colors.
 
     pip install pillow
     python3 scripts/gen-brand-assets.py
 
-Fonts are optional. If Manrope/Space Grotesk are not found the wordmark falls
-back to a system face — the icons, which carry no text, are unaffected.
+Fonts are optional. If Manrope/Space Grotesk are not found, the social card's
+supporting copy falls back to a system face.
 """
 
 import os
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUBLIC = os.path.join(HERE, "..", "public")
+MASTER = os.path.join(HERE, "..", "logos", "banterclips-logo-sample-4.png")
 FONT_DIRS = [
     os.environ.get("BRAND_FONT_DIR", ""),
     os.path.join(HERE, "fonts"),
@@ -32,11 +34,6 @@ TEXT = (242, 244, 250)  # --text
 MUTED = (152, 161, 181)  # --muted
 ACCENT = (34, 211, 238)  # --accent  #22d3ee
 ACCENT2 = (52, 226, 122)  # --accent2 #34e27a
-
-# Icons are drawn at 8x and downsampled; the play triangle has diagonal edges
-# that alias badly at 32px if drawn directly at final size.
-SS = 8
-
 
 def font(names, size, weight=700):
     """First font in `names` that resolves, at `size`. Variable fonts get an
@@ -65,35 +62,54 @@ def body(size, weight=600):
 
 
 def diagonal_gradient(w, h, c1, c2):
-    """Top-left → bottom-right linear gradient, matching CSS `--grad`."""
-    img = Image.new("RGB", (w, h))
-    px = img.load()
-    for y in range(h):
-        for x in range(w):
-            t = (x / max(w - 1, 1) + y / max(h - 1, 1)) / 2
-            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(c1, c2))
-    return img
+    """Fast left-to-right brand gradient."""
+    ramp = Image.linear_gradient("L").rotate(90, expand=True).resize((w, h))
+    return Image.composite(Image.new("RGB", (w, h), c2), Image.new("RGB", (w, h), c1), ramp)
+
+
+def _rounded(img):
+    """Replace generated black corners with real transparency."""
+    mask = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [0, 0, img.width - 1, img.height - 1], radius=round(img.width * 0.205), fill=255
+    )
+    out = img.convert("RGBA")
+    out.putalpha(mask)
+    return out
+
+
+def lockup(size):
+    """Sample 4 as selected: B/play mark plus the BanterClips wordmark."""
+    master = Image.open(MASTER).convert("RGB")
+    return _rounded(master).resize((size, size), Image.Resampling.LANCZOS)
+
+
+def _mark():
+    """Extract Sample 4's white B/play mark without its lower wordmark."""
+    master = Image.open(MASTER).convert("RGB")
+    crop = master.crop((330, 240, 925, 835))
+    r, g, b = crop.split()
+    whiteness = ImageChops.darker(ImageChops.darker(r, g), b)
+    alpha = whiteness.point(lambda value: max(0, min(255, (value - 165) * 3)))
+    mark = Image.new("RGBA", crop.size, (255, 255, 255, 0))
+    mark.putalpha(alpha)
+    return mark.crop(alpha.getbbox())
 
 
 def icon(size):
-    """The app mark: a gradient squircle with a white play triangle."""
-    s = size * SS
+    """Small-context Sample 4: its B/play mark without duplicate tiny text."""
+    scale = 4
+    s = size * scale
     grad = diagonal_gradient(s, s, ACCENT, ACCENT2)
-
-    mask = Image.new("L", (s, s), 0)
-    ImageDraw.Draw(mask).rounded_rectangle([0, 0, s - 1, s - 1], radius=int(s * 0.265), fill=255)
-
-    out = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    out.paste(grad, (0, 0), mask)
-
-    # Optically centred, not geometrically: a triangle's mass sits left of its
-    # bounding box, so it needs a nudge right to look centred in the square.
-    d = ImageDraw.Draw(out)
-    d.polygon(
-        [(s * 0.385, s * 0.305), (s * 0.735, s * 0.5), (s * 0.385, s * 0.695)],
-        fill=(255, 255, 255, 255),
+    out = _rounded(grad)
+    mark = _mark()
+    max_w, max_h = round(s * 0.48), round(s * 0.58)
+    ratio = min(max_w / mark.width, max_h / mark.height)
+    mark = mark.resize(
+        (round(mark.width * ratio), round(mark.height * ratio)), Image.Resampling.LANCZOS
     )
-    return out.resize((size, size), Image.LANCZOS)
+    out.alpha_composite(mark, ((s - mark.width) // 2, (s - mark.height) // 2))
+    return out.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def glow(img, cx, cy, radius, color, strength):
@@ -160,13 +176,17 @@ def main():
     icon(180).save(out("apple-touch-icon.png"))  # iOS ignores transparency
     icon(192).save(out("icon-192.png"))
     icon(512).save(out("icon-512.png"))
-    icon(512).save(out("logo.png"))  # Organization.logo in JSON-LD
+    lockup(120).save(out("oauth-logo-120.png"), optimize=True)
+    lockup(512).save(out("logo.png"), optimize=True)  # Organization.logo in JSON-LD
+    lockup(1024).save(out("logo1024.png"), optimize=True)
+    icon(1024).save(out("logo-mark-1024.png"), optimize=True)
 
     og_card().save(out("og.png"), optimize=True)
 
     for n in (
         "favicon.ico favicon-32x32.png apple-touch-icon.png icon-192.png "
-        "icon-512.png logo.png og.png"
+        "icon-512.png oauth-logo-120.png logo.png logo1024.png "
+        "logo-mark-1024.png og.png"
     ).split():
         print(f"  {n:24} {os.path.getsize(out(n)):>8,} bytes")
 

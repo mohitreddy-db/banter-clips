@@ -4,6 +4,7 @@ import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { UpgradeModal } from "../components/Modals.jsx";
 import AppShell from "../components/AppShell.jsx";
+import Logo from "../components/BrandMark.jsx";
 import { useSeo } from "../lib/seo.js";
 
 /* The one app page that is deliberately PUBLIC. Pricing queries are the
@@ -33,21 +34,6 @@ const CREATOR = [
   [true, "First access to new platforms"],
   [true, "Everything in Free"],
 ];
-
-function Logo({ size = 26 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34">
-      <defs>
-        <linearGradient id="prlg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#34e27a" />
-        </linearGradient>
-      </defs>
-      <rect width="34" height="34" rx="9" fill="url(#prlg)" />
-      <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-    </svg>
-  );
-}
 
 export default function Pricing() {
   useSeo({

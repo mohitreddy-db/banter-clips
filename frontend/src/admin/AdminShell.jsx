@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { T } from "./ui.jsx";
+import BrandMark from "../components/BrandMark.jsx";
 
 /**
  * Admin console shell — grouped sidebar per ADMIN.md §2 / Figma frames 15–23.
@@ -65,17 +66,7 @@ export default function AdminShell() {
         }}
       >
         <NavLink to="/studio" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", marginBottom: 4 }}>
-          {/* Same mark as the app sidebar (AppShell) — play glyph on the gradient. */}
-          <svg width="28" height="28" viewBox="0 0 34 34" style={{ flexShrink: 0 }}>
-            <defs>
-              <linearGradient id="adminlg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#22d3ee" />
-                <stop offset="1" stopColor="#34e27a" />
-              </linearGradient>
-            </defs>
-            <rect width="34" height="34" rx="9" fill="url(#adminlg)" />
-            <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-          </svg>
+          <BrandMark size={28} />
           <span>
             <span style={{ display: "block", fontSize: 16, fontWeight: 700, color: T.text, lineHeight: 1.1 }}>BanterClips</span>
             <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".12em", color: T.cyan }}>ADMIN CONSOLE</span>

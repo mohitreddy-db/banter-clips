@@ -1,21 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
+import BrandMark from "../components/BrandMark.jsx";
 
 import { useSeo } from "../lib/seo.js";
 function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <svg width="32" height="32" viewBox="0 0 34 34">
-        <defs>
-          <linearGradient id="silg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#22d3ee" />
-            <stop offset="1" stopColor="#34e27a" />
-          </linearGradient>
-        </defs>
-        <rect width="34" height="34" rx="9" fill="url(#silg)" />
-        <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-      </svg>
+      <BrandMark size={32} />
       <span style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>BanterClips</span>
     </div>
   );

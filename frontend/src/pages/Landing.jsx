@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 import { showcaseClips, SHOWCASE_BASE } from "../lib/showcase.js";
+import Logo from "../components/BrandMark.jsx";
 
 // The clip the hero tile and the "Publish or download" card demo. Follows
 // whatever leads the catalog, so refreshing the showcase refreshes the whole
@@ -258,21 +259,6 @@ const plansMini = [
   { name: "Free", price: "$0", per: "/mo", tag: "5 videos · publish-only · watermarked", cta: "Start free", popular: false },
   { name: "Creator", price: "$19", per: "/mo", tag: "150 credits/mo · HD download · no watermark", cta: "Go Creator", popular: true },
 ];
-
-function Logo({ size = 30 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34">
-      <defs>
-        <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="oklch(0.66 0.19 253)" />
-          <stop offset="1" stopColor="oklch(0.80 0.16 152)" />
-        </linearGradient>
-      </defs>
-      <rect width="34" height="34" rx="9" fill="url(#lg)" />
-      <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#fff" />
-    </svg>
-  );
-}
 
 const WAVE_DELAYS = [0, 0.1, 0.2, 0.3, 0.15, 0.25, 0.05, 0.35];
 
