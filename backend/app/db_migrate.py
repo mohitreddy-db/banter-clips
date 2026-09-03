@@ -45,6 +45,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "reference_key", "text"),
     ("clips", "edit_pending", "jsonb"),
     ("clips", "credits_edits", "integer NOT NULL DEFAULT 0"),
+    ("publishes", "options", "jsonb"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied

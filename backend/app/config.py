@@ -54,9 +54,18 @@ class Settings(BaseSettings):
     # box (tinyproxy on the NYC droplet) regardless of where this backend
     # runs: http://user:pass@146.190.213.29:8899. Empty = direct.
     TIKTOK_PROXY_URL: str = ""
-    # Unaudited/sandbox TikTok apps may only post SELF_ONLY (private, visible
-    # to the author). Flip to False once the app passes TikTok's audit and
-    # public posting is allowed.
+    # Whether our TikTok client has yet to pass the content audit. Unaudited
+    # (and every sandbox) client may only post privately, and only to a
+    # private account — TikTok enforces that itself, rejecting anything else.
+    #
+    # This flag does NOT override the creator's choice: the composer always
+    # sends the audience they picked, because an app that silently substitutes
+    # one is what TikTok's audit is looking for. All it does is warn them in
+    # the dialog about what TikTok will accept today.
+    #
+    # Set to false once the audit clears — and remember the audit attaches to
+    # a specific client key, so a sandbox key (sb...) stays restricted no
+    # matter what this says.
     TIKTOK_UNAUDITED: bool = True
 
     # YouTube Data API OAuth + videos.insert. Unverified API projects may have

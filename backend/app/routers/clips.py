@@ -647,6 +647,40 @@ def caption_suggestions(
     return CaptionSuggestions(captions=options)
 
 
+def _tiktok_options(body: PublishCreate) -> dict:
+    """The creator's composer choices, checked for the rules TikTok states as
+    absolutes rather than per-account settings.
+
+    Anything that depends on the creator's own TikTok settings — which privacy
+    levels they may use, whether comments/duet/stitch are permitted, how long
+    a video they may post — is enforced in services/publishing.py against the
+    `creator_info` call TikTok requires immediately before every publish.
+    Checking it here as well would mean querying TikTok twice per publish and
+    still racing a settings change between the two calls.
+    """
+    if body.tiktok is None:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "tiktok_options_required",
+                "message": "Choose who can view this video before posting to TikTok.",
+            },
+        )
+    options = body.tiktok
+    # TikTok forbids branded content on a private post: a paid partnership has
+    # to be visible to somebody. Its own composer greys out "Only me" once
+    # branded content is on, and ours does the same — this is the backstop.
+    if options.branded_content and options.privacy_level == "SELF_ONLY":
+        raise HTTPException(
+            400,
+            detail={
+                "code": "branded_content_private",
+                "message": "Branded content cannot be posted privately. Choose a different audience or turn off Branded content.",
+            },
+        )
+    return options.model_dump()
+
+
 @router.post("/{clip_id}/publish", response_model=PublishOut, status_code=201)
 def publish_clip(
     clip_id: uuid.UUID,
@@ -670,8 +704,14 @@ def publish_clip(
     if account is None or account.user_id != user.id or account.status != "connected":
         raise HTTPException(400, "Connect a social account before publishing.")
 
+    options = None
+    if account.platform == "tiktok":
+        options = _tiktok_options(body)
+
     # BR-13: publishing is always an explicit per-clip action.
-    pub = Publish(clip_id=clip.id, social_account_id=account.id, caption=body.caption)
+    pub = Publish(
+        clip_id=clip.id, social_account_id=account.id, caption=body.caption, options=options
+    )
     db.add(pub)
     db.commit()
     record_event(db, "publish_started", user, clip_id=str(clip.id),

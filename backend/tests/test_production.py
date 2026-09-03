@@ -14,16 +14,20 @@ import json
 import shutil
 import sys
 import tempfile
+import uuid
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fastapi import HTTPException  # noqa: E402
+
 from app.config import settings  # noqa: E402
-from app.routers.clips import reference_matches  # noqa: E402
+from app.routers.clips import _tiktok_options, reference_matches  # noqa: E402
 from app.routers.socials import _clear_credentials  # noqa: E402
-from app.services import markers, spend, storage, youtube  # noqa: E402
+from app.schemas import PublishCreate  # noqa: E402
+from app.services import markers, publishing, spend, storage, tiktok, youtube  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
 
 
@@ -448,3 +452,172 @@ if __name__ == "__main__":
             print(f"  FAIL  {name}: {exc}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ------------------------------------------------------------------- tiktok
+# TikTok's audit turns UI behaviour into API correctness: the creator's choices
+# must reach post_init unchanged, and the rules TikTok states as absolutes must
+# hold even if the composer is bypassed.
+
+def _init_payload(monkeypatch, **kwargs):
+    """Capture the JSON post_init would send, without touching the network."""
+    captured = {}
+
+    class _FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            captured.update(json)
+            return SimpleNamespace(json=lambda: {"data": {"publish_id": "p"}})
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _FakeClient())
+    tiktok.post_init(
+        "token",
+        caption="hot take",
+        privacy="PUBLIC_TO_EVERYONE",
+        video_size=1_000_000,
+        **kwargs,
+    )
+    return captured["post_info"]
+
+
+def test_interaction_choices_are_sent_as_tiktoks_negated_fields(monkeypatch):
+    """The composer asks "allow comments?"; TikTok's field is disable_comment.
+    Inverting it in the wrong place silently publishes the opposite of what the
+    creator ticked."""
+    allowed = _init_payload(monkeypatch, allow_comment=True, allow_duet=True, allow_stitch=False)
+    assert allowed["disable_comment"] is False
+    assert allowed["disable_duet"] is False
+    assert allowed["disable_stitch"] is True
+
+    nothing = _init_payload(monkeypatch)
+    assert nothing["disable_comment"] is True
+    assert nothing["disable_duet"] is True
+    assert nothing["disable_stitch"] is True
+
+
+def test_commercial_disclosure_reaches_tiktok_and_ai_content_is_always_declared(monkeypatch):
+    """"Your brand" and "Branded content" drive the Promotional content and
+    Paid partnership labels. is_aigc is ours, not the creator's: every
+    BanterClips video is generated, so it is declared on every post."""
+    post = _init_payload(monkeypatch, brand_organic=True, branded_content=True)
+    assert post["brand_organic_toggle"] is True
+    assert post["brand_content_toggle"] is True
+    assert post["is_aigc"] is True
+
+    plain = _init_payload(monkeypatch)
+    assert plain["brand_organic_toggle"] is False
+    assert plain["brand_content_toggle"] is False
+    assert plain["is_aigc"] is True
+
+
+def test_privacy_level_is_sent_exactly_as_chosen(monkeypatch):
+    """No "most public option wins" fallback: TikTok's audit reads that as the
+    app choosing the audience instead of the creator."""
+    captured = {}
+
+    class _FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            captured.update(json)
+            return SimpleNamespace(json=lambda: {"data": {}})
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _FakeClient())
+    for level in tiktok.PRIVACY_LEVELS:
+        tiktok.post_init("t", caption="c", privacy=level, video_size=10)
+        assert captured["post_info"]["privacy_level"] == level
+
+
+def test_creator_profile_offers_only_the_levels_tiktok_returned(monkeypatch):
+    """A private account never gets offered "Everyone". The composer renders
+    exactly this list, so anything we invent here becomes a failed publish."""
+    monkeypatch.setattr(
+        tiktok,
+        "creator_info",
+        lambda token: {
+            "data": {
+                "creator_nickname": "Ni",
+                "creator_username": "ni.process",
+                "privacy_level_options": ["SELF_ONLY", "MUTUAL_FOLLOW_FRIENDS"],
+                "comment_disabled": True,
+                "max_video_post_duration_sec": 60,
+            },
+            "error": {"code": "ok"},
+        },
+    )
+    profile = tiktok.creator_profile("token")
+    assert profile["privacy_level_options"] == ["MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"]
+    assert profile["comment_disabled"] is True
+    assert profile["duet_disabled"] is False
+    assert profile["max_video_post_duration_sec"] == 60
+
+
+def test_creator_profile_surfaces_tiktoks_own_message(monkeypatch):
+    """When TikTok refuses, the creator should read TikTok's reason — not a
+    generic failure that sends them to support."""
+    monkeypatch.setattr(
+        tiktok,
+        "creator_info",
+        lambda token: {"error": {"code": "spam_risk_too_many_posts", "message": "Daily post cap reached."}},
+    )
+    try:
+        tiktok.creator_profile("token")
+    except RuntimeError as exc:
+        assert "Daily post cap reached." in str(exc)
+    else:
+        raise AssertionError("a TikTok error must not look like success")
+
+
+def test_publishing_to_tiktok_requires_the_creators_choices():
+    """Publishing without composer options is a bug, not a default. TikTok
+    forbids the app picking an audience, so there is nothing safe to assume."""
+    body = PublishCreate(social_account_id=uuid.uuid4(), caption="hi")
+    try:
+        _tiktok_options(body)
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "tiktok_options_required"
+    else:
+        raise AssertionError("a TikTok publish with no options must be refused")
+
+
+def test_branded_content_cannot_be_posted_privately():
+    """TikTok's rule, enforced server-side too: the composer greys out "Only
+    me" for branded content, and a client that ignores that is still refused."""
+    body = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        caption="hi",
+        tiktok={"privacy_level": "SELF_ONLY", "branded_content": True},
+    )
+    try:
+        _tiktok_options(body)
+    except HTTPException as exc:
+        assert exc.detail["code"] == "branded_content_private"
+    else:
+        raise AssertionError("branded content + private must be refused")
+
+    allowed = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        caption="hi",
+        tiktok={"privacy_level": "PUBLIC_TO_EVERYONE", "branded_content": True},
+    )
+    assert _tiktok_options(allowed)["branded_content"] is True
+
+
+def test_options_default_to_private_when_a_publish_row_has_none():
+    """Rows queued before the composer existed still publish — as private,
+    the one audience a creator cannot be surprised by."""
+    assert publishing.TIKTOK_FALLBACK["privacy_level"] == "SELF_ONLY"
+    assert not any(
+        publishing.TIKTOK_FALLBACK[k]
+        for k in ("allow_comment", "allow_duet", "allow_stitch", "brand_organic", "branded_content")
+    )

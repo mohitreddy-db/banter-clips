@@ -112,6 +112,10 @@ CREATE TABLE publishes (
     clip_id            uuid NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
     social_account_id  uuid NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
     caption            text NOT NULL DEFAULT '',
+    -- Composer choices sent to the platform. TikTok requires every post to
+    -- carry the audience, interaction permissions and commercial-content
+    -- disclosure the creator selected; null for platforms with no such step.
+    options            jsonb,
     status             text NOT NULL DEFAULT 'queued'
                        CHECK (status IN ('queued', 'uploading', 'published', 'failed')),
     error              text,

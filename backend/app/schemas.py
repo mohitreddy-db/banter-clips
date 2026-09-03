@@ -260,9 +260,51 @@ class SocialAccountOut(BaseModel):
 
 
 # ---------- publishing ----------
+class TikTokOptions(BaseModel):
+    """What the creator chose in the TikTok composer.
+
+    TikTok's Content Sharing Guidelines make every one of these a creator
+    decision rather than an app default: the privacy level must be picked
+    explicitly (no pre-selection), the three interaction permissions start
+    off, and commercial content must be disclosed by the person posting.
+    The API mirrors that — there is no default privacy_level here.
+    """
+
+    privacy_level: Literal[
+        "PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"
+    ]
+    allow_comment: bool = False
+    allow_duet: bool = False
+    allow_stitch: bool = False
+    # Commercial content disclosure: "Your brand" → Promotional content label,
+    # "Branded content" → Paid partnership label.
+    brand_organic: bool = False
+    branded_content: bool = False
+
+
+class TikTokCreatorInfo(BaseModel):
+    """`creator_info` as the composer needs it, plus what we know about our
+    own audit state so the UI can be honest about what will happen."""
+
+    nickname: str
+    username: str
+    avatar_url: str
+    privacy_level_options: list[str]
+    comment_disabled: bool
+    duet_disabled: bool
+    stitch_disabled: bool
+    max_video_post_duration_sec: int
+    # True while our TikTok client has not passed the content audit, when
+    # TikTok refuses anything but a private post. Drives a warning, not a
+    # silent override — the creator's choice is always sent as chosen.
+    unaudited: bool
+
+
 class PublishCreate(BaseModel):
     social_account_id: uuid.UUID
     caption: str = Field(default="", max_length=2200)
+    # Required when the target account is TikTok; ignored for other platforms.
+    tiktok: TikTokOptions | None = None
 
 
 # ---------- billing ----------

@@ -61,17 +61,56 @@ def _fail(db, pub, message: str) -> None:
     db.commit()
 
 
+# Default when a publish row carries no composer choices — an attempt queued
+# before the composer existed, or the dev mock connector. Private is the only
+# safe assumption: it is the one audience the creator cannot be surprised by.
+TIKTOK_FALLBACK = {
+    "privacy_level": "SELF_ONLY",
+    "allow_comment": False,
+    "allow_duet": False,
+    "allow_stitch": False,
+    "brand_organic": False,
+    "branded_content": False,
+}
+
+
 def _publish_tiktok(db, pub) -> None:
     account = pub.account
     token = account.access_token
+    chosen = dict(TIKTOK_FALLBACK, **(pub.options or {}))
 
-    # 1. TikTok requires asking what the creator may post right now.
-    info = tiktok.creator_info(token)
-    if (info.get("error") or {}).get("code") not in (None, "ok"):
-        msg = (info.get("error") or {}).get("message") or "TikTok rejected the publish request."
-        return _fail(db, pub, msg)
-    options = (info.get("data") or {}).get("privacy_level_options") or []
-    privacy = tiktok.pick_privacy(options)
+    # 1. TikTok requires asking what the creator may post right now, on every
+    # publish. It is also our enforcement point: the composer was built from
+    # this same call when the dialog opened, but a creator can change their
+    # TikTok settings in between, and the choices below must still be legal.
+    try:
+        profile = tiktok.creator_profile(token)
+    except RuntimeError as exc:
+        return _fail(db, pub, str(exc))
+
+    privacy = chosen["privacy_level"]
+    if privacy not in profile["privacy_level_options"]:
+        return _fail(
+            db,
+            pub,
+            "Your TikTok privacy settings changed — that audience is no longer available. "
+            "Reopen the publish dialog and pick again; retrying is free.",
+        )
+
+    # Interaction permissions are the creator's TikTok account settings, not
+    # ours to override. TikTok rejects the upload outright if we ask to enable
+    # something they have switched off, so honour the account and drop the
+    # request rather than failing the publish over it.
+    allow_comment = chosen["allow_comment"] and not profile["comment_disabled"]
+    allow_duet = chosen["allow_duet"] and not profile["duet_disabled"]
+    allow_stitch = chosen["allow_stitch"] and not profile["stitch_disabled"]
+
+    limit = profile["max_video_post_duration_sec"]
+    length = pub.clip.duration_seconds or 0
+    if limit and length > limit:
+        return _fail(
+            db, pub, f"TikTok limits your account to {limit}s videos and this clip is {length:.0f}s."
+        )
 
     # 2. Fetch the finished clip's bytes — we push them, TikTok never needs
     # to reach our storage, so this works from local dev too.
@@ -83,15 +122,33 @@ def _publish_tiktok(db, pub) -> None:
         return _fail(db, pub, "Could not read the finished video from storage. Retrying is free.")
 
     # 3. Init the Direct Post, upload, then poll processing.
-    init = tiktok.post_init(token, caption=pub.caption or "", privacy=privacy, video_size=len(video))
-    if (init.get("error") or {}).get("code") not in (None, "ok") or "data" not in init:
+    init = tiktok.post_init(
+        token,
+        caption=pub.caption or "",
+        privacy=privacy,
+        video_size=len(video),
+        allow_comment=allow_comment,
+        allow_duet=allow_duet,
+        allow_stitch=allow_stitch,
+        brand_organic=chosen["brand_organic"],
+        branded_content=chosen["branded_content"],
+    )
+    message = tiktok.error_of(init)
+    if message or "data" not in init:
         code = (init.get("error") or {}).get("code") or ""
         if "unaudited" in code:
-            # TikTok's rule while an app is unaudited/sandbox: the target
-            # ACCOUNT must be private, not just the post's privacy level.
-            return _fail(db, pub, "While our TikTok app is in review, TikTok only lets us post to private accounts. Switch your TikTok account to Private (Settings → Privacy → Private account) and retry — it's free.")
-        msg = (init.get("error") or {}).get("message") or "TikTok rejected the upload request."
-        return _fail(db, pub, msg)
+            # TikTok's rule while a client is unaudited: it may only post to a
+            # private account, and only privately. Naming both halves matters —
+            # people switch the post to "Only me" and are surprised it still
+            # fails because the *account* is public.
+            return _fail(
+                db,
+                pub,
+                "TikTok only accepts private posts while our app is under review: set this "
+                "video's audience to \u201cOnly me\u201d and switch your TikTok account to "
+                "private (Settings \u2192 Privacy \u2192 Private account). Retrying is free.",
+            )
+        return _fail(db, pub, message or "TikTok rejected the upload request.")
     publish_id = init["data"]["publish_id"]
 
     try:
@@ -109,8 +166,10 @@ def _publish_tiktok(db, pub) -> None:
             pub.error = None
             pub.published_at = datetime.now(timezone.utc)
             # Public posts get a canonical link (TikTok redirects on the video
-            # id, whatever the @segment). Private/sandbox posts have no public
-            # URL — the video sits on the creator's own profile.
+            # id, whatever the @segment). Private posts have no public URL —
+            # the video sits on the creator's own profile. That is also how an
+            # unaudited client's "public" post gives itself away: TikTok
+            # accepts it, downgrades it to private, and returns no id here.
             pub.external_url = (
                 f"https://www.tiktok.com/@_/video/{post_ids[0]}" if post_ids else None
             )
@@ -227,16 +286,22 @@ def _mock_publish(db, pub) -> None:
             "and never regenerates the video.",
         )
 
+    platform = pub.account.platform if pub.account else "instagram"
     pub.status = "published"
     pub.error = None
     pub.published_at = datetime.now(timezone.utc)
-    pub.external_url = (
-        f"https://www.tiktok.com/@banterclips/video/72{str(pub.id.int)[:14]}"
-        if pub.account and pub.account.platform == "tiktok"
-        else f"https://www.youtube.com/shorts/BC{str(pub.id)[:8]}"
-        if pub.account and pub.account.platform == "youtube"
-        else f"https://www.instagram.com/reel/BC{str(pub.id)[:8]}/"
-    )
+    if platform == "tiktok":
+        # Mirror the real path: a private post has no public URL to link to,
+        # so the dialog shows "published" with no "View post" link. Simulating
+        # a link here would hide exactly the behaviour worth rehearsing.
+        private = (pub.options or {}).get("privacy_level", "SELF_ONLY") == "SELF_ONLY"
+        pub.external_url = (
+            None if private else f"https://www.tiktok.com/@banterclips/video/72{str(pub.id.int)[:14]}"
+        )
+    elif platform == "youtube":
+        pub.external_url = f"https://www.youtube.com/shorts/BC{str(pub.id)[:8]}"
+    else:
+        pub.external_url = f"https://www.instagram.com/reel/BC{str(pub.id)[:8]}/"
     db.commit()
 
 

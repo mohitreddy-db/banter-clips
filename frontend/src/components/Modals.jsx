@@ -3,6 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { SocialIcon } from "./SocialIcon.jsx";
+import TikTokComposer, {
+  emptyTikTokOptions,
+  TikTokDeclaration,
+  tiktokBlocker,
+  toApiOptions,
+} from "./TikTokComposer";
 
 // How a publish attempt reads in the UI, per status.
 const PUBLISH_STATE = {
@@ -201,6 +207,12 @@ export function PublishModal({ clip, onClose }) {
   const nav = useNavigate();
   const { instagram, tiktok, youtube, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
+  // TikTok post settings. Kept blank until the creator chooses — TikTok's UX
+  // guidelines forbid pre-selecting an audience on their behalf.
+  const [ttOptions, setTtOptions] = useState(emptyTikTokOptions);
+  const [ttInfo, setTtInfo] = useState(null);
+  const [ttLoading, setTtLoading] = useState(false);
+  const [ttError, setTtError] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -235,6 +247,26 @@ export function PublishModal({ clip, onClose }) {
     }, 4000);
     return () => clearInterval(timer);
   }, [anyInFlight, clip.id, refreshClips]);
+  // TikTok requires `creator_info` immediately before each post, and the
+  // composer is built from the answer — so load it whenever TikTok becomes
+  // the selected destination, and again after connecting an account.
+  const loadTikTok = useCallback(async () => {
+    setTtLoading(true);
+    setTtError("");
+    try {
+      setTtInfo(await api.tiktokCreatorInfo());
+    } catch (e) {
+      setTtInfo(null);
+      setTtError(e.message || "Could not load your TikTok settings.");
+    }
+    setTtLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (platform !== "tiktok" || !tiktok) return;
+    loadTikTok();
+  }, [platform, tiktok, loadTikTok]);
+
   // Written captions to pick between. Three options beat a blank box, and
   // beat one suggestion — a list gets chosen from, a single one gets ignored.
   const [suggestions, setSuggestions] = useState([]);
@@ -291,7 +323,12 @@ export function PublishModal({ clip, onClose }) {
     setError("");
     setSending(true);
     try {
-      const pub = await api.publishClip(clip.id, selected.account.id, caption);
+      const pub = await api.publishClip(
+        clip.id,
+        selected.account.id,
+        caption,
+        selected.key === "tiktok" ? toApiOptions(ttOptions) : null
+      );
       // Show it in flight at once; the poll above takes over from here.
       setPublishes((list) => [
         { ...pub, platform: selected.key, handle: selected.account.handle },
@@ -306,6 +343,12 @@ export function PublishModal({ clip, onClose }) {
 
   const attempted = PLATFORMS.filter((p) => latestFor(p.key));
   const selectedPub = latestFor(platform);
+  // TikTok is the one destination that can be connected and still not ready to
+  // post: the audience is a required choice, and disclosure must be resolved.
+  const ttBlocker = platform === "tiktok" && connected ? tiktokBlocker(ttOptions, ttInfo) : "";
+  // TikTok's guidelines call the action "Post"; the rest of the product (and
+  // the other two platforms) say "Publish". Follow each where it applies.
+  const verb = platform === "tiktok" ? "Post" : "Publish";
 
   return (
     <Overlay onClose={onClose}>
@@ -441,29 +484,41 @@ export function PublishModal({ clip, onClose }) {
               ℹ️ Free plan: your clip is published <b style={{ color: "var(--app-text)" }}>with the BanterClips watermark</b>. Upgrade to Creator to publish clean.
             </div>
           )}
-          {platform === "tiktok" && (
-            <div style={{ fontSize: 12.5, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>
-              ℹ️ While BanterClips is under TikTok's app review, TikTok posts are published as <b style={{ color: "var(--app-text)" }}>private</b> (visible only to you).
-            </div>
+          {/* TikTok's Content Sharing Guidelines require these controls, built
+              from a live creator_info call, before a Direct Post is allowed. */}
+          {platform === "tiktok" && connected && (
+            <TikTokComposer
+              info={ttInfo}
+              loading={ttLoading}
+              error={ttError}
+              onRetry={loadTikTok}
+              value={ttOptions}
+              onChange={setTtOptions}
+            />
           )}
           {error && <div style={{ fontSize: 13, color: "var(--app-error)" }}>{error}</div>}
-          {/* Publishing again is never blocked: a clip can go to both
-              platforms, and a post the user deleted is worth re-posting. */}
+          {/* TikTok requires this consent line directly above the post button,
+              and its wording follows the disclosure selection. */}
+          {platform === "tiktok" && connected && ttInfo && <TikTokDeclaration value={ttOptions} />}
+          {/* Publishing again is never blocked: a clip can go to any platform,
+              and a post the user deleted is worth re-posting. */}
           <button
             className="grad-btn"
-            style={{ padding: 14, fontSize: 15.5, opacity: sending ? 0.7 : 1 }}
-            disabled={!connected || sending}
+            style={{ padding: 14, fontSize: 15.5, opacity: sending || ttBlocker ? 0.7 : 1 }}
+            disabled={!connected || sending || !!ttBlocker}
             onClick={publish}
           >
             {!connected
               ? `Connect ${selected.name} first`
-              : sending
-                ? "Sending…"
-                : selectedPub?.status === "published"
-                  ? `Publish to ${selected.name} again`
-                  : ["queued", "uploading"].includes(selectedPub?.status)
-                    ? `Publishing to ${selected.name}…`
-                    : `Publish to ${selected.name}`}
+              : ttBlocker
+                ? ttBlocker
+                : sending
+                  ? "Sending…"
+                  : selectedPub?.status === "published"
+                    ? `${verb} to ${selected.name} again`
+                    : ["queued", "uploading"].includes(selectedPub?.status)
+                      ? `${verb}ing to ${selected.name}…`
+                      : `${verb} to ${selected.name}`}
           </button>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--app-muted)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>

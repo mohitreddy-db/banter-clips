@@ -123,8 +123,13 @@ export const api = {
   sendFeedback: (body) => request("/feedback", { method: "POST", body }),
 
   // publishing
-  publishClip: (clipId, social_account_id, caption) =>
-    request(`/clips/${clipId}/publish`, { method: "POST", body: { social_account_id, caption } }),
+  // `tiktok` carries the composer's choices (audience, interactions,
+  // commercial disclosure). Required for a TikTok account, ignored elsewhere.
+  publishClip: (clipId, social_account_id, caption, tiktok = null) =>
+    request(`/clips/${clipId}/publish`, {
+      method: "POST",
+      body: { social_account_id, caption, ...(tiktok ? { tiktok } : {}) },
+    }),
   getPublish: (clipId, publishId) => request(`/clips/${clipId}/publishes/${publishId}`),
 
   // socials
@@ -134,6 +139,11 @@ export const api = {
   oauthUrl: (platform, next) => request(`/socials/${platform}/oauth-url?next=${encodeURIComponent(next || "/account")}`),
   connectSocial: (platform) => request("/socials/connect", { method: "POST", body: { platform } }),
   disconnectSocial: (platform) => request(`/socials/${platform}`, { method: "DELETE" }),
+  // What the TikTok composer must be built from — the connected creator, the
+  // audiences their account currently allows, and which interactions they
+  // permit. TikTok requires this immediately before every post, so it is
+  // fetched fresh each time the publish dialog opens on TikTok.
+  tiktokCreatorInfo: () => request("/socials/tiktok/creator-info"),
 
   // billing — Stripe Checkout when configured, mock upgrade as dev fallback
   // Credit top-ups: pack list + one-time Checkout (credits granted by webhook).

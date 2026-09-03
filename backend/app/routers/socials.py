@@ -21,7 +21,7 @@ from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
 from ..models import SocialAccount, User
-from ..schemas import SocialAccountOut, SocialConnectRequest
+from ..schemas import SocialAccountOut, SocialConnectRequest, TikTokCreatorInfo
 from ..services import tiktok, youtube
 
 router = APIRouter(prefix="/socials", tags=["socials"])
@@ -377,6 +377,62 @@ def youtube_callback(
     )
     record_event(db, "social_connected", user, platform="youtube", real=True)
     return bounce(next_path, yt="connected", handle="YouTube channel")
+
+
+@router.get("/tiktok/creator-info", response_model=TikTokCreatorInfo)
+def tiktok_creator_info(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """What the TikTok composer must be built from.
+
+    TikTok's audit requires querying `creator_info` before every publish and
+    rendering the composer from the answer: only the privacy levels this
+    creator may currently use, and interaction toggles disabled where their
+    account settings forbid them. Fetching it fresh each time the dialog opens
+    is the point — these settings change on TikTok's side, not ours.
+    """
+    account = db.scalar(
+        select(SocialAccount).where(
+            SocialAccount.user_id == user.id,
+            SocialAccount.platform == "tiktok",
+            SocialAccount.status == "connected",
+        )
+    )
+    if account is None:
+        raise HTTPException(404, detail={"code": "not_connected", "message": "Connect TikTok first."})
+    maybe_refresh_token(db, account)
+    if account.status != "connected" or not account.access_token:
+        raise HTTPException(
+            401,
+            detail={"code": "reconnect", "message": "Your TikTok session expired — reconnect the account."},
+        )
+    # The mock connector has no real token, so there is nobody to ask. Answer
+    # with the full set of choices so the composer is still exercisable in dev.
+    if account.access_token == MOCK_TOKEN:
+        return TikTokCreatorInfo(
+            nickname=account.handle,
+            username=account.handle.lstrip("@"),
+            avatar_url="",
+            privacy_level_options=list(tiktok.PRIVACY_LEVELS),
+            comment_disabled=False,
+            duet_disabled=False,
+            stitch_disabled=False,
+            max_video_post_duration_sec=600,
+            unaudited=settings.TIKTOK_UNAUDITED,
+        )
+    try:
+        profile = tiktok.creator_profile(account.access_token)
+    except RuntimeError as exc:
+        # TikTok's own words are more useful than ours here — a creator whose
+        # account is under review or region-restricted gets told exactly that.
+        raise HTTPException(502, detail={"code": "tiktok_error", "message": str(exc)}) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            502,
+            detail={"code": "tiktok_unreachable", "message": "Could not reach TikTok. Try again in a moment."},
+        ) from exc
+    return TikTokCreatorInfo(**profile, unaudited=settings.TIKTOK_UNAUDITED)
 
 
 @router.get("", response_model=list[SocialAccountOut])
