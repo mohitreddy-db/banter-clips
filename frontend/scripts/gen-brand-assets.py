@@ -6,9 +6,8 @@ a real, crawlable URL — a `data:` URI does not count — so these have to exis
 files in `public/`, not as inline SVG. Same story for `og:image`: crawlers fetch
 it, they do not render the page to invent one.
 
-The selected full lockup lives in `frontend/logos`; small-context assets use
-the same lockup's extracted B/play mark so the wordmark never becomes a blur.
-The generated background uses the app's CSS accent colors.
+The selected full lockup lives in `frontend/logos`; every generated logo is a
+direct resize of that source image.
 
     pip install pillow
     python3 scripts/gen-brand-assets.py
@@ -18,7 +17,7 @@ supporting copy falls back to a system face.
 """
 
 import os
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PUBLIC = os.path.join(HERE, "..", "public")
@@ -84,34 +83,6 @@ def lockup(size):
     return _rounded(master).resize((size, size), Image.Resampling.LANCZOS)
 
 
-def _mark():
-    """Extract Sample 4's white B/play mark without its lower wordmark."""
-    master = Image.open(MASTER).convert("RGB")
-    crop = master.crop((330, 240, 925, 835))
-    r, g, b = crop.split()
-    whiteness = ImageChops.darker(ImageChops.darker(r, g), b)
-    alpha = whiteness.point(lambda value: max(0, min(255, (value - 165) * 3)))
-    mark = Image.new("RGBA", crop.size, (255, 255, 255, 0))
-    mark.putalpha(alpha)
-    return mark.crop(alpha.getbbox())
-
-
-def icon(size):
-    """Small-context Sample 4: its B/play mark without duplicate tiny text."""
-    scale = 4
-    s = size * scale
-    grad = diagonal_gradient(s, s, ACCENT, ACCENT2)
-    out = _rounded(grad)
-    mark = _mark()
-    max_w, max_h = round(s * 0.48), round(s * 0.58)
-    ratio = min(max_w / mark.width, max_h / mark.height)
-    mark = mark.resize(
-        (round(mark.width * ratio), round(mark.height * ratio)), Image.Resampling.LANCZOS
-    )
-    out.alpha_composite(mark, ((s - mark.width) // 2, (s - mark.height) // 2))
-    return out.resize((size, size), Image.Resampling.LANCZOS)
-
-
 def glow(img, cx, cy, radius, color, strength):
     """Soft radial wash — the hero's background glows, cheaply."""
     w, h = img.size
@@ -136,7 +107,7 @@ def og_card():
     img = glow(img, 1090, 70, 560, (52, 226, 122), 0.16)
     d = ImageDraw.Draw(img)
 
-    mark = icon(74)
+    mark = lockup(74)
     img.paste(mark, (74, 66), mark)
     d.text((166, 78), "BanterClips", font=display(46), fill=TEXT)
 
@@ -169,24 +140,21 @@ def main():
     # 48px is Google's floor for a search-result favicon, and it wants a
     # multiple of 48 — the .ico carries 16/32/48 so browsers and Google are
     # both served by one URL.
-    ico = icon(192)
+    ico = lockup(192)
     ico.save(out("favicon.ico"), sizes=[(16, 16), (32, 32), (48, 48)])
 
-    icon(32).save(out("favicon-32x32.png"))
-    icon(180).save(out("apple-touch-icon.png"))  # iOS ignores transparency
-    icon(192).save(out("icon-192.png"))
-    icon(512).save(out("icon-512.png"))
+    lockup(32).save(out("favicon-32x32.png"))
+    lockup(180).save(out("apple-touch-icon.png"))
+    lockup(192).save(out("icon-192.png"))
+    lockup(512).save(out("icon-512.png"))
     lockup(120).save(out("oauth-logo-120.png"), optimize=True)
     lockup(512).save(out("logo.png"), optimize=True)  # Organization.logo in JSON-LD
     lockup(1024).save(out("logo1024.png"), optimize=True)
-    icon(1024).save(out("logo-mark-1024.png"), optimize=True)
-
     og_card().save(out("og.png"), optimize=True)
 
     for n in (
         "favicon.ico favicon-32x32.png apple-touch-icon.png icon-192.png "
-        "icon-512.png oauth-logo-120.png logo.png logo1024.png "
-        "logo-mark-1024.png og.png"
+        "icon-512.png oauth-logo-120.png logo.png logo1024.png og.png"
     ).split():
         print(f"  {n:24} {os.path.getsize(out(n)):>8,} bytes")
 
