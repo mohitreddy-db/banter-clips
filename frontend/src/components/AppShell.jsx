@@ -190,6 +190,7 @@ export default function AppShell({ children }) {
           ["/prompts", "Prompts", icons.prompts],
           ["/clips", "My Clips", icons.clips],
           ["/pricing", "Pricing", icons.pricing],
+          ["/feedback", "Feedback", icons.feedback],
           ["/account", "Account", icons.account],
           // Same conditional entry as the sidebar — without it, a phone has
           // no way into the console at all.

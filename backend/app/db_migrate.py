@@ -53,7 +53,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
 # rebuilding it from CLIP_STATUSES keeps the constraint in lockstep with the
 # model — a status added in code but not here silently fails every write.
 def _statements() -> tuple[str, ...]:
-    from .models import CLIP_STATUSES, SPORTS, TONES
+    from .models import CLIP_STATUSES, CREDIT_KINDS, SPORTS, TONES
 
     # Every enum-ish CHECK is rebuilt from the model tuple on boot. The status
     # constraint taught us why: it was written once in schema.sql, the model
@@ -78,6 +78,11 @@ def _statements() -> tuple[str, ...]:
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_sport_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_sport_check "
         f"CHECK (sport IN {SPORTS!r})",
+        # The ledger's kinds grow too (edit_charge, 2026-09-02): a kind the
+        # constraint predates makes every such charge silently fail on prod.
+        "ALTER TABLE credit_entries DROP CONSTRAINT IF EXISTS credit_entries_kind_check",
+        f"ALTER TABLE credit_entries ADD CONSTRAINT credit_entries_kind_check "
+        f"CHECK (kind IN {CREDIT_KINDS!r})",
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_tone_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_tone_check "
         f"CHECK (tone IN {TONES!r})",
