@@ -989,6 +989,46 @@ def test_scene_clamps_a_silly_duration():
     assert Scene.from_raw({"seconds": "abc"}, 0, "v").seconds > 0
 
 
+def test_trending_write_stage_fills_one_tap_presets():
+    """The Viral tab's angles come from the same write call as the free-form
+    prompts: five fixed keys in order, labels built server-side, bad values
+    falling back — and a pack without them counts as stale."""
+    from app.video import trending
+
+    topics = [{"title": "Arsenal vs Man City", "summary": "s", "why_now": "w", "heat": "viral",
+               "who": ["Arteta"], "team": "Arsenal", "prompts": [], "presets": []}]
+
+    class Fake:
+        available = True
+
+        def complete_json(self, system, user, **_k):
+            assert "roast" in system and "controversial" in system
+            return json.dumps({"topics": [{
+                "index": 0,
+                "prompts": [{"take": "Arsenal bottle it again", "tone": "Savage", "seconds": 15, "angle": "roast"}],
+                "presets": {
+                    "roast": {"take": "Arsenal in August is a comedy special", "tone": "Savage", "seconds": 10},
+                    "predict": {"take": "City win it by March", "tone": "Bold", "seconds": 15},
+                    "better": {"take": "Haaland vs Havertz isn't a debate", "tone": "Bold"},
+                    "threat": {"take": "Their biggest threat is their own back line", "tone": "Funny", "seconds": 99},
+                    "controversial": {"take": "Arteta out would fix nothing", "tone": "Hype", "seconds": 30},
+                },
+            }]})
+
+    real = providers.text_client
+    providers.text_client = lambda: Fake()
+    try:
+        trending._write_prompts("Soccer", topics)
+    finally:
+        providers.text_client = real
+    presets = topics[0]["presets"]
+    assert [p["key"] for p in presets] == ["roast", "predict", "better", "threat", "controversial"]
+    assert presets[0]["label"] == "Roast Arsenal" and presets[0]["icon"] == "🔥"
+    assert presets[2]["seconds"] == 15 and presets[3]["seconds"] == 15  # missing / bad → default
+    assert trending._has_presets({"topics": topics})
+    assert not trending._has_presets({"topics": [{"presets": []}]})
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

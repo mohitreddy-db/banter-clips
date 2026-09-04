@@ -10,6 +10,7 @@ import Clips from "./pages/Clips.jsx";
 import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import Feedback from "./pages/Feedback.jsx";
+import Viral from "./pages/Viral.jsx";
 import { Privacy, Terms } from "./pages/Legal.jsx";
 import { ShowcaseIndex, ShowcaseClip } from "./pages/Showcase.jsx";
 import AdminCatalog from "./pages/AdminCatalog.jsx";
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/showcase/:slug" element={<ShowcaseClip />} />
       <Route element={<AppShell />}>
         <Route path="/studio" element={<Studio />} />
+        <Route path="/viral" element={<Viral />} />
         <Route path="/prompts" element={<Prompts />} />
         <Route path="/clips" element={<Clips />} />
         <Route path="/account" element={<Account />} />

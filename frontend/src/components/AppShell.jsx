@@ -2,7 +2,7 @@ import { Outlet, NavLink, Navigate, useNavigate, useLocation } from "react-route
 import { useApp } from "../state/AppContext.jsx";
 import BrandMark from "./BrandMark.jsx";
 
-const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing", "/feedback": "Feedback" };
+const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing", "/feedback": "Feedback", "/viral": "Viral right now" };
 
 function Icon({ d, size = 18, color = "currentColor" }) {
   return (
@@ -15,6 +15,7 @@ function Icon({ d, size = 18, color = "currentColor" }) {
 const icons = {
   create: <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   feedback: <><path d="M21 12a8 8 0 0 1-8 8H8l-5 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" /><path d="M9 11h6" /><path d="M9 14h4" /></>,
+  viral: <path d="M12 2c.5 3.5 3 5 4.5 7.5A6.5 6.5 0 1 1 6 11c.3 1.6 1.2 2.6 2.3 3.2C8 10.5 9.5 8 12 2Z" />,
   prompts: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M8.5 14.5A6 6 0 1 1 15.5 14.5c-.9.6-1.5 1.4-1.5 2.5h-4c0-1.1-.6-1.9-1.5-2.5Z" /></>,
   catalog: (
     <>
@@ -106,6 +107,9 @@ export default function AppShell({ children }) {
         <NavLink to="/studio" style={navItem}>
           <Icon d={icons.create} /> Create
         </NavLink>
+        <NavLink to="/viral" style={navItem}>
+          <Icon d={icons.viral} /> Viral
+        </NavLink>
         <NavLink to="/prompts" style={navItem}>
           <Icon d={icons.prompts} /> Prompts
         </NavLink>
@@ -186,10 +190,12 @@ export default function AppShell({ children }) {
           navigation must not disappear with it */}
       <nav className="app-bottomnav app-font">
         {[
+          // Pricing is reached from Account (and the credits pill) on phones —
+          // the bar holds the tabs people actually switch between.
           ["/studio", "Create", icons.create],
+          ["/viral", "Viral", icons.viral],
           ["/prompts", "Prompts", icons.prompts],
           ["/clips", "My Clips", icons.clips],
-          ["/pricing", "Pricing", icons.pricing],
           ["/feedback", "Feedback", icons.feedback],
           ["/account", "Account", icons.account],
           // Same conditional entry as the sidebar — without it, a phone has

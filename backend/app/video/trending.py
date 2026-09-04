@@ -36,6 +36,22 @@ TTL = timedelta(minutes=20)
 TOPICS = 5
 PROMPTS_PER_TOPIC = 2
 
+# The Viral tab's one-tap angles (Vikunja: "[MVP 1.5] Viral Presets tab").
+# Every topic gets one take per angle, written in the same call as the
+# free-form prompts; the label is built here so the client stays dumb.
+PRESETS = (
+    ("roast", "🔥", "Roast {target}",
+     "ROAST: mock {target}'s performance or decisions from this story — mercilessly, never cruelly"),
+    ("predict", "🔮", "Predict the season",
+     "PREDICTION: state how this story ends for the season as settled fact, absurdly confident"),
+    ("better", "⚖️", "Who is better?",
+     "COMPARISON: pick a winner between the two sides/people in this story and defend it outrageously"),
+    ("threat", "⚠️", "Biggest threat",
+     "THREAT: name the one thing (a rival, a habit, a player) that will wreck them next, and why"),
+    ("controversial", "🌶️", "Controversial take",
+     "CONTROVERSY: the take most fans will furiously disagree with — pick the unpopular side"),
+)
+
 SWEEP_PROMPT = """\
 Search the web for what {sport} fans are talking about RIGHT NOW.
 Today's date: {today}. Look at the last 24-48 hours only: results and
@@ -80,10 +96,17 @@ Rules for every take:
   when the story genuinely has acts.
 - angle is a 2-4 word label for the angle taken.
 
+ALSO, for each topic, write one take per PRESET angle below — same rules,
+but the angle is fixed and the take must commit to it completely:
+{presets}
+
 Return ONLY JSON:
 {{"topics": [{{"index": <topic index>,
   "prompts": [{{"take": "...", "tone": "...", "seconds": 15,
-                "angle": "..."}}]}}]}}"""
+                "angle": "..."}}],
+  "presets": {{"roast": {{"take": "...", "tone": "...", "seconds": 15}},
+              "predict": {{...}}, "better": {{...}}, "threat": {{...}},
+              "controversial": {{...}}}}}}]}}"""
 
 
 def enabled() -> bool:
@@ -106,7 +129,10 @@ def get_feed(sport: str) -> dict:
     now = datetime.now(timezone.utc)
     if row is not None:
         fetched_at, pack = row
-        if now - fetched_at < TTL:
+        # A pack written before presets existed is served once more only if
+        # the rebuild fails — otherwise it is rebuilt so the Viral tab has
+        # its one-tap angles.
+        if now - fetched_at < TTL and _has_presets(pack):
             return {**pack, "fetched_at": fetched_at.isoformat()}
     try:
         pack = _build(sport)
@@ -130,6 +156,17 @@ def _build(sport: str) -> dict | None:
         return None
     _write_prompts(sport, topics)  # best-effort; topics stay usable without
     return {"topics": topics}
+
+
+def _has_presets(pack: dict) -> bool:
+    topics = pack.get("topics") or []
+    return bool(topics) and all(t.get("presets") for t in topics)
+
+
+def _preset_target(topic: dict) -> str:
+    """Who a preset like "Roast {target}" is aimed at: the team, else the
+    person at the centre of the story, else the story itself."""
+    return (topic.get("team") or (topic.get("who") or [""])[0] or "them").strip()[:40]
 
 
 def _sweep(sport: str) -> list[dict] | None:
@@ -173,6 +210,7 @@ def _sweep(sport: str) -> list[dict] | None:
             "who": [str(w)[:40] for w in (t.get("who") or [])[:3]],
             "team": str(t.get("team") or "")[:60],
             "prompts": [],
+            "presets": [],
         })
     return topics or None
 
@@ -189,9 +227,10 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
          "who": t["who"], "team": t["team"]}
         for i, t in enumerate(topics)
     ], ensure_ascii=False)
+    preset_lines = "\n".join(f"- {key}: {brief}" for key, _icon, _label, brief in PRESETS)
     raw = client.complete_json(
-        WRITE_SYSTEM.format(sport=sport, k=PROMPTS_PER_TOPIC),
-        f"Today's topics:\n{payload}", max_tokens=2500, temperature=0.9,
+        WRITE_SYSTEM.format(sport=sport, k=PROMPTS_PER_TOPIC, presets=preset_lines),
+        f"Today's topics:\n{payload}", max_tokens=6000, temperature=0.9,
     )
     if not raw:
         return
@@ -210,10 +249,35 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
                 continue
             topic["prompts"].append({
                 "take": take[:280],
-                "tone": p.get("tone") if p.get("tone") in ("Funny", "Savage", "Hype", "Bold") else "Funny",
-                "seconds": int(p["seconds"]) if p.get("seconds") in (10, 15, 30) else 15,
+                "tone": _tone(p.get("tone")),
+                "seconds": _seconds(p.get("seconds")),
                 "angle": str(p.get("angle") or "")[:40],
             })
+        # One-tap presets, in the fixed order the Viral tab shows them.
+        written = entry.get("presets") if isinstance(entry.get("presets"), dict) else {}
+        target = _preset_target(topic)
+        presets = []
+        for key, icon, label, _brief in PRESETS:
+            p = written.get(key) if isinstance(written.get(key), dict) else None
+            take = str((p or {}).get("take") or "").strip()
+            if not take:
+                continue
+            presets.append({
+                "key": key, "icon": icon,
+                "label": label.format(target=target),
+                "take": take[:280],
+                "tone": _tone(p.get("tone"), default="Savage" if key == "roast" else "Bold"),
+                "seconds": _seconds(p.get("seconds")),
+            })
+        topic["presets"] = presets
+
+
+def _tone(value, default: str = "Funny") -> str:
+    return value if value in ("Funny", "Savage", "Roast", "Hype", "Bold") else default
+
+
+def _seconds(value) -> int:
+    return int(value) if value in (10, 15, 30) else 15
 
 
 # --------------------------------------------------------------------- cache

@@ -250,11 +250,19 @@ export default function Studio() {
   // Opened from My Clips as /studio?clip=<id>: jump straight to that clip's
   // state — live status while it renders, the player when it is done.
   useEffect(() => {
-    const id = new URLSearchParams(search).get("clip");
-    const prompt = new URLSearchParams(search).get("prompt");
+    const params = new URLSearchParams(search);
+    const id = params.get("clip");
+    const prompt = params.get("prompt");
     if (!id) {
       reset();
       if (prompt) setTake(prompt.slice(0, takeLimit));
+      // A Viral preset arrives with its tone, length and sport already chosen.
+      const t = params.get("tone");
+      if (t && TONES.some((x) => x.key === t)) setTone(t);
+      const s = Number(params.get("seconds"));
+      if (DURATIONS.includes(s) && (s <= FREE_MAX_DURATION || plan === "creator")) setDuration(s);
+      const sp = params.get("sport");
+      if (sp && SPORT_KEYS.includes(sp)) setSports([sp]);
       return;
     }
     let cancelled = false;
