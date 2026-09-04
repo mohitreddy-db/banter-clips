@@ -40,6 +40,29 @@ MOCK_TOKEN = "mock-oauth-token"
 REFRESH_WINDOW = timedelta(days=15)
 
 
+def _revoke_with_platform(account: SocialAccount) -> None:
+    """Tell the platform the grant is over before we forget the token.
+
+    Clearing our columns is not the same as the user revoking access: the
+    grant lives on in their Google or TikTok account until it expires. The
+    YouTube API Services Developer Policies make revoking it on disconnect a
+    requirement, and it is the honest behaviour everywhere else too — the
+    "Disconnect" button should mean what it says on both ends.
+
+    Instagram (Instagram Login) exposes no server-side revoke; those tokens are
+    ended from Instagram's own Apps and Websites settings, which the privacy
+    policy points to.
+    """
+    if not account.access_token or account.access_token == MOCK_TOKEN:
+        return
+    if account.platform == "youtube":
+        # Revoking the refresh token ends the whole grant; the access token
+        # alone would leave a refreshable grant behind.
+        youtube.revoke(account.refresh_token or account.access_token)
+    elif account.platform == "tiktok":
+        tiktok.revoke(account.access_token)
+
+
 def _clear_credentials(account: SocialAccount) -> None:
     """Remove every credential and platform identifier on disconnect/mock."""
     account.access_token = None
@@ -493,6 +516,7 @@ def disconnect(platform: str, user: User = Depends(get_current_user), db: Sessio
     )
     if account is None:
         raise HTTPException(404, "No connected account for that platform")
+    _revoke_with_platform(account)
     account.status = "revoked"
     account.revoked_at = datetime.now(timezone.utc)
     _clear_credentials(account)

@@ -9,6 +9,7 @@ from ..config import settings
 AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN = "https://oauth2.googleapis.com/token"
 UPLOAD = "https://www.googleapis.com/upload/youtube/v3/videos"
+REVOKE = "https://oauth2.googleapis.com/revoke"
 SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 REFRESH_WINDOW = timedelta(minutes=5)
 
@@ -105,3 +106,22 @@ def upload_short(token: str, video: bytes, *, title: str, description: str) -> s
     if not video_id:
         raise httpx.HTTPError("YouTube did not return a video id")
     return video_id
+
+
+def revoke(token: str) -> None:
+    """Tell Google the grant is over.
+
+    Deleting our copy of a token does not end the user's authorization — it
+    stays listed under their Google Account until it expires, and the YouTube
+    API Services Developer Policies require an API client to revoke it when the
+    user disconnects. Revoking either token ends the whole grant, so callers
+    pass the refresh token when they have one.
+
+    Best-effort: a disconnect must succeed even if Google is unreachable, and
+    a token Google no longer recognises returns 400, which is the outcome we
+    wanted anyway.
+    """
+    try:
+        httpx.post(REVOKE, data={"token": token}, timeout=10)
+    except httpx.HTTPError:
+        pass

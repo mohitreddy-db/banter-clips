@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { SocialIcon } from "./SocialIcon.jsx";
+import { YouTubeTerms } from "./YouTubeTerms.jsx";
 import TikTokComposer, {
   emptyTikTokOptions,
   TikTokDeclaration,
@@ -427,7 +428,10 @@ export function PublishModal({ clip, onClose }) {
           ) : (
             <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
               <SocialIcon platform={selected.key} size={30} />
-              <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect {selected.name} to publish</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect {selected.name} to publish</div>
+                {selected.key === "youtube" && <YouTubeTerms style={{ marginTop: 2 }} />}
+              </div>
               <button className="grad-btn" style={{ padding: "8px 16px", fontSize: 13, borderRadius: 9, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
                 {connecting ? "Connecting…" : "Connect"}
               </button>

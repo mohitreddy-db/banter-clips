@@ -84,6 +84,13 @@ export function Privacy() {
           token and expiry for the <code>youtube.upload</code> permission. We do
           not read your existing YouTube videos or channel content, and nothing
           is ever posted automatically.</LI>
+        <LI><B>YouTube API Services.</B> YouTube publishing uses YouTube API
+          Services. By connecting a YouTube channel you agree to the
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> YouTube Terms of Service</a>,
+          and Google&rsquo;s handling of your data is described in the
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Privacy Policy</a>.
+          The only YouTube data we hold is the token above; we store no video,
+          channel or viewer data from YouTube.</LI>
         <LI><B>Payment details.</B> Payments run through Stripe. Your card
           number never touches our servers; we store only your Stripe customer
           and subscription identifiers and your plan status.</LI>
@@ -151,8 +158,9 @@ export function Privacy() {
       <UL>
         <LI>Your content is kept while your account is active. Deleting a clip
           removes its video files, not just the listing.</LI>
-        <LI>Disconnecting a social account immediately deletes its stored access
-          token, refresh token, expiry and platform identifier. Publish history
+        <LI>Disconnecting a social account revokes the grant with the platform
+          (Google, TikTok) and immediately deletes its stored access token,
+          refresh token, expiry and platform identifier. Publish history
           remains with the clip until you delete that clip or your account.</LI>
         <LI>You can also revoke Google access at any time from your
           <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.</LI>
@@ -244,7 +252,9 @@ export function Terms() {
         <LI>Do not present generated content as real news, real quotes, or
           real events, and do not use the service to defame or deceive.</LI>
         <LI>You are responsible for what you choose to publish to your own
-          social accounts, and for complying with those platforms&rsquo; rules.</LI>
+          social accounts, and for complying with those platforms&rsquo; rules.
+          Connecting a YouTube channel also means you agree to the
+          <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> YouTube Terms of Service</a>.</LI>
         <LI>No attempts to break, overload, or reverse-engineer the service.</LI>
       </UL>
 

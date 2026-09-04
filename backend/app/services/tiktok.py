@@ -20,6 +20,7 @@ from ..config import settings
 
 AUTHORIZE = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN = "https://open.tiktokapis.com/v2/oauth/token/"
+REVOKE = "https://open.tiktokapis.com/v2/oauth/revoke/"
 API = "https://open.tiktokapis.com/v2"
 
 # Refresh when the 24h access token is inside its last 2 hours. The refresh
@@ -110,6 +111,24 @@ def maybe_refresh_token(db, account) -> None:
         account.status = "revoked"
         account.revoked_at = datetime.now(timezone.utc)
         db.commit()
+
+
+def revoke(token: str) -> None:
+    """End the grant on TikTok's side when the user disconnects, so it stops
+    appearing under their Settings → Security → Connected apps. Best-effort for
+    the same reason as the YouTube revoke: disconnecting must always work."""
+    try:
+        with client(timeout=10) as c:
+            c.post(
+                REVOKE,
+                data={
+                    "client_key": settings.TIKTOK_CLIENT_KEY,
+                    "client_secret": settings.TIKTOK_CLIENT_SECRET,
+                    "token": token,
+                },
+            )
+    except httpx.HTTPError:
+        pass
 
 
 # ── Direct Post (Content Posting API) ───────────────────────────────────

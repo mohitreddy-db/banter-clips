@@ -14,6 +14,8 @@ import json
 import shutil
 import sys
 import tempfile
+
+import pytest
 import uuid
 from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
@@ -25,7 +27,7 @@ from fastapi import HTTPException  # noqa: E402
 
 from app.config import settings  # noqa: E402
 from app.routers.clips import _tiktok_options, reference_matches  # noqa: E402
-from app.routers.socials import _clear_credentials  # noqa: E402
+from app.routers.socials import _clear_credentials, _revoke_with_platform  # noqa: E402
 from app.schemas import PublishCreate  # noqa: E402
 from app.services import markers, publishing, spend, storage, tiktok, youtube  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
@@ -621,3 +623,63 @@ def test_options_default_to_private_when_a_publish_row_has_none():
         publishing.TIKTOK_FALLBACK[k]
         for k in ("allow_comment", "allow_duet", "allow_stitch", "brand_organic", "branded_content")
     )
+
+
+# ------------------------------------------------------------------- revoke
+# "Disconnect" has to mean the same thing on both ends. Deleting our token
+# leaves the grant alive in the user's Google/TikTok account; the YouTube API
+# Services Developer Policies require us to revoke it, and it is the honest
+# behaviour regardless.
+
+def test_youtube_disconnect_revokes_the_refresh_token(monkeypatch):
+    """The refresh token ends the whole grant; revoking only the access token
+    would leave a refreshable authorization behind."""
+    seen = []
+    monkeypatch.setattr(youtube, "revoke", lambda token: seen.append(token))
+    account = SimpleNamespace(platform="youtube", access_token="acc", refresh_token="ref")
+    _revoke_with_platform(account)
+    assert seen == ["ref"]
+
+
+def test_youtube_disconnect_falls_back_to_the_access_token(monkeypatch):
+    seen = []
+    monkeypatch.setattr(youtube, "revoke", lambda token: seen.append(token))
+    _revoke_with_platform(SimpleNamespace(platform="youtube", access_token="acc", refresh_token=None))
+    assert seen == ["acc"]
+
+
+def test_tiktok_disconnect_revokes_too(monkeypatch):
+    seen = []
+    monkeypatch.setattr(tiktok, "revoke", lambda token: seen.append(token))
+    _revoke_with_platform(SimpleNamespace(platform="tiktok", access_token="acc", refresh_token="ref"))
+    assert seen == ["acc"]
+
+
+def test_mock_and_empty_accounts_never_call_a_platform(monkeypatch):
+    """The dev mock connector has no real grant to revoke, and a row that
+    already lost its token has nothing to send."""
+    monkeypatch.setattr(youtube, "revoke", lambda token: pytest.fail("called Google"))
+    monkeypatch.setattr(tiktok, "revoke", lambda token: pytest.fail("called TikTok"))
+    _revoke_with_platform(SimpleNamespace(platform="youtube", access_token="mock-oauth-token", refresh_token=None))
+    _revoke_with_platform(SimpleNamespace(platform="tiktok", access_token=None, refresh_token=None))
+
+
+def test_revoke_is_best_effort(monkeypatch):
+    """Disconnecting must succeed even when the platform is unreachable —
+    otherwise a Google outage would trap users in a connection they asked to
+    leave."""
+    import httpx as _httpx
+
+    def boom(*a, **k):
+        raise _httpx.ConnectError("down")
+
+    monkeypatch.setattr(youtube.httpx, "post", boom)
+    youtube.revoke("token")  # must not raise
+
+    class _Client:
+        def __enter__(self): return self
+        def __exit__(self, *e): return False
+        def post(self, *a, **k): raise _httpx.ConnectError("down")
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _Client())
+    tiktok.revoke("token")  # must not raise

@@ -6,6 +6,7 @@ import { TopUpModal } from "../components/Modals.jsx";
 import { SocialIcon } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
+import { YouTubeTerms } from "../components/YouTubeTerms.jsx";
 export default function Account() {
   useSeo({
     title: "Account — BanterClips",
@@ -189,8 +190,8 @@ export default function Account() {
         {[
           { key: "instagram", name: "Instagram", account: instagram, blurb: "Connected · clips publish as Reels · explicit per-clip publishing only" },
           { key: "tiktok", name: "TikTok", account: tiktok, blurb: "Connected · clips post to your TikTok · explicit per-clip publishing only" },
-          { key: "youtube", name: "YouTube", account: youtube, blurb: "Connected · vertical clips upload as Shorts · explicit per-clip publishing only" },
-        ].map(({ key, name, account, blurb }) => (
+          { key: "youtube", name: "YouTube", account: youtube, blurb: "Connected · vertical clips upload as Shorts · explicit per-clip publishing only", legal: true },
+        ].map(({ key, name, account, blurb, legal }) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <SocialIcon platform={key} size={36} />
             <div style={{ flex: 1, minWidth: 180 }}>
@@ -200,6 +201,9 @@ export default function Account() {
               <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>
                 {account ? blurb : "Not connected"}
               </div>
+              {/* YouTube API Services Developer Policies: these two links must
+                  sit where the channel is connected, not only in the policy. */}
+              {legal && <YouTubeTerms style={{ marginTop: 4 }} />}
             </div>
             {account ? (
               <button className="ghost-btn" style={{ padding: "10px 18px", fontSize: 14, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => disconnectSocial(key))}>
