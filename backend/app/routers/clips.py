@@ -144,7 +144,7 @@ def enhance_take_variations(
 
 
 @router.get("/trending")
-def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
+def trending(sport: str = "NBA", refresh: bool = False, user: User = Depends(get_current_user)):
     """The trending feed for the create page.
 
     Shared 20-minute cache per sport (see app/video/trending.py), so this is
@@ -157,7 +157,7 @@ def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
     """
     from ..video import trending as trending_feed
 
-    return trending_feed.get_feed(sport)
+    return trending_feed.get_feed(sport, force=refresh)
 
 
 @router.post("", response_model=ClipOut, status_code=201)

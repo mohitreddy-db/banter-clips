@@ -6,9 +6,9 @@ renders a generic stand-in. With research enabled, one web-search call fetches
 enough public facts (appearance, current team, team colours) to write a real
 look description before any money is spent on images.
 
-Uses the OpenAI Responses API with the built-in `web_search` tool. Strictly
-optional and strictly non-fatal: off by default (`WEB_RESEARCH=off`), and any
-error simply leaves the cast member as it was.
+Searches through websearch.py (Firecrawl first, the OpenAI `web_search` tool
+as the fallback). Strictly optional and strictly non-fatal: off with
+`WEB_RESEARCH=off`, and any error simply leaves the cast member as it was.
 
 Never used for scores, results, or quotes — the planner is forbidden from
 presenting invented facts as news, and research only describes appearance.
@@ -20,14 +20,11 @@ import json
 import logging
 import re
 
-import httpx
-
 from ..config import settings
+from . import websearch
 from .types import CastMember, _clean
 
 log = logging.getLogger("banter.video.research")
-
-RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 RESEARCH_PROMPT = """\
 Search the web for the athlete or sports figure "{name}" ({sport}).
@@ -58,10 +55,7 @@ unsure of the number, return an empty string rather than guessing."""
 
 
 def enabled() -> bool:
-    return (
-        getattr(settings, "WEB_RESEARCH", "off") == "openai"
-        and bool(getattr(settings, "OPENAI_API_KEY", ""))
-    )
+    return websearch.enabled()
 
 
 # Words that mark a planner-invented GENERIC character rather than a person.
@@ -137,20 +131,11 @@ def enrich_member(member: CastMember, sport: str) -> bool:
 
 
 def _search(name: str, sport: str) -> dict | None:
-    body = {
-        "model": getattr(settings, "OPENAI_RESEARCH_MODEL", "gpt-4.1-mini"),
-        "tools": [{"type": "web_search"}],
-        "input": RESEARCH_PROMPT.format(name=name, sport=sport),
-    }
-    with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            RESPONSES_URL, json=body,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-        )
-    if resp.status_code >= 400:
-        log.warning("research -> %s %s", resp.status_code, resp.text[:300])
-        return None
-    return _extract_json(resp.json())
+    answer = websearch.ask(RESEARCH_PROMPT.format(name=name, sport=sport), [
+        websearch.SearchSpec(f"{name} {sport} player profile club squad number", limit=6, scrape_top=2),
+        websearch.SearchSpec(f"{name} {sport} appearance kit photo", limit=4),
+    ], timeout=60.0, max_tokens=1500)
+    return answer.data
 
 
 def _extract_json(payload: dict) -> dict | None:

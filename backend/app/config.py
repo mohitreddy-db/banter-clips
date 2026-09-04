@@ -141,7 +141,13 @@ class Settings(BaseSettings):
     # Optional web research for off-catalog cast members ("off" | "openai").
     # With "openai", an unknown name triggers one web-search call to write a
     # real look description before any image spend. Never fatal.
+    # "openai" keeps the OpenAI web_search fallback available; "off" disables
+    # every research feature. Firecrawl (below) is used first when its key is set.
     WEB_RESEARCH: str = "openai"
+    # Firecrawl web search — trending feed, Storyline Pack, cast research and
+    # the catalog verifier all search through it (app/video/websearch.py).
+    FIRECRAWL_API_KEY: str = ""
+    FIRECRAWL_URL: str = "https://api.firecrawl.dev"
     OPENAI_RESEARCH_MODEL: str = "gpt-4.1-mini"
 
     # Images and video (OpenRouter). Both default to offline stubs so the

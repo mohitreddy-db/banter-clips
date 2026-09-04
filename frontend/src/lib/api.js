@@ -92,7 +92,8 @@ export const api = {
     request("/clips/enhance-take", { method: "POST", body: { take, sport, tone, round } }),
   // Trending feed for the create page. Cheap: served from a shared
   // 20-minute server cache per sport.
-  trending: (sport) => request(`/clips/trending?sport=${encodeURIComponent(sport)}`),
+  trending: (sport, refresh = false) =>
+    request(`/clips/trending?sport=${encodeURIComponent(sport)}${refresh ? "&refresh=1" : ""}`),
   // `sports` and `subjects` are optional hints — the server infers the sport
   // from the take when nothing is picked.
   uploadReference: (file) => upload("/clips/reference", file),

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api.js";
 
 /**
@@ -38,31 +38,45 @@ export function agoLabel(iso) {
 export function useTrendingFeed(sport) {
   const [feed, setFeed] = useState(() => readCache(sport));
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [failed, setFailed] = useState(false);
   const seq = useRef(0);
 
-  useEffect(() => {
+  const load = useCallback((refresh) => {
     const mySeq = ++seq.current;
-    const cached = readCache(sport);
-    if (cached) {
-      setFeed(cached);
-      setFailed(false);
-      setLoading(false);
-      return;
+    if (!refresh) {
+      const cached = readCache(sport);
+      if (cached) {
+        setFeed(cached);
+        setFailed(false);
+        setLoading(false);
+        return;
+      }
+      setFeed(null);
+      setLoading(true);
+    } else {
+      // Keep the old list on screen while the new one builds.
+      setRefreshing(true);
     }
-    setFeed(null);
     setFailed(false);
-    setLoading(true);
     api
-      .trending(sport)
+      .trending(sport, refresh)
       .then((data) => {
         writeCache(sport, data);
         if (seq.current !== mySeq) return;
         setFeed(data);
       })
       .catch(() => seq.current === mySeq && setFailed(true))
-      .finally(() => seq.current === mySeq && setLoading(false));
+      .finally(() => {
+        if (seq.current !== mySeq) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
   }, [sport]);
 
-  return { feed, loading, failed };
+  useEffect(() => {
+    load(false);
+  }, [load]);
+
+  return { feed, loading, refreshing, failed, refresh: () => load(true) };
 }

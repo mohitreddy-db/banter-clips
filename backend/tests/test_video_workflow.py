@@ -1028,6 +1028,81 @@ def test_trending_write_stage_fills_one_tap_presets():
     assert trending._has_presets({"topics": topics})
     assert not trending._has_presets({"topics": [{"presets": []}]})
 
+# ------------------------------------------------------------- web search
+
+def test_firecrawl_results_parse_both_api_shapes_and_dedupe():
+    from app.video import websearch
+
+    v2 = {"data": {"news": [{"url": "https://a/1", "title": "A", "description": "  first   story ", "date": "2026-09-04"}],
+                   "web": [{"url": "https://a/1", "title": "dup"}, {"url": "https://b/2", "title": "B", "markdown": "x" * 5000}]}}
+    hits = websearch.parse_results(v2)
+    assert [h.url for h in hits] == ["https://a/1", "https://b/2"]   # news first, dupes dropped
+    assert hits[0].snippet == "first story" and hits[0].date == "2026-09-04"
+    assert len(hits[1].excerpt) == websearch.EXCERPT_CHARS
+    v1 = {"data": [{"url": "https://c/3", "title": "C", "description": "d"}]}
+    assert [h.title for h in websearch.parse_results(v1)] == ["C"]
+    assert websearch.parse_results({"success": False}) == []
+
+
+def test_ask_answers_from_firecrawl_sources_and_falls_back_cleanly():
+    """With a Firecrawl key the answer is written from the search hits by the
+    research model; with no hits and no OpenAI search the answer is empty
+    rather than an exception."""
+    from app.config import settings
+    from app.video import websearch
+
+    old = (settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY,
+           websearch._key_rejected, websearch.search, providers.TextClient)
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, key, model, timeout=90.0):
+            seen["model"] = model
+
+        def complete_json(self, system, user, **_k):
+            seen["user"] = user
+            return '{"found": true, "topics": [{"title": "Arsenal vs City"}]}'
+
+    try:
+        settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY = "k", "openai", "ok"
+        websearch._key_rejected = False
+        websearch.search = lambda spec: [websearch.Hit(title="T", url=f"https://x/{spec.query[:3]}", snippet="s")]
+        providers.TextClient = FakeClient
+        ans = websearch.ask("Return the topics.", [websearch.SearchSpec("q one"), websearch.SearchSpec("q two")])
+        assert ans.provider == "firecrawl" and ans.data["found"] is True
+        assert len(ans.sources) == 2 and "[1] T — https://x/q o" in seen["user"]
+        assert seen["model"] == settings.OPENAI_RESEARCH_MODEL
+
+        # No key at all and OpenAI search off: research is simply disabled.
+        settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH = "", "off"
+        assert websearch.enabled() is False
+        assert websearch.ask("x", [websearch.SearchSpec("q")]).data is None
+    finally:
+        (settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY,
+         websearch._key_rejected, websearch.search, providers.TextClient) = old
+
+
+def test_trending_sweep_goes_through_websearch_and_refresh_is_throttled():
+    from datetime import datetime, timedelta, timezone
+    from app.video import trending, websearch
+
+    old = websearch.ask
+    websearch.ask = lambda prompt, specs, **k: websearch.Answer(
+        data={"found": True, "topics": [{"title": "Messi retires", "summary": "s", "heat": "viral",
+                                          "who": ["Messi"], "team": "Argentina"}]},
+        provider="firecrawl")
+    try:
+        topics = trending._sweep("Soccer")
+    finally:
+        websearch.ask = old
+    assert topics and topics[0]["title"] == "Messi retires" and topics[0]["presets"] == []
+
+    now = datetime.now(timezone.utc)
+    assert trending.refresh_allowed(now - trending.REFRESH_FLOOR, now)
+    assert not trending.refresh_allowed(now - timedelta(seconds=30), now)
+    assert trending._refresh_after(now - timedelta(seconds=30), now) == int(trending.REFRESH_FLOOR.total_seconds()) - 30
+    assert trending._refresh_after(now - timedelta(hours=1), now) == 0
+
 
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())

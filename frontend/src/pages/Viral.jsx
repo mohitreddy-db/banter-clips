@@ -55,8 +55,20 @@ export default function Viral() {
   // The user's own sports lead the row; everything else follows.
   const order = useMemo(() => [...followed, ...SPORT_KEYS.filter((s) => !followed.includes(s))], [followed]);
   const [sport, setSport] = useState(() => followed[0] || "Soccer");
-  const { feed, loading, failed } = useTrendingFeed(sport);
+  const { feed, loading, refreshing, failed, refresh } = useTrendingFeed(sport);
   const topics = feed?.topics || [];
+  // The server rebuilds on demand at most once every few minutes per sport;
+  // until then the button shows the wait instead of pretending to refresh.
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const waitSecs = (() => {
+    if (!feed?.fetched_at || !feed?.refresh_after) return 0;
+    const elapsed = (now - new Date(feed.fetched_at).getTime()) / 1000;
+    return Math.max(0, Math.ceil(feed.refresh_after - elapsed));
+  })();
 
   useEffect(() => {
     api.track("viral_viewed", { sport });
@@ -92,7 +104,19 @@ export default function Viral() {
 
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.2, color: "var(--app-muted)" }}>🔥 TRENDING NOW · {String(sport).toUpperCase()}</span>
-        {!loading && feed?.fetched_at && <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--app-muted2)" }}>{agoLabel(feed.fetched_at)}</span>}
+        <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 10 }}>
+          {!loading && feed?.fetched_at && <span style={{ fontSize: 11, color: "var(--app-muted2)" }}>{agoLabel(feed.fetched_at)}</span>}
+          <button
+            type="button"
+            onClick={() => { api.track("viral_refreshed", { sport }); refresh(); }}
+            disabled={loading || refreshing || waitSecs > 0}
+            title={waitSecs > 0 ? `Fresh — try again in ${waitSecs}s` : "Rebuild this sport's feed from today's internet"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", minHeight: 34, borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: waitSecs > 0 || refreshing ? "default" : "pointer", color: waitSecs > 0 ? "var(--app-muted2)" : "var(--app-cyan)", background: "var(--app-surface)", border: `1px solid ${waitSecs > 0 ? "var(--app-border)" : "rgba(34,211,238,.45)"}` }}
+          >
+            <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
+            {refreshing ? "Refreshing…" : waitSecs > 0 ? `Fresh · ${waitSecs}s` : "Refresh"}
+          </button>
+        </span>
       </div>
 
       {loading && (

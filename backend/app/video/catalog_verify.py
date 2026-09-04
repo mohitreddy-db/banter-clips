@@ -25,15 +25,11 @@ import logging
 import re
 import sys
 
-import httpx
-
 from ..config import settings
-from . import catalog
+from . import catalog, websearch
 from .types import _clean
 
 log = logging.getLogger("banter.video.verify")
-
-RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 VERIFY_PROMPT = """\
 Search the web for the current status of the {sport} player "{name}".
@@ -52,33 +48,10 @@ number is worse than none."""
 
 
 def _ask(name: str, sport: str) -> dict | None:
-    body = {
-        "model": getattr(settings, "OPENAI_RESEARCH_MODEL", "gpt-4.1-mini"),
-        "tools": [{"type": "web_search"}],
-        "input": VERIFY_PROMPT.format(name=name, sport=sport),
-    }
-    with httpx.Client(timeout=90.0) as client:
-        resp = client.post(
-            RESPONSES_URL, json=body,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-        )
-    if resp.status_code >= 400:
-        log.warning("verify -> %s %s", resp.status_code, resp.text[:200])
-        return None
-    texts = [
-        part["text"]
-        for item in (resp.json().get("output") or [])
-        for part in (item.get("content") or [])
-        if isinstance(part, dict) and part.get("text")
-    ]
-    match = re.search(r"\{.*\}", "\n".join(texts), re.S)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    answer = websearch.ask(VERIFY_PROMPT.format(name=name, sport=sport), [
+        websearch.SearchSpec(f"{name} {sport} current club squad number", limit=6, recent="month", scrape_top=2),
+    ], timeout=90.0, max_tokens=800)
+    return answer.data
 
 
 def check(char: catalog.Character) -> list[str]:
