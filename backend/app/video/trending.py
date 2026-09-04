@@ -140,8 +140,11 @@ def get_feed(sport: str, force: bool = False) -> dict:
         log.exception("trending build failed for %s", sport)
         pack = None
     if pack:
-        _cache_put(sport, pack)
-        return {**pack, "fetched_at": now.isoformat(),
+        # The build itself takes ~20s; stamp its END so the client's refresh
+        # countdown agrees with the server's floor.
+        built_at = datetime.now(timezone.utc)
+        _cache_put(sport, pack, built_at)
+        return {**pack, "fetched_at": built_at.isoformat(),
                 "refresh_after": int(REFRESH_FLOOR.total_seconds())}
     if row is not None:  # stale beats empty
         fetched_at, stale = row
@@ -297,7 +300,8 @@ def _cache_get(sport: str) -> tuple[datetime, dict] | None:
         db.close()
 
 
-def _cache_put(sport: str, pack: dict) -> None:
+def _cache_put(sport: str, pack: dict, fetched_at: datetime | None = None) -> None:
+    fetched_at = fetched_at or datetime.now(timezone.utc)
     from ..db import SessionLocal
     from ..models import TrendingPack
 
@@ -305,10 +309,10 @@ def _cache_put(sport: str, pack: dict) -> None:
     try:
         row = db.query(TrendingPack).filter(TrendingPack.sport == sport).first()
         if row is None:
-            db.add(TrendingPack(sport=sport, pack=pack))
+            db.add(TrendingPack(sport=sport, pack=pack, fetched_at=fetched_at))
         else:
             row.pack = pack
-            row.fetched_at = datetime.now(timezone.utc)
+            row.fetched_at = fetched_at
         db.commit()
     except Exception:  # noqa: BLE001 — a cache miss next time is the only cost
         log.warning("could not cache trending feed for %s", sport)
