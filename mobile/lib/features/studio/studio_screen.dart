@@ -257,8 +257,9 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
         final tone = uri.queryParameters['tone'];
         setState(() {
           if (sport != null && _sports.contains(sport)) _sport = sport;
-          if (tone != null && _tones.any((item) => item.$1 == tone))
+          if (tone != null && _tones.any((item) => item.$1 == tone)) {
             _tone = tone;
+          }
         });
       });
     }

@@ -290,8 +290,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                             ? null
                             : () {
                                 if (!(_formKey.currentState?.validate() ??
-                                    false))
+                                    false)) {
                                   return;
+                                }
                                 _run(() async {
                                   await ref
                                       .read(appStateProvider.notifier)
@@ -325,8 +326,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                             ? null
                             : () {
                                 if (!(_formKey.currentState?.validate() ??
-                                    false))
+                                    false)) {
                                   return;
+                                }
                                 _run(
                                   () => ref
                                       .read(appStateProvider.notifier)

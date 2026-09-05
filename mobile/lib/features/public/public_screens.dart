@@ -610,8 +610,9 @@ class _HowItWorksState extends State<_HowItWorks> {
 
   Widget _result() {
     final ready = _tick > 118;
-    if (ready && _clip.value.isInitialized && !_clip.value.isPlaying)
+    if (ready && _clip.value.isInitialized && !_clip.value.isPlaying) {
       _clip.play();
+    }
     if (!ready && _clip.value.isPlaying) _clip.pause();
     return AspectRatio(
       aspectRatio: 4 / 5,

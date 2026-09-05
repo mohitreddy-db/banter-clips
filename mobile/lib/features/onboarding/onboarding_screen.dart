@@ -91,8 +91,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             .savePreferences(teams: _teams, players: _players)
             .catchError((_) {});
       case 3:
-        if (_role != null)
+        if (_role != null) {
           notifier.savePreferences(role: _role).catchError((_) {});
+        }
     }
   }
 

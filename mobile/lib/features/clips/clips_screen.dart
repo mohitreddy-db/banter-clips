@@ -171,8 +171,9 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen>
                 itemCount: state.clips.length + (_error.isEmpty ? 0 : 1),
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  if (_error.isNotEmpty && index == 0)
+                  if (_error.isNotEmpty && index == 0) {
                     return Notice.error(_error);
+                  }
                   final clip = state.clips[_error.isEmpty ? index : index - 1];
                   return ClipCard(
                     clip: clip,

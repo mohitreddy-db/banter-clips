@@ -230,7 +230,16 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
       // The native share sheet — save to camera roll, send to WhatsApp, post
       // anywhere. This is the one moment the app is plainly better than the
       // website, which can only drop a file in the Downloads folder.
-      await Share.shareXFiles([XFile(file.path)], text: clip.take);
+      // iPad presents the share sheet as a popover and throws if it is given no
+      // anchor to point at. The app supports iPad, so the rect is not optional.
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: clip.take,
+        sharePositionOrigin: box != null
+            ? box.localToGlobal(Offset.zero) & box.size
+            : null,
+      );
       ref.read(apiClientProvider).track('video_downloaded', {
         'clip_id': clip.id,
       });

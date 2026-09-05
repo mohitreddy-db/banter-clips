@@ -68,8 +68,9 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
     final purchase = ref.watch(purchaseControllerProvider);
     final controller = ref.read(purchaseControllerProvider.notifier);
 
-    if (purchase.phase == PurchasePhase.success)
+    if (purchase.phase == PurchasePhase.success) {
       return const _WelcomeToCreator();
+    }
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -157,7 +158,7 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
               'Secure payment by Google Play. Renews monthly until cancelled; '
               'manage or cancel it from your Play Store subscriptions.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 height: 1.5,
                 color: AppColors.muted2,

@@ -391,8 +391,9 @@ class AppStateNotifier extends Notifier<AppState> {
       onboardingCompleted: onboardingCompleted,
     );
     final user = state.user;
-    if (user != null)
+    if (user != null) {
       state = state.copyWith(user: user.copyWith(preferences: saved));
+    }
   }
 
   // -------------------------------------------------------------- socials

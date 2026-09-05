@@ -125,8 +125,9 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
     final state = ref.watch(appStateProvider);
     final connected = state.instagramConnected;
 
-    if (_queued)
+    if (_queued) {
       return _QueuedConfirmation(watermarked: widget.clip.watermarked);
+    }
 
     return SafeArea(
       child: SingleChildScrollView(
