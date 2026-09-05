@@ -148,7 +148,7 @@ export default function AppShell({ children }) {
           <div style={{ height: 6, borderRadius: 99, background: "#0b0f1c", overflow: "hidden", marginBottom: 6 }}>
             <div style={{ height: "100%", width: `${((limit - left) / limit) * 100}%`, background: "var(--app-grad)" }} />
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{left} of {limit} videos left</div>
+          <div style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{left} of {limit} credits left</div>
         </div>
       </aside>
 
@@ -165,7 +165,7 @@ export default function AppShell({ children }) {
           <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: left > 0 ? "var(--app-green)" : "var(--app-error)" }} />
             <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", whiteSpace: "nowrap" }}>
-              <span className="usage-long">{left} of {limit} videos left</span>
+              <span className="usage-long">{left} of {limit} credits left</span>
               <span className="usage-short">{left}/{limit}</span>
             </span>
           </div>

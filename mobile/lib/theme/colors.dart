@@ -58,9 +58,12 @@ class AppColors {
   /// Translucent accent washes. The web writes these inline as
   /// `rgba(34,211,238,.08)`; naming them keeps the opacities consistent
   /// instead of drifting a hundredth at a time across screens.
-  static Color cyanWash([double opacity = 0.08]) => cyan.withValues(alpha: opacity);
-  static Color greenWash([double opacity = 0.10]) => green.withValues(alpha: opacity);
-  static Color errorWash([double opacity = 0.10]) => error.withValues(alpha: opacity);
+  static Color cyanWash([double opacity = 0.08]) =>
+      cyan.withValues(alpha: opacity);
+  static Color greenWash([double opacity = 0.10]) =>
+      green.withValues(alpha: opacity);
+  static Color errorWash([double opacity = 0.10]) =>
+      error.withValues(alpha: opacity);
 
   /// Fallback thumbnail for a clip with no poster frame yet. The backend
   /// sends `thumb_gradient` as a CSS gradient string, which Flutter cannot

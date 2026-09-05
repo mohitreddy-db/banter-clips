@@ -19,8 +19,8 @@ const PLATFORMS = [
   { name: "X", key: "x", sub: "Video post with caption", connectable: false, tile: "#0f1524", glyph: "x" },
 ];
 
-const FREE_FEATURES = ["5 videos a month", "One-click publish to Instagram", "Funny · Savage · Hype tones", "Watermark on every clip"];
-const CREATOR_FEATURES = ["30 videos a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
+const FREE_FEATURES = ["60 welcome credits", "One-click publish to Instagram & TikTok", "Funny · Savage · Hype tones", "Watermark on every clip"];
+const CREATOR_FEATURES = ["150 video credits a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none" };
@@ -303,7 +303,7 @@ function OnboardingFlow() {
             />
             <PlanTile
               name="Creator"
-              price="$9.99"
+              price="$19"
               features={CREATOR_FEATURES}
               popular
               cta={plan === "creator" ? "✓ Your plan" : upgrading ? "Upgrading…" : "Go Creator"}

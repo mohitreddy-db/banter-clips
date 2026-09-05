@@ -40,6 +40,7 @@ META_APP_ID=<infra/meta.md>
 META_APP_SECRET=<infra/meta.md>
 IG_REDIRECT_URI=https://api.banterclips.com/socials/instagram/callback
 STRIPE_SECRET_KEY=<infra/stripe.md>
+STRIPE_PUBLISHABLE_KEY=<infra/stripe.md>
 STRIPE_PRICE_CREATOR=<infra/stripe.md>
 STRIPE_WEBHOOK_SECRET=<infra/stripe.md>
 FRONTEND_URL=https://www.banterclips.com

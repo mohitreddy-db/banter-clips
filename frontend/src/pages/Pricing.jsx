@@ -14,7 +14,7 @@ import { useSeo } from "../lib/seo.js";
    same cards wrapped back in the app chrome via AppShell's children mode. */
 
 const FREE = [
-  [true, "5 successful videos / month"],
+  [true, "60 welcome credits — your first video on us"],
   [true, "One-click publish to Instagram"],
   [true, "Funny · Savage · Hype tones"],
   [true, "Free retries — failures never count"],
@@ -23,7 +23,7 @@ const FREE = [
   [false, "No downloads"],
 ];
 const CREATOR = [
-  [true, "30 successful videos / month"],
+  [true, "150 video credits / month"],
   [true, "Full HD 1080p quality"],
   [true, "Download in HD — no watermark"],
   [true, "Publish without the watermark"],
@@ -51,7 +51,7 @@ export default function Pricing() {
   useSeo({
     title: "Pricing — BanterClips plans from $0",
     description:
-      "BanterClips pricing: Free plan with 5 AI sports videos a month, or Creator at $9.99/mo for 30 videos in 1080p with watermark-free downloads. No credit card to start.",
+      "BanterClips pricing: Free includes 60 welcome credits, or Creator at $19/mo adds 150 credits with 1080p and watermark-free downloads. No credit card to start.",
     path: "/pricing",
   });
 
@@ -78,7 +78,7 @@ export default function Pricing() {
       />
       <PlanCard
         name="Creator"
-        price="$9.99"
+        price="$19"
         tagline="For creators posting every week."
         features={CREATOR}
         popular

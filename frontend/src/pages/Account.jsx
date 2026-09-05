@@ -107,12 +107,12 @@ export default function Account() {
         <div style={{ display: "flex", alignItems: "center" }}>
           <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>PLAN & ALLOWANCE</span>
           <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: isCreator ? "rgba(52,226,122,.14)" : "#161e30", color: isCreator ? "var(--app-green)" : "var(--app-muted)", border: "1px solid var(--app-border)" }}>
-            {isCreator ? "CREATOR · $9.99/mo" : "FREE"}
+            {isCreator ? "CREATOR · $19/mo" : "FREE"}
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontWeight: 800, fontSize: "clamp(28px, 7vw, 34px)", color: "var(--app-text)" }}>{left} of {limit}</span>
-          <span style={{ fontSize: 15, color: "var(--app-muted)" }}>videos remaining this month</span>
+          <span style={{ fontSize: 15, color: "var(--app-muted)" }}>credits remaining this month</span>
         </div>
         <div style={{ height: 10, borderRadius: 999, background: "var(--app-panel)", overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${Math.min(100, (used / limit) * 100)}%`, background: "var(--app-grad)", borderRadius: 999 }} />
@@ -123,7 +123,7 @@ export default function Account() {
         {!isCreator ? (
           <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
             <button className="grad-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
-              Upgrade to Creator — $9.99/mo
+              Upgrade to Creator — $19/mo
             </button>
             <button className="ghost-btn" style={{ padding: "13px 22px", fontSize: 14.5 }} onClick={() => nav("/pricing")}>
               Compare plans

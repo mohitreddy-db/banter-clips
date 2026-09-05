@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'colors.dart';
 import 'typography.dart';
@@ -44,8 +45,9 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.bg,
       canvasColor: AppColors.bg,
-      fontFamily: AppType.fontFamily,
-      textTheme: AppType.textTheme,
+      fontFamily: GoogleFonts.inter().fontFamily,
+      textTheme: GoogleFonts.interTextTheme(AppType.textTheme),
+      primaryTextTheme: GoogleFonts.interTextTheme(AppType.textTheme),
       splashFactory: InkSparkle.splashFactory,
 
       appBarTheme: const AppBarTheme(
@@ -71,8 +73,14 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,
-        hintStyle: const TextStyle(color: AppColors.muted2, fontWeight: FontWeight.w400),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: const TextStyle(
+          color: AppColors.muted2,
+          fontWeight: FontWeight.w400,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: _inputBorder(AppColors.border),
         enabledBorder: _inputBorder(AppColors.border),
         focusedBorder: _inputBorder(AppColors.cyan, width: 1.5),
@@ -80,7 +88,11 @@ class AppTheme {
         focusedErrorBorder: _inputBorder(AppColors.error, width: 1.5),
       ),
 
-      dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 1),
+      dividerTheme: const DividerThemeData(
+        color: AppColors.border,
+        thickness: 1,
+        space: 1,
+      ),
 
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surface,

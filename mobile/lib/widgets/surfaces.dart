@@ -103,11 +103,11 @@ class SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Text(text.toUpperCase(), style: AppType.sectionLabel),
-          if (trailing != null) ...[const Spacer(), trailing!],
-        ],
-      );
+    children: [
+      Text(text.toUpperCase(), style: AppType.sectionLabel),
+      if (trailing != null) ...[const Spacer(), trailing!],
+    ],
+  );
 }
 
 /// A tinted advisory strip: the cyan info note, the green success note, the
@@ -122,10 +122,10 @@ class Notice extends StatelessWidget {
   });
 
   const Notice.error(String message, {Key? key})
-      : this(key: key, text: message, tone: NoticeTone.error);
+    : this(key: key, text: message, tone: NoticeTone.error);
 
   const Notice.success(String message, {Key? key})
-      : this(key: key, text: message, tone: NoticeTone.success);
+    : this(key: key, text: message, tone: NoticeTone.success);
 
   final String text;
   final NoticeTone tone;
@@ -161,7 +161,9 @@ class Notice extends StatelessWidget {
                 fontSize: 13.5,
                 height: 1.45,
                 color: tone == NoticeTone.info ? AppColors.muted : color,
-                fontWeight: tone == NoticeTone.info ? FontWeight.w400 : FontWeight.w600,
+                fontWeight: tone == NoticeTone.info
+                    ? FontWeight.w400
+                    : FontWeight.w600,
               ),
             ),
           ),
@@ -176,7 +178,12 @@ enum NoticeTone { info, success, error }
 
 /// The header every screen body opens with.
 class ScreenHeader extends StatelessWidget {
-  const ScreenHeader({super.key, required this.title, this.subtitle, this.badge});
+  const ScreenHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.badge,
+  });
 
   final String title;
   final String? subtitle;
@@ -186,41 +193,41 @@ class ScreenHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (badge != null) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.cyanWash(0.10),
-                borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-                border: Border.all(color: AppColors.cyan.withValues(alpha: 0.35)),
-              ),
-              child: Text(
-                badge!,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.9,
-                  color: AppColors.cyan,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.displaySmall,
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      if (badge != null) ...[
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.cyanWash(0.10),
+            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+            border: Border.all(color: AppColors.cyan.withValues(alpha: 0.35)),
           ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              subtitle!,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+          child: Text(
+            badge!,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.9,
+              color: AppColors.cyan,
             ),
-          ],
-        ],
-      );
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+      Text(
+        title,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.displaySmall,
+      ),
+      if (subtitle != null) ...[
+        const SizedBox(height: 8),
+        Text(
+          subtitle!,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    ],
+  );
 }

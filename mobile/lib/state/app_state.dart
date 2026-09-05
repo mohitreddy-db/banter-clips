@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
@@ -22,12 +24,14 @@ final tokenStoreProvider = Provider<TokenStore>((ref) => TokenStore());
 final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(tokens: ref.watch(tokenStoreProvider));
   // A 401 anywhere signs the app out, which the router notices immediately.
-  client.onUnauthorized = () => ref.read(appStateProvider.notifier).handleSessionExpired();
+  client.onUnauthorized = () =>
+      ref.read(appStateProvider.notifier).handleSessionExpired();
   return client;
 });
 
-final appStateProvider =
-    NotifierProvider<AppStateNotifier, AppState>(AppStateNotifier.new);
+final appStateProvider = NotifierProvider<AppStateNotifier, AppState>(
+  AppStateNotifier.new,
+);
 
 /// Everything the shell and the screens read. Immutable — every change goes
 /// through [AppStateNotifier], which is what makes the router's redirect
@@ -41,6 +45,7 @@ class AppState {
     this.clips = const [],
     this.socials = const [],
     this.apiDown = false,
+    this.authError = '',
   });
 
   /// False until the stored session has been checked. The router shows a
@@ -55,6 +60,7 @@ class AppState {
   /// The API could not be reached at boot. Worth saying out loud — the
   /// alternative is an empty app that looks broken.
   final bool apiDown;
+  final String authError;
 
   bool get signedIn => user != null;
 
@@ -63,7 +69,7 @@ class AppState {
 
   String get plan => usage?.plan ?? user?.plan ?? 'free';
   bool get isCreator => plan == 'creator';
-  int get limit => usage?.limit ?? (isCreator ? 30 : 5);
+  int get limit => usage?.limit ?? (isCreator ? 150 : 60);
   int get used => usage?.used ?? 0;
   int get left => usage?.left ?? (limit - used).clamp(0, limit);
 
@@ -94,19 +100,25 @@ class AppState {
     List<Clip>? clips,
     List<SocialAccount>? socials,
     bool? apiDown,
+    String? authError,
+    bool clearAuthError = false,
     bool clearUser = false,
-  }) =>
-      AppState(
-        booted: booted ?? this.booted,
-        user: clearUser ? null : (user ?? this.user),
-        usage: clearUser ? null : (usage ?? this.usage),
-        clips: clearUser ? const [] : (clips ?? this.clips),
-        socials: clearUser ? const [] : (socials ?? this.socials),
-        apiDown: apiDown ?? this.apiDown,
-      );
+  }) => AppState(
+    booted: booted ?? this.booted,
+    user: clearUser ? null : (user ?? this.user),
+    usage: clearUser ? null : (usage ?? this.usage),
+    clips: clearUser ? const [] : (clips ?? this.clips),
+    socials: clearUser ? const [] : (socials ?? this.socials),
+    apiDown: apiDown ?? this.apiDown,
+    authError: clearAuthError ? '' : (authError ?? this.authError),
+  );
 }
 
 class AppStateNotifier extends Notifier<AppState> {
+  StreamSubscription<sb.AuthState>? _authSubscription;
+  bool _authExchangeInFlight = false;
+  String? _lastExchangedSupabaseToken;
+
   @override
   AppState build() {
     // Boot runs once, off the first frame, so the constructor stays cheap.
@@ -182,9 +194,11 @@ class AppStateNotifier extends Notifier<AppState> {
     final res = await supabase.auth.signUp(
       email: email,
       password: password,
-      data: {'display_name': displayName?.trim().isNotEmpty == true
-          ? displayName!.trim()
-          : email.split('@').first},
+      data: {
+        'display_name': displayName?.trim().isNotEmpty == true
+            ? displayName!.trim()
+            : email.split('@').first,
+      },
     );
     final session = res.session;
     if (session == null) return false; // needs email confirmation
@@ -192,9 +206,15 @@ class AppStateNotifier extends Notifier<AppState> {
     return true;
   }
 
-  Future<void> signInWithPassword({required String email, required String password}) async {
+  Future<void> signInWithPassword({
+    required String email,
+    required String password,
+  }) async {
     final supabase = _requireSupabase();
-    final res = await supabase.auth.signInWithPassword(email: email, password: password);
+    final res = await supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
     final session = res.session;
     if (session == null) {
       throw const ApiException(401, null, 'Sign-in failed — please try again.');
@@ -206,6 +226,7 @@ class AppStateNotifier extends Notifier<AppState> {
   /// arrives on the auth stream, which [listenToSupabase] exchanges.
   Future<void> signInWithGoogle() async {
     final supabase = _requireSupabase();
+    state = state.copyWith(clearAuthError: true);
     await supabase.auth.signInWithOAuth(
       sb.OAuthProvider.google,
       redirectTo: '${Env.oauthScheme}://login-callback',
@@ -242,7 +263,11 @@ class AppStateNotifier extends Notifier<AppState> {
   Future<void> devSignIn(String email) async {
     final token = await _api.requestDevLink(email);
     if (token == null) {
-      throw const ApiException(0, null, 'Check your inbox for the sign-in link.');
+      throw const ApiException(
+        0,
+        null,
+        'Check your inbox for the sign-in link.',
+      );
     }
     final session = await _api.verifyDevToken(token);
     await _tokens.write(session.accessToken);
@@ -255,21 +280,31 @@ class AppStateNotifier extends Notifier<AppState> {
   /// without the user coming back to tap anything.
   void listenToSupabase() {
     final supabase = _supabase;
-    if (supabase == null) return;
-    supabase.auth.onAuthStateChange.listen((event) async {
+    if (supabase == null || _authSubscription != null) return;
+    _authSubscription = supabase.auth.onAuthStateChange.listen((event) async {
       final session = event.session;
       if (session == null) return;
       if (event.event == sb.AuthChangeEvent.signedIn ||
-          event.event == sb.AuthChangeEvent.tokenRefreshed) {
-        if (_tokens.hasToken) return; // already exchanged
+          event.event == sb.AuthChangeEvent.tokenRefreshed ||
+          event.event == sb.AuthChangeEvent.initialSession) {
+        final accessToken = session.accessToken;
+        if (_authExchangeInFlight ||
+            accessToken == _lastExchangedSupabaseToken) {
+          return;
+        }
+        _authExchangeInFlight = true;
         try {
-          await _exchange(session.accessToken);
-        } on ApiException {
-          // The backend rejected it (blocked account, or it is down). The
-          // sign-in screen stays put and shows its own error.
+          await _exchange(accessToken);
+          _lastExchangedSupabaseToken = accessToken;
+          state = state.copyWith(clearAuthError: true);
+        } on ApiException catch (error) {
+          state = state.copyWith(booted: true, authError: error.message);
+        } finally {
+          _authExchangeInFlight = false;
         }
       }
     });
+    ref.onDispose(() => _authSubscription?.cancel());
   }
 
   /// Called by the API client when anything returns 401.
@@ -293,25 +328,33 @@ class AppStateNotifier extends Notifier<AppState> {
     try {
       state = state.copyWith(user: await _api.me());
       await refreshUsage();
-    } on ApiException {/* keep what we have */}
+    } on ApiException {
+      /* keep what we have */
+    }
   }
 
   Future<void> refreshUsage() async {
     try {
       state = state.copyWith(usage: await _api.usage());
-    } on ApiException {/* keep what we have */}
+    } on ApiException {
+      /* keep what we have */
+    }
   }
 
   Future<void> refreshClips() async {
     try {
       state = state.copyWith(clips: await _api.listClips());
-    } on ApiException {/* keep what we have */}
+    } on ApiException {
+      /* keep what we have */
+    }
   }
 
   Future<void> refreshSocials() async {
     try {
       state = state.copyWith(socials: await _api.listSocials());
-    } on ApiException {/* keep what we have */}
+    } on ApiException {
+      /* keep what we have */
+    }
   }
 
   /// Merge one freshly-polled clip into the list without a round-trip for
@@ -327,8 +370,9 @@ class AppStateNotifier extends Notifier<AppState> {
     state = state.copyWith(clips: next);
   }
 
-  void removeClip(String id) =>
-      state = state.copyWith(clips: state.clips.where((c) => c.id != id).toList());
+  void removeClip(String id) => state = state.copyWith(
+    clips: state.clips.where((c) => c.id != id).toList(),
+  );
 
   // ---------------------------------------------------------- preferences
 
@@ -347,7 +391,8 @@ class AppStateNotifier extends Notifier<AppState> {
       onboardingCompleted: onboardingCompleted,
     );
     final user = state.user;
-    if (user != null) state = state.copyWith(user: user.copyWith(preferences: saved));
+    if (user != null)
+      state = state.copyWith(user: user.copyWith(preferences: saved));
   }
 
   // -------------------------------------------------------------- socials
@@ -364,7 +409,7 @@ class AppStateNotifier extends Notifier<AppState> {
         0,
         null,
         'Sign-in is not configured in this build. '
-            'Pass --dart-define=SUPABASE_URL and --dart-define=SUPABASE_ANON_KEY.',
+        'Pass --dart-define=SUPABASE_URL and --dart-define=SUPABASE_ANON_KEY.',
       );
     }
     return supabase;

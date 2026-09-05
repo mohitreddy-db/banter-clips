@@ -49,7 +49,7 @@ log = logging.getLogger("banter.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin-console"])
 
-CREATOR_PRICE_USD = 9.99
+CREATOR_PRICE_USD = 19.00
 PROCESSING_STATUSES = ("queued", *GENERATION_STAGES, "script_ready")
 PAGE_SIZE = 50
 

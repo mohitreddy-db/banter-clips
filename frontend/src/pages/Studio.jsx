@@ -500,7 +500,7 @@ export default function Studio() {
           <div className="panel" style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 14, flexWrap: "wrap" }}>
             <span style={{ color: "var(--app-cyan)" }}>⚡</span>
             <span style={{ fontSize: 13.5, color: "var(--app-muted)" }}>
-              <b style={{ color: "var(--app-text)" }}>{left}</b> of <b style={{ color: "var(--app-text)" }}>{limit}</b> monthly videos left · each clip uses 1 · failures are free
+              <b style={{ color: "var(--app-text)" }}>{left}</b> of <b style={{ color: "var(--app-text)" }}>{limit}</b> monthly credits left · each successful clip uses 1 · failures are free
             </span>
             <div style={{ flex: 1 }} />
             {plan !== "creator" && (

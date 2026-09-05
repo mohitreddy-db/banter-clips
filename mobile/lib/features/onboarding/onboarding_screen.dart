@@ -87,9 +87,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 1:
         notifier.savePreferences(sports: _sportsPicked).catchError((_) {});
       case 2:
-        notifier.savePreferences(teams: _teams, players: _players).catchError((_) {});
+        notifier
+            .savePreferences(teams: _teams, players: _players)
+            .catchError((_) {});
       case 3:
-        if (_role != null) notifier.savePreferences(role: _role).catchError((_) {});
+        if (_role != null)
+          notifier.savePreferences(role: _role).catchError((_) {});
     }
   }
 
@@ -99,7 +102,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _error = '';
     });
     try {
-      await ref.read(appStateProvider.notifier).savePreferences(
+      await ref
+          .read(appStateProvider.notifier)
+          .savePreferences(
             sports: _sportsPicked,
             teams: _teams,
             players: _players,
@@ -181,16 +186,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           widthFactor: _step / _totalSteps,
                           child: Container(
                             height: 6,
-                            decoration: const BoxDecoration(gradient: AppColors.gradient),
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.gradient,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 22),
-                  Text(titles[_step]!, style: Theme.of(context).textTheme.displaySmall),
+                  Text(
+                    titles[_step]!,
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
                   const SizedBox(height: 6),
-                  Text(subtitles[_step]!, style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    subtitles[_step]!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               ),
             ),
@@ -225,7 +238,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     child: GradButton(
                       label: _step == _totalSteps ? "I'm ready" : 'Continue',
                       loading: _busy,
-                      onPressed: _step == 1 && _sportsPicked.isEmpty ? null : _next,
+                      onPressed: _step == 1 && _sportsPicked.isEmpty
+                          ? null
+                          : _next,
                     ),
                   ),
                 ],
@@ -234,11 +249,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: TextAction(
-                label: _step == _totalSteps ? 'Skip — finish setup' : 'Skip for now',
+                label: _step == _totalSteps
+                    ? 'Skip — finish setup'
+                    : 'Skip for now',
                 color: AppColors.muted,
                 onPressed: _busy
                     ? null
-                    : () => _step == _totalSteps ? _finish() : setState(() => _step++),
+                    : () => _step == _totalSteps
+                          ? _finish()
+                          : setState(() => _step++),
               ),
             ),
           ],
@@ -248,76 +267,82 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Widget _sportsStep() => Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (final (name, emoji) in _sports)
-            _Tile(
-              emoji: emoji,
-              label: name,
-              selected: _sportsPicked.contains(name),
-              onTap: () => setState(() => _sportsPicked.contains(name)
-                  ? _sportsPicked.remove(name)
-                  : _sportsPicked.add(name)),
-            ),
-        ],
-      );
+    spacing: 12,
+    runSpacing: 12,
+    children: [
+      for (final (name, emoji) in _sports)
+        _Tile(
+          emoji: emoji,
+          label: name,
+          selected: _sportsPicked.contains(name),
+          onTap: () => setState(
+            () => _sportsPicked.contains(name)
+                ? _sportsPicked.remove(name)
+                : _sportsPicked.add(name),
+          ),
+        ),
+    ],
+  );
 
   Widget _tagsStep() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _TagField(
-            label: 'FAVOURITE TEAMS',
-            hint: 'Lakers, Chiefs, Real Madrid…',
-            controller: _teamInput,
-            tags: _teams,
-            onAdd: () => _addTag(_teamInput, _teams),
-            onRemove: (tag) => setState(() => _teams.remove(tag)),
-          ),
-          const SizedBox(height: 24),
-          _TagField(
-            label: 'FAVOURITE PLAYERS',
-            hint: 'LeBron, Mahomes, Messi…',
-            controller: _playerInput,
-            tags: _players,
-            onAdd: () => _addTag(_playerInput, _players),
-            onRemove: (tag) => setState(() => _players.remove(tag)),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _TagField(
+        label: 'FAVOURITE TEAMS',
+        hint: 'Lakers, Chiefs, Real Madrid…',
+        controller: _teamInput,
+        tags: _teams,
+        onAdd: () => _addTag(_teamInput, _teams),
+        onRemove: (tag) => setState(() => _teams.remove(tag)),
+      ),
+      const SizedBox(height: 24),
+      _TagField(
+        label: 'FAVOURITE PLAYERS',
+        hint: 'LeBron, Mahomes, Messi…',
+        controller: _playerInput,
+        tags: _players,
+        onAdd: () => _addTag(_playerInput, _players),
+        onRemove: (tag) => setState(() => _players.remove(tag)),
+      ),
+    ],
+  );
 
   Widget _roleStep() => Column(
-        children: [
-          for (final (name, emoji) in _roles)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: AppPanel(
-                onTap: () => setState(() => _role = name),
-                borderColor: _role == name ? AppColors.cyan : AppColors.border,
-                color: _role == name ? AppColors.chipOn : AppColors.panel,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: Row(
-                  children: [
-                    Text(emoji, style: const TextStyle(fontSize: 22)),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w600,
-                          color: _role == name ? AppColors.text : AppColors.muted,
-                        ),
-                      ),
+    children: [
+      for (final (name, emoji) in _roles)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: AppPanel(
+            onTap: () => setState(() => _role = name),
+            borderColor: _role == name ? AppColors.cyan : AppColors.border,
+            color: _role == name ? AppColors.chipOn : AppColors.panel,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      color: _role == name ? AppColors.text : AppColors.muted,
                     ),
-                    if (_role == name)
-                      const Icon(Icons.check_circle_rounded, color: AppColors.cyan, size: 20),
-                  ],
+                  ),
                 ),
-              ),
+                if (_role == name)
+                  const Icon(
+                    Icons.check_circle_rounded,
+                    color: AppColors.cyan,
+                    size: 20,
+                  ),
+              ],
             ),
-        ],
-      );
+          ),
+        ),
+    ],
+  );
 }
 
 class _Tile extends StatelessWidget {
@@ -382,42 +407,49 @@ class _TagField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SectionLabel(label),
-          const SizedBox(height: 10),
-          TextField(
-            controller: controller,
-            textInputAction: TextInputAction.done,
-            textCapitalization: TextCapitalization.words,
-            onSubmitted: (_) => onAdd(),
-            decoration: InputDecoration(
-              hintText: hint,
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.add_rounded, color: AppColors.cyan),
-                onPressed: onAdd,
-              ),
-            ),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SectionLabel(label),
+      const SizedBox(height: 10),
+      TextField(
+        controller: controller,
+        textInputAction: TextInputAction.done,
+        textCapitalization: TextCapitalization.words,
+        onSubmitted: (_) => onAdd(),
+        decoration: InputDecoration(
+          hintText: hint,
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.add_rounded, color: AppColors.cyan),
+            onPressed: onAdd,
           ),
-          if (tags.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final tag in tags)
-                  Chip(
-                    label: Text(tag, style: const TextStyle(fontSize: 13, color: AppColors.text)),
-                    backgroundColor: AppColors.chipOff,
-                    side: const BorderSide(color: AppColors.border),
-                    deleteIcon: const Icon(Icons.close_rounded, size: 16, color: AppColors.muted),
-                    onDeleted: () => onRemove(tag),
-                  ),
-              ],
-            ),
+        ),
+      ),
+      if (tags.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final tag in tags)
+              Chip(
+                label: Text(
+                  tag,
+                  style: const TextStyle(fontSize: 13, color: AppColors.text),
+                ),
+                backgroundColor: AppColors.chipOff,
+                side: const BorderSide(color: AppColors.border),
+                deleteIcon: const Icon(
+                  Icons.close_rounded,
+                  size: 16,
+                  color: AppColors.muted,
+                ),
+                onDeleted: () => onRemove(tag),
+              ),
           ],
-        ],
-      );
+        ),
+      ],
+    ],
+  );
 }
 
 /// The last step reuses the same connect widget the Account screen uses, so
@@ -427,14 +459,15 @@ class _InstagramStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Column(
-        children: [
-          InstagramConnectCard(),
-          SizedBox(height: 16),
-          Notice(
-            text: 'Clips publish as Reels, one at a time, and only when you '
-                'explicitly tap Publish. Nothing is posted automatically.',
-            icon: Icons.lock_outline_rounded,
-          ),
-        ],
-      );
+    children: [
+      InstagramConnectCard(),
+      SizedBox(height: 16),
+      Notice(
+        text:
+            'Clips publish as Reels, one at a time, and only when you '
+            'explicitly tap Publish. Nothing is posted automatically.',
+        icon: Icons.lock_outline_rounded,
+      ),
+    ],
+  );
 }

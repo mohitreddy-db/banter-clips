@@ -4,7 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-Sport = Literal["NBA", "NFL", "Soccer", "MLB"]
+Sport = Literal[
+    "NBA", "NFL", "Soccer", "MLB", "F1", "Tennis",
+    "College Sports", "Combat Sports",
+]
 Tone = Literal["Funny", "Savage", "Hype", "Bold"]
 Platform = Literal["instagram", "tiktok", "youtube", "x", "linkedin"]
 Role = Literal["Sports Fan", "Creator", "Podcaster", "Media Company", "Fantasy Creator"]

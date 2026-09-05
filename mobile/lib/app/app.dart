@@ -54,7 +54,9 @@ class _BanterClipsAppState extends ConsumerState<BanterClipsApp> {
         // Respect the system font-size setting, but stop a 200% accessibility
         // scale from breaking every layout in the app. 1.3 is the point past
         // which the take box and the stage list stop fitting a small phone.
-        final scale = MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3);
+        final scale = MediaQuery.textScalerOf(
+          context,
+        ).clamp(maxScaleFactor: 1.3);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: scale),
           child: child!,

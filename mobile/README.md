@@ -41,6 +41,13 @@ flutter run \
 flutter run
 ```
 
+For the existing BanterClips Supabase project, keep the client-safe URL and
+publishable key in the git-ignored `config/supabase.local.json`, then run:
+
+```bash
+flutter run --dart-define-from-file=config/supabase.local.json
+```
+
 **`10.0.2.2`, not `localhost`.** That is how the Android emulator reaches the
 host machine; inside the emulator `localhost` is the emulator itself. On a
 physical device use your machine's LAN IP, and make sure the backend's

@@ -20,8 +20,8 @@ import 'token_store.dart';
 /// a desktop browser — see the mobile roadmap, phase 03.
 class ApiClient {
   ApiClient({required TokenStore tokens, Dio? dio})
-      : _tokens = tokens,
-        _dio = dio ?? Dio() {
+    : _tokens = tokens,
+      _dio = dio ?? Dio() {
     _dio.options = _dio.options.copyWith(
       baseUrl: Env.apiUrl,
       // Generous, because the API fronts a render pipeline: enhancement and
@@ -33,7 +33,8 @@ class ApiClient {
       contentType: Headers.jsonContentType,
       // We read status codes ourselves in the error interceptor, but letting
       // Dio throw for non-2xx keeps every call site free of status checks.
-      validateStatus: (status) => status != null && status >= 200 && status < 300,
+      validateStatus: (status) =>
+          status != null && status >= 200 && status < 300,
     );
 
     _dio.interceptors.add(
@@ -55,7 +56,11 @@ class ApiClient {
             onUnauthorized?.call();
           }
           handler.reject(
-            DioException(requestOptions: e.requestOptions, error: error, response: e.response),
+            DioException(
+              requestOptions: e.requestOptions,
+              error: error,
+              response: e.response,
+            ),
           );
         },
       ),
@@ -93,17 +98,28 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>> _map(String method, String path,
-      {Object? body, Map<String, dynamic>? query}) async {
+  Future<Map<String, dynamic>> _map(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, dynamic>? query,
+  }) async {
     final data = await _send(method, path, body: body, query: query);
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
-  Future<List<Map<String, dynamic>>> _listOf(String method, String path,
-      {Object? body, Map<String, dynamic>? query}) async {
+  Future<List<Map<String, dynamic>>> _listOf(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, dynamic>? query,
+  }) async {
     final data = await _send(method, path, body: body, query: query);
     return data is List
-        ? data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        ? data
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList()
         : <Map<String, dynamic>>[];
   }
 
@@ -116,16 +132,24 @@ class ApiClient {
   /// the user row, and issues its OWN session JWT. Everything after this
   /// carries the backend token — never the Supabase one.
   Future<Session> exchangeSupabase(String accessToken) async {
-    final json = await _map('POST', '/auth/supabase', body: {'access_token': accessToken});
+    final json = await _map(
+      'POST',
+      '/auth/supabase',
+      body: {'access_token': accessToken},
+    );
     return Session.fromJson(json);
   }
 
   /// Dev-only fallback (404s unless the backend runs with DEV_MODE=true).
   Future<String?> requestDevLink(String email, {String? displayName}) async {
-    final json = await _map('POST', '/auth/request-link', body: {
-      'email': email,
-      if (displayName != null) 'display_name': displayName,
-    });
+    final json = await _map(
+      'POST',
+      '/auth/request-link',
+      body: {
+        'email': email,
+        if (displayName != null) 'display_name': displayName,
+      },
+    );
     return json['dev_token'] as String?;
   }
 
@@ -154,9 +178,12 @@ class ApiClient {
       if (teams != null) 'teams': teams,
       if (players != null) 'players': players,
       if (role != null) 'role': role,
-      if (onboardingCompleted != null) 'onboarding_completed': onboardingCompleted,
+      if (onboardingCompleted != null)
+        'onboarding_completed': onboardingCompleted,
     };
-    return Preferences.fromJson(await _map('PATCH', '/me/preferences', body: body));
+    return Preferences.fromJson(
+      await _map('PATCH', '/me/preferences', body: body),
+    );
   }
 
   // ----------------------------------------------------------------- clips
@@ -164,7 +191,8 @@ class ApiClient {
   Future<List<Clip>> listClips() async =>
       (await _listOf('GET', '/clips')).map(Clip.fromJson).toList();
 
-  Future<Clip> getClip(String id) async => Clip.fromJson(await _map('GET', '/clips/$id'));
+  Future<Clip> getClip(String id) async =>
+      Clip.fromJson(await _map('GET', '/clips/$id'));
 
   /// Starts a render. Throws [ApiException] with `limit_reached` when the
   /// allowance is spent and `upgrade_required` for 30s or 1080p on Free —
@@ -176,13 +204,17 @@ class ApiClient {
     int duration = 15,
     String resolution = '720p',
   }) async {
-    final json = await _map('POST', '/clips', body: {
-      'take': take,
-      'sport': sport,
-      'tone': tone,
-      'duration': duration,
-      'resolution': resolution,
-    });
+    final json = await _map(
+      'POST',
+      '/clips',
+      body: {
+        'take': take,
+        'sport': sport,
+        'tone': tone,
+        'duration': duration,
+        'resolution': resolution,
+      },
+    );
     return Clip.fromJson(json);
   }
 
@@ -195,37 +227,47 @@ class ApiClient {
     String? tone,
     int round = 0,
   }) async {
-    final json = await _map('POST', '/clips/enhance-take', body: {
-      'take': take,
-      if (sport != null) 'sport': sport,
-      if (tone != null) 'tone': tone,
-      'round': round,
-    });
+    final json = await _map(
+      'POST',
+      '/clips/enhance-take',
+      body: {
+        'take': take,
+        if (sport != null) 'sport': sport,
+        if (tone != null) 'tone': tone,
+        'round': round,
+      },
+    );
     final variations = json['variations'];
     return variations is List
         ? variations
-            .whereType<Map>()
-            .map((e) => TakeVariation.fromJson(Map<String, dynamic>.from(e)))
-            .toList()
+              .whereType<Map>()
+              .map((e) => TakeVariation.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
         : <TakeVariation>[];
   }
 
   /// Today's stories for a sport. Cheap — a shared 20-minute server cache
   /// per sport — so calling it on every screen open is fine.
-  Future<TrendingFeed> trending(String sport) async =>
-      TrendingFeed.fromJson(await _map('GET', '/clips/trending', query: {'sport': sport}));
+  Future<TrendingFeed> trending(String sport) async => TrendingFeed.fromJson(
+    await _map('GET', '/clips/trending', query: {'sport': sport}),
+  );
 
   /// Three caption options to pick between when publishing. [avoid] carries
   /// what has already been shown so a "new suggestions" press produces
   /// genuinely new ones rather than a reshuffle.
-  Future<List<String>> captionSuggestions(String clipId, {List<String> avoid = const []}) async {
+  Future<List<String>> captionSuggestions(
+    String clipId, {
+    List<String> avoid = const [],
+  }) async {
     final json = await _map(
       'GET',
       '/clips/$clipId/captions',
       query: avoid.isEmpty ? null : {'avoid': avoid.join('\n')},
     );
     final captions = json['captions'];
-    return captions is List ? captions.map((e) => e.toString()).toList() : <String>[];
+    return captions is List
+        ? captions.map((e) => e.toString()).toList()
+        : <String>[];
   }
 
   /// Retries are free — the allowance is only charged on success (BR-09).
@@ -234,8 +276,12 @@ class ApiClient {
 
   /// Save edited dialogue and actions. [edits] is the sparse patch built by
   /// `Script.diffAgainst` — only the shots that actually changed.
-  Future<Clip> updateScript(String id, List<Map<String, dynamic>> edits) async =>
-      Clip.fromJson(await _map('PATCH', '/clips/$id/script', body: {'scenes': edits}));
+  Future<Clip> updateScript(
+    String id,
+    List<Map<String, dynamic>> edits,
+  ) async => Clip.fromJson(
+    await _map('PATCH', '/clips/$id/script', body: {'scenes': edits}),
+  );
 
   /// The money gate: nothing renders, and nothing is spent, until this.
   Future<Clip> approveScript(String id) async =>
@@ -243,8 +289,14 @@ class ApiClient {
 
   /// Throw the script away and write a different one. Free — only the render
   /// costs, and it hasn't started.
-  Future<Clip> regenerateScript(String id, {String feedback = ''}) async => Clip.fromJson(
-      await _map('POST', '/clips/$id/script/regenerate', body: {'feedback': feedback}));
+  Future<Clip> regenerateScript(String id, {String feedback = ''}) async =>
+      Clip.fromJson(
+        await _map(
+          'POST',
+          '/clips/$id/script/regenerate',
+          body: {'feedback': feedback},
+        ),
+      );
 
   Future<void> deleteClip(String id) async => _send('DELETE', '/clips/$id');
 
@@ -272,15 +324,18 @@ class ApiClient {
     required String socialAccountId,
     required String caption,
   }) async {
-    final json = await _map('POST', '/clips/$clipId/publish', body: {
-      'social_account_id': socialAccountId,
-      'caption': caption,
-    });
+    final json = await _map(
+      'POST',
+      '/clips/$clipId/publish',
+      body: {'social_account_id': socialAccountId, 'caption': caption},
+    );
     return Publish.fromJson(json);
   }
 
   Future<Publish> getPublish(String clipId, String publishId) async =>
-      Publish.fromJson(await _map('GET', '/clips/$clipId/publishes/$publishId'));
+      Publish.fromJson(
+        await _map('GET', '/clips/$clipId/publishes/$publishId'),
+      );
 
   // --------------------------------------------------------------- socials
 
@@ -294,16 +349,23 @@ class ApiClient {
   /// Throws `oauth_not_configured` (503) when the Meta app isn't set up, and
   /// the caller falls back to [connectSocial]'s mock connector.
   Future<String?> instagramOauthUrl({String next = Env.igRedirect}) async {
-    final json = await _map('GET', '/socials/instagram/oauth-url', query: {'next': next});
+    final json = await _map(
+      'GET',
+      '/socials/instagram/oauth-url',
+      query: {'next': next},
+    );
     return json['url'] as String?;
   }
 
   /// The mock connector — immediately returns a connected account. Real
   /// OAuth goes through [instagramOauthUrl] first.
   Future<SocialAccount> connectSocial(String platform) async =>
-      SocialAccount.fromJson(await _map('POST', '/socials/connect', body: {'platform': platform}));
+      SocialAccount.fromJson(
+        await _map('POST', '/socials/connect', body: {'platform': platform}),
+      );
 
-  Future<void> disconnectSocial(String platform) async => _send('DELETE', '/socials/$platform');
+  Future<void> disconnectSocial(String platform) async =>
+      _send('DELETE', '/socials/$platform');
 
   // --------------------------------------------------------------- billing
 
@@ -318,13 +380,16 @@ class ApiClient {
     required String productId,
     required String purchaseToken,
     String? transactionId,
-  }) async =>
-      _send('POST', '/billing/mobile/verify', body: {
-        'platform': platform,
-        'product_id': productId,
-        'purchase_token': purchaseToken,
-        if (transactionId != null) 'transaction_id': transactionId,
-      });
+  }) async => _send(
+    'POST',
+    '/billing/mobile/verify',
+    body: {
+      'platform': platform,
+      'product_id': productId,
+      'purchase_token': purchaseToken,
+      if (transactionId != null) 'transaction_id': transactionId,
+    },
+  );
 
   /// Stripe Checkout. Returns null when Stripe isn't configured (503).
   ///
@@ -348,12 +413,23 @@ class ApiClient {
 
   Future<void> cancelPlan() async => _send('POST', '/billing/cancel');
 
+  /// Read-only admin console data. Server-side authorization remains the
+  /// source of truth and deliberately returns 404 to non-admin accounts.
+  Future<Map<String, dynamic>> adminGet(
+    String path, {
+    Map<String, dynamic>? query,
+  }) => _map('GET', path, query: query);
+
   // ------------------------------------------------------------- analytics
 
   /// Fire-and-forget, exactly like the web: analytics must never surface an
   /// error or block anything the user asked for.
   void track(String name, [Map<String, dynamic> props = const {}]) {
-    _send('POST', '/events', body: {'name': name, 'props': props}).catchError((_) => null);
+    _send(
+      'POST',
+      '/events',
+      body: {'name': name, 'props': props},
+    ).catchError((_) => null);
   }
 }
 
@@ -365,7 +441,7 @@ class Session {
   final User user;
 
   factory Session.fromJson(Map<String, dynamic> json) => Session(
-        accessToken: json['access_token']?.toString() ?? '',
-        user: User.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
-      );
+    accessToken: json['access_token']?.toString() ?? '',
+    user: User.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
+  );
 }

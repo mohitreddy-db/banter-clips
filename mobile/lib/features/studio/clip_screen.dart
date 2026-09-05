@@ -49,7 +49,8 @@ class ClipScreen extends ConsumerStatefulWidget {
   ConsumerState<ClipScreen> createState() => _ClipScreenState();
 }
 
-class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObserver {
+class _ClipScreenState extends ConsumerState<ClipScreen>
+    with WidgetsBindingObserver {
   static const _pollInterval = Duration(seconds: 2, milliseconds: 500);
 
   Clip? _clip;
@@ -133,7 +134,12 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
     _tick ??= Timer.periodic(const Duration(seconds: 1), (_) {
       final start = _startedAt;
       if (start == null || !mounted) return;
-      setState(() => _elapsed = DateTime.now().difference(start).inSeconds.clamp(0, 1 << 30));
+      setState(
+        () => _elapsed = DateTime.now()
+            .difference(start)
+            .inSeconds
+            .clamp(0, 1 << 30),
+      );
     });
   }
 
@@ -205,11 +211,11 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
   }
 
   Future<void> _approve() => _act('approve', () async {
-        final api = ref.read(apiClientProvider);
-        final edits = _edits;
-        if (edits.isNotEmpty) await api.updateScript(widget.clipId, edits);
-        return api.approveScript(widget.clipId);
-      });
+    final api = ref.read(apiClientProvider);
+    final edits = _edits;
+    if (edits.isNotEmpty) await api.updateScript(widget.clipId, edits);
+    return api.approveScript(widget.clipId);
+  });
 
   Future<void> _share() async {
     final clip = _clip;
@@ -225,7 +231,9 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
       // anywhere. This is the one moment the app is plainly better than the
       // website, which can only drop a file in the Downloads folder.
       await Share.shareXFiles([XFile(file.path)], text: clip.take);
-      ref.read(apiClientProvider).track('video_downloaded', {'clip_id': clip.id});
+      ref.read(apiClientProvider).track('video_downloaded', {
+        'clip_id': clip.id,
+      });
     } on ApiException catch (e) {
       if (!mounted) return;
       if (e.needsUpgrade || e.status == 403) {
@@ -259,28 +267,30 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
         child: _loading
             ? const Center(child: InlineSpinner(size: 26))
             : clip == null
-                ? ErrorState(
-                    message: _error.isEmpty ? 'That clip could not be opened.' : _error,
-                    onRetry: _load,
-                  )
-                : RefreshIndicator(
-                    onRefresh: _refetch,
-                    color: AppColors.cyan,
-                    backgroundColor: AppColors.surface,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-                      children: [
-                        if (clip.awaitingScript)
-                          ..._scriptPhase(clip)
-                        else if (clip.hasFailed)
-                          ..._failedPhase(clip)
-                        else if (clip.isReady)
-                          ..._readyPhase(clip)
-                        else
-                          ..._generatingPhase(clip),
-                      ],
-                    ),
-                  ),
+            ? ErrorState(
+                message: _error.isEmpty
+                    ? 'That clip could not be opened.'
+                    : _error,
+                onRetry: _load,
+              )
+            : RefreshIndicator(
+                onRefresh: _refetch,
+                color: AppColors.cyan,
+                backgroundColor: AppColors.surface,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                  children: [
+                    if (clip.awaitingScript)
+                      ..._scriptPhase(clip)
+                    else if (clip.hasFailed)
+                      ..._failedPhase(clip)
+                    else if (clip.isReady)
+                      ..._readyPhase(clip)
+                    else
+                      ..._generatingPhase(clip),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -288,56 +298,63 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
   // ------------------------------------------------------------- phases
 
   List<Widget> _scriptPhase(Clip clip) => [
-        const Notice(
-          text: 'Your script is ready — read it through. Nothing is generated, '
-              'and nothing is used up, until you approve.',
-          icon: Icons.edit_note_rounded,
-        ),
-        const SizedBox(height: 16),
-        AppCard(child: ScriptView(script: _draft ?? clip.script!, editable: true, onEdit: _editDraft)),
-        const SizedBox(height: 10),
-        const Text(
-          '✏️ Every line and action above is editable — your words are what gets performed.',
-          style: TextStyle(fontSize: 12, color: AppColors.muted2),
-        ),
-        if (_error.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Notice.error(_error),
-        ],
-        const SizedBox(height: 18),
-        GradButton(
-          label: '✅  Approve script & generate video',
-          height: 54,
-          loading: _busy == 'approve',
-          onPressed: _busy.isEmpty ? _approve : null,
-        ),
-        const SizedBox(height: 12),
-        AppPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Not quite right?',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.text,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _RegenerateField(
-                busy: _busy == 'regen',
-                onSubmit: (feedback) => _act(
-                  'regen',
-                  () => ref
-                      .read(apiClientProvider)
-                      .regenerateScript(widget.clipId, feedback: feedback),
-                ),
-              ),
-            ],
+    const Notice(
+      text:
+          'Your script is ready — read it through. Nothing is generated, '
+          'and nothing is used up, until you approve.',
+      icon: Icons.edit_note_rounded,
+    ),
+    const SizedBox(height: 16),
+    AppCard(
+      child: ScriptView(
+        script: _draft ?? clip.script!,
+        editable: true,
+        onEdit: _editDraft,
+      ),
+    ),
+    const SizedBox(height: 10),
+    const Text(
+      '✏️ Every line and action above is editable — your words are what gets performed.',
+      style: TextStyle(fontSize: 12, color: AppColors.muted2),
+    ),
+    if (_error.isNotEmpty) ...[
+      const SizedBox(height: 14),
+      Notice.error(_error),
+    ],
+    const SizedBox(height: 18),
+    GradButton(
+      label: '✅  Approve script & generate video',
+      height: 54,
+      loading: _busy == 'approve',
+      onPressed: _busy.isEmpty ? _approve : null,
+    ),
+    const SizedBox(height: 12),
+    AppPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Not quite right?',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.text,
+            ),
           ),
-        ),
-      ];
+          const SizedBox(height: 10),
+          _RegenerateField(
+            busy: _busy == 'regen',
+            onSubmit: (feedback) => _act(
+              'regen',
+              () => ref
+                  .read(apiClientProvider)
+                  .regenerateScript(widget.clipId, feedback: feedback),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ];
 
   List<Widget> _generatingPhase(Clip clip) {
     final stageIndex = clip.stageIndex;
@@ -367,10 +384,10 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
                 state: clip.status == 'queued'
                     ? _StageState.pending
                     : i < stageIndex
-                        ? _StageState.done
-                        : i == stageIndex
-                            ? _StageState.active
-                            : _StageState.pending,
+                    ? _StageState.done
+                    : i == stageIndex
+                    ? _StageState.active
+                    : _StageState.pending,
               ),
           ],
         ),
@@ -404,14 +421,16 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
       ],
       const SizedBox(height: 14),
       const Notice(
-        text: 'You can leave the app — your video keeps rendering on our '
+        text:
+            'You can leave the app — your video keeps rendering on our '
             'servers and will be waiting in My Clips.',
         icon: Icons.info_outline_rounded,
       ),
       if (clip.isSimulated) ...[
         const SizedBox(height: 12),
         const Notice(
-          text: 'Demo run: the real stages at real pacing, but nothing is '
+          text:
+              'Demo run: the real stages at real pacing, but nothing is '
               'generated and no allowance is used.',
           icon: Icons.science_outlined,
         ),
@@ -420,65 +439,77 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
   }
 
   List<Widget> _failedPhase(Clip clip) => [
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: AppColors.errorWash(0.14),
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    child: const Center(child: Text('⚠️', style: TextStyle(fontSize: 19))),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Generation failed',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Your allowance was not used.',
-                          style: TextStyle(fontSize: 13, color: AppColors.muted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              if ((clip.error ?? '').isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text(
-                  clip.error!,
-                  style: const TextStyle(fontSize: 14, height: 1.55, color: AppColors.muted),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.errorWash(0.14),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-              ],
+                child: const Center(
+                  child: Text('⚠️', style: TextStyle(fontSize: 19)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Generation failed',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Your allowance was not used.',
+                      style: TextStyle(fontSize: 13, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-        if (_error.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Notice.error(_error),
+          if ((clip.error ?? '').isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              clip.error!,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.55,
+                color: AppColors.muted,
+              ),
+            ),
+          ],
         ],
-        const SizedBox(height: 18),
-        GradButton(
-          label: '↻  Retry for free',
-          loading: _busy == 'retry',
-          onPressed: () => _act('retry', () => ref.read(apiClientProvider).retryClip(widget.clipId)),
-        ),
-      ];
+      ),
+    ),
+    if (_error.isNotEmpty) ...[
+      const SizedBox(height: 14),
+      Notice.error(_error),
+    ],
+    const SizedBox(height: 18),
+    GradButton(
+      label: '↻  Retry for free',
+      loading: _busy == 'retry',
+      onPressed: () => _act(
+        'retry',
+        () => ref.read(apiClientProvider).retryClip(widget.clipId),
+      ),
+    ),
+  ];
 
   List<Widget> _readyPhase(Clip clip) {
     final state = ref.watch(appStateProvider);
     return [
       Notice(
-        text: 'Video ready · 0:${clip.displaySeconds.toString().padLeft(2, '0')}',
+        text:
+            'Video ready · 0:${clip.displaySeconds.toString().padLeft(2, '0')}',
         tone: NoticeTone.success,
         icon: Icons.check_circle_outline_rounded,
       ),
@@ -504,7 +535,8 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
               : ClipPlayer(
                   url: clip.videoUrl!,
                   watermarked: clip.watermarked,
-                  onPlay: () => ref.read(apiClientProvider).track('preview_played'),
+                  onPlay: () =>
+                      ref.read(apiClientProvider).track('preview_played'),
                 ),
         ),
       ),
@@ -512,7 +544,9 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
       GradButton(
         label: 'Publish to Instagram',
         height: 54,
-        onPressed: clip.isPreparing ? null : () => showPublishSheet(context, clip),
+        onPressed: clip.isPreparing
+            ? null
+            : () => showPublishSheet(context, clip),
       ),
       const SizedBox(height: 10),
       if (state.canDownload)
@@ -529,7 +563,8 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
           dashed: true,
           color: AppColors.muted2,
           trailing: const CreatorPill(),
-          onPressed: () => showUpgradeSheet(context, reason: UpgradeReason.download),
+          onPressed: () =>
+              showUpgradeSheet(context, reason: UpgradeReason.download),
         ),
       if (clip.script != null) ...[
         const SizedBox(height: 10),
@@ -552,13 +587,22 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
               ('Resolution', clip.resolutionLabel),
               ('Duration', '${clip.displaySeconds}s'),
               ('Format', 'MP4 · H.264/AAC'),
-              ('Watermark', clip.watermarked ? 'BanterClips (Free plan)' : 'None (Creator)'),
+              (
+                'Watermark',
+                clip.watermarked ? 'BanterClips (Free plan)' : 'None (Creator)',
+              ),
             ])
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Row(
                   children: [
-                    Text(label, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.muted,
+                      ),
+                    ),
                     const Spacer(),
                     Text(
                       value,
@@ -578,20 +622,20 @@ class _ClipScreenState extends ConsumerState<ClipScreen> with WidgetsBindingObse
   }
 
   void _showScriptDialog(Script script) => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppColors.surface,
-        builder: (context) => DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.85,
-          maxChildSize: 0.95,
-          builder: (context, controller) => ListView(
-            controller: controller,
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            children: [ScriptView(script: script)],
-          ),
-        ),
-      );
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    builder: (context) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      builder: (context, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        children: [ScriptView(script: script)],
+      ),
+    ),
+  );
 
   static String _formatElapsed(int seconds) =>
       '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
@@ -609,20 +653,24 @@ class _StageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, color, trailing) = switch (state) {
       _StageState.done => (
-          const Icon(Icons.check_circle_rounded, size: 21, color: AppColors.green),
-          AppColors.text,
-          'done',
+        const Icon(
+          Icons.check_circle_rounded,
+          size: 21,
+          color: AppColors.green,
         ),
+        AppColors.text,
+        'done',
+      ),
       _StageState.active => (
-          const InlineSpinner(size: 20),
-          AppColors.cyan,
-          'in progress',
-        ),
+        const InlineSpinner(size: 20),
+        AppColors.cyan,
+        'in progress',
+      ),
       _StageState.pending => (
-          const Icon(Icons.circle_outlined, size: 21, color: AppColors.border),
-          AppColors.muted2,
-          'queued',
-        ),
+        const Icon(Icons.circle_outlined, size: 21, color: AppColors.border),
+        AppColors.muted2,
+        'queued',
+      ),
     };
 
     return Padding(
@@ -636,7 +684,9 @@ class _StageRow extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 14.5,
-                fontWeight: state == _StageState.active ? FontWeight.w600 : FontWeight.w500,
+                fontWeight: state == _StageState.active
+                    ? FontWeight.w600
+                    : FontWeight.w500,
                 color: color,
               ),
             ),
@@ -681,26 +731,27 @@ class _RegenerateFieldState extends State<_RegenerateField> {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _controller,
-            maxLines: 2,
-            minLines: 1,
-            style: const TextStyle(fontSize: 13.5, color: AppColors.text),
-            decoration: const InputDecoration(
-              hintText: 'Optional: what should change? e.g. “funnier, set it in the press room”',
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 10),
-          GhostButton(
-            label: '↻  Write a different script (free)',
-            height: 46,
-            fontSize: 14,
-            loading: widget.busy,
-            onPressed: () => widget.onSubmit(_controller.text.trim()),
-          ),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      TextField(
+        controller: _controller,
+        maxLines: 2,
+        minLines: 1,
+        style: const TextStyle(fontSize: 13.5, color: AppColors.text),
+        decoration: const InputDecoration(
+          hintText:
+              'Optional: what should change? e.g. “funnier, set it in the press room”',
+          isDense: true,
+        ),
+      ),
+      const SizedBox(height: 10),
+      GhostButton(
+        label: '↻  Write a different script (free)',
+        height: 46,
+        fontSize: 14,
+        loading: widget.busy,
+        onPressed: () => widget.onSubmit(_controller.text.trim()),
+      ),
+    ],
+  );
 }

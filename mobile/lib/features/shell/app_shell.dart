@@ -21,9 +21,27 @@ class AppShell extends ConsumerWidget {
   final StatefulNavigationShell navigationShell;
 
   static const _tabs = [
-    (icon: Icons.add_circle_outline_rounded, active: Icons.add_circle_rounded, label: 'Create'),
-    (icon: Icons.video_library_outlined, active: Icons.video_library_rounded, label: 'Clips'),
-    (icon: Icons.person_outline_rounded, active: Icons.person_rounded, label: 'Account'),
+    (
+      icon: Icons.add_circle_outline_rounded,
+      active: Icons.add_circle_rounded,
+      label: 'Create',
+    ),
+    (
+      icon: Icons.video_library_outlined,
+      active: Icons.video_library_rounded,
+      label: 'Clips',
+    ),
+    (
+      icon: Icons.auto_awesome_outlined,
+      active: Icons.auto_awesome_rounded,
+      label: 'Prompts',
+    ),
+    (icon: Icons.sell_outlined, active: Icons.sell_rounded, label: 'Pricing'),
+    (
+      icon: Icons.person_outline_rounded,
+      active: Icons.person_rounded,
+      label: 'Account',
+    ),
   ];
 
   @override
@@ -84,43 +102,43 @@ class _Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    onTap: onTap,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Icon(
-                  selected ? tab.active : tab.icon,
-                  size: 23,
-                  color: selected ? AppColors.cyan : AppColors.muted,
-                ),
-                if (showDot)
-                  Positioned(
-                    right: -2,
-                    top: -1,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.cyan,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+            Icon(
+              selected ? tab.active : tab.icon,
+              size: 23,
+              color: selected ? AppColors.cyan : AppColors.muted,
+            ),
+            if (showDot)
+              Positioned(
+                right: -2,
+                top: -1,
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.cyan,
+                    shape: BoxShape.circle,
                   ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Text(
-              tab.label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: selected ? AppColors.cyan : AppColors.muted,
+                ),
               ),
-            ),
           ],
         ),
-      );
+        const SizedBox(height: 3),
+        Text(
+          tab.label,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: selected ? AppColors.cyan : AppColors.muted,
+          ),
+        ),
+      ],
+    ),
+  );
 }

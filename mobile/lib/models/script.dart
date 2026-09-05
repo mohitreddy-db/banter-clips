@@ -9,7 +9,12 @@
 library;
 
 class CastMember {
-  const CastMember({required this.id, required this.name, this.look = '', this.wardrobe = ''});
+  const CastMember({
+    required this.id,
+    required this.name,
+    this.look = '',
+    this.wardrobe = '',
+  });
 
   final String id;
   final String name;
@@ -17,11 +22,11 @@ class CastMember {
   final String wardrobe;
 
   factory CastMember.fromJson(Map<String, dynamic> json) => CastMember(
-        id: json['id']?.toString() ?? '',
-        name: json['name']?.toString() ?? '',
-        look: json['look']?.toString() ?? '',
-        wardrobe: json['wardrobe']?.toString() ?? '',
-      );
+    id: json['id']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    look: json['look']?.toString() ?? '',
+    wardrobe: json['wardrobe']?.toString() ?? '',
+  );
 }
 
 class Scene {
@@ -67,32 +72,32 @@ class Scene {
   }
 
   factory Scene.fromJson(Map<String, dynamic> json) => Scene(
-        seconds: (json['seconds'] as num?)?.toDouble() ?? 4,
-        beat: json['beat']?.toString() ?? '',
-        shotSize: json['shot_size']?.toString() ?? '',
-        cameraMove: json['camera_move']?.toString() ?? '',
-        action: json['action']?.toString() ?? '',
-        beats: json['beats']?.toString() ?? '',
-        expression: json['expression']?.toString() ?? '',
-        line: json['line']?.toString() ?? '',
-        delivery: json['delivery']?.toString() ?? '',
-        speakerId: json['speaker_id']?.toString() ?? '',
-        venue: json['venue']?.toString() ?? '',
-      );
+    seconds: (json['seconds'] as num?)?.toDouble() ?? 4,
+    beat: json['beat']?.toString() ?? '',
+    shotSize: json['shot_size']?.toString() ?? '',
+    cameraMove: json['camera_move']?.toString() ?? '',
+    action: json['action']?.toString() ?? '',
+    beats: json['beats']?.toString() ?? '',
+    expression: json['expression']?.toString() ?? '',
+    line: json['line']?.toString() ?? '',
+    delivery: json['delivery']?.toString() ?? '',
+    speakerId: json['speaker_id']?.toString() ?? '',
+    venue: json['venue']?.toString() ?? '',
+  );
 
   Scene copyWith({String? line, String? action}) => Scene(
-        seconds: seconds,
-        beat: beat,
-        shotSize: shotSize,
-        cameraMove: cameraMove,
-        action: action ?? this.action,
-        beats: beats,
-        expression: expression,
-        line: line ?? this.line,
-        delivery: delivery,
-        speakerId: speakerId,
-        venue: venue,
-      );
+    seconds: seconds,
+    beat: beat,
+    shotSize: shotSize,
+    cameraMove: cameraMove,
+    action: action ?? this.action,
+    beats: beats,
+    expression: expression,
+    line: line ?? this.line,
+    delivery: delivery,
+    speakerId: speakerId,
+    venue: venue,
+  );
 }
 
 class Script {
@@ -152,12 +157,12 @@ class Script {
   }
 
   Script withScenes(List<Scene> next) => Script(
-        title: title,
-        style: style,
-        cast: cast,
-        scenes: next,
-        storylines: storylines,
-      );
+    title: title,
+    style: style,
+    cast: cast,
+    scenes: next,
+    storylines: storylines,
+  );
 
   /// The sparse patch for `PATCH /clips/{id}/script` — only the shots whose
   /// line or action the user actually changed, exactly as `draftEdits()`
@@ -179,8 +184,5 @@ class Script {
 }
 
 List<Map<String, dynamic>> _list(dynamic value) => value is List
-    ? value
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList()
+    ? value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
     : const [];

@@ -13,7 +13,10 @@ from . import catalog, focus as focus_mod
 from .library import default_venue
 from .types import _clean
 
-SPORTS = ("NBA", "NFL", "Soccer", "MLB")
+SPORTS = (
+    "NBA", "NFL", "Soccer", "MLB", "F1", "Tennis",
+    "College Sports", "Combat Sports",
+)
 TONES = ("Funny", "Savage", "Hype", "Bold")
 # The product's duration tiers. These must match the options the UI offers and
 # the Literal on ClipCreate — a mismatch means a user picks a length and

@@ -70,18 +70,16 @@ class ApiException implements Exception {
       message ??= data['message']?.toString();
     }
 
-    return ApiException(
-      status,
-      code,
-      message ?? _defaultMessage(status),
-    );
+    return ApiException(status, code, message ?? _defaultMessage(status));
   }
 
   static String _defaultMessage(int status) {
     if (status == 0) return "Can't reach BanterClips. Check your connection.";
-    if (status == 401) return 'Your session has expired — please sign in again.';
+    if (status == 401)
+      return 'Your session has expired — please sign in again.';
     if (status == 404) return "That isn't there any more.";
-    if (status >= 500) return 'BanterClips is having a moment. Try again shortly.';
+    if (status >= 500)
+      return 'BanterClips is having a moment. Try again shortly.';
     return 'Request failed ($status)';
   }
 }

@@ -1,7 +1,7 @@
 name: banterclips
 description: "BanterClips — turn any sports take into a cinematic vertical video."
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.8.0
@@ -34,10 +34,12 @@ dependencies:
   cached_network_image: ^3.4.1
   url_launcher: ^6.3.1
   path_provider: ^2.1.5
+  google_fonts: ^6.3.0
+  image_picker: ^1.1.2
 
-  # Store billing. Creator is a digital subscription consumed in-app, so
-  # Apple (3.1.1) and Google both require it to run through their billing.
-  in_app_purchase: ^3.2.0
+  # Google Play Billing / StoreKit. Digital subscriptions sold inside the app
+  # must use the platform store; the website keeps its separate Stripe flow.
+  in_app_purchase: ^3.3.0
 
   # Instagram Business Login in a system browser sheet
   # (ASWebAuthenticationSession on iOS, Custom Tabs on Android).

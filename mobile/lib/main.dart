@@ -30,13 +30,15 @@ Future<void> main() async {
 
   // Draw behind the status and navigation bars; the theme paints the dark
   // background under them.
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: AppColors.sidebar,
-    systemNavigationBarIconBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: AppColors.sidebar,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // Supabase is optional at compile time: with no keys the app falls back to
   // the backend's dev magic-link, which is how it runs fully offline.
@@ -46,8 +48,7 @@ Future<void> main() async {
       // The web app and this one share one Supabase project, and that project
       // still issues a legacy anon key. Both clients must send the same key,
       // so this moves to `publishableKey` when the web app does — not before.
-      // ignore: deprecated_member_use
-      anonKey: Env.supabaseAnonKey,
+      publishableKey: Env.supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
         // The Supabase session is only ever traded for our own backend JWT,
         // but it still has to survive a restart so a magic-link return works.

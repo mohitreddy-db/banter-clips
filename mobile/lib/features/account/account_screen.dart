@@ -78,9 +78,13 @@ class AccountScreen extends ConsumerWidget {
                           [
                             'Beta creator',
                             if ((prefs?.role ?? '').isNotEmpty) prefs!.role!,
-                            if (user?.createdAt != null) 'joined ${_joined(user!.createdAt!)}',
+                            if (user?.createdAt != null)
+                              'joined ${_joined(user!.createdAt!)}',
                           ].join(' · '),
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.muted,
+                          ),
                         ),
                       ],
                     ),
@@ -90,6 +94,28 @@ class AccountScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
+            if (user?.isAdmin == true) ...[
+              AppCard(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: AppColors.cyan,
+                  ),
+                  title: const Text('Admin Console'),
+                  subtitle: const Text(
+                    'Live operations, graphs, costs, revenue and audit log.',
+                  ),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                  ),
+                  onTap: () => context.push('/admin'),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // ---- plan & allowance ---------------------------------------
             AppCard(
               child: Column(
@@ -98,18 +124,27 @@ class AccountScreen extends ConsumerWidget {
                   SectionLabel(
                     'PLAN & ALLOWANCE',
                     trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: state.isCreator ? AppColors.greenWash(0.14) : AppColors.chipOff,
-                        borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+                        color: state.isCreator
+                            ? AppColors.greenWash(0.14)
+                            : AppColors.chipOff,
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusPill,
+                        ),
                         border: Border.all(color: AppColors.border),
                       ),
                       child: Text(
-                        state.isCreator ? 'CREATOR' : 'FREE',
+                        state.isCreator ? r'CREATOR · $19/mo' : 'FREE',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: state.isCreator ? AppColors.green : AppColors.muted,
+                          color: state.isCreator
+                              ? AppColors.green
+                              : AppColors.muted,
                         ),
                       ),
                     ),
@@ -130,8 +165,11 @@ class AccountScreen extends ConsumerWidget {
                       const Padding(
                         padding: EdgeInsets.only(bottom: 4),
                         child: Text(
-                          'videos left',
-                          style: TextStyle(fontSize: 14, color: AppColors.muted),
+                          'credits left',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.muted,
+                          ),
                         ),
                       ),
                     ],
@@ -146,7 +184,9 @@ class AccountScreen extends ConsumerWidget {
                           widthFactor: state.usage?.fraction ?? 0,
                           child: Container(
                             height: 10,
-                            decoration: const BoxDecoration(gradient: AppColors.gradient),
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.gradient,
+                            ),
                           ),
                         ),
                       ],
@@ -154,16 +194,29 @@ class AccountScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '${state.used} used this month · only successful videos count — '
+                    '${state.used} used this month · each successful video uses one credit — '
                     'failed jobs and retries are free.',
-                    style: const TextStyle(fontSize: 12.5, height: 1.5, color: AppColors.muted),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      height: 1.5,
+                      color: AppColors.muted,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (!state.isCreator) ...[
                     GradButton(
-                      label: 'Upgrade to Creator',
+                      label: r'Upgrade to Creator — $19/mo',
                       height: 46,
-                      onPressed: () => showUpgradeSheet(context, reason: UpgradeReason.limit),
+                      onPressed: () => showUpgradeSheet(
+                        context,
+                        reason: UpgradeReason.limit,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GhostButton(
+                      label: 'Compare plans',
+                      height: 44,
+                      onPressed: () => context.go('/plans'),
                     ),
                     // Somebody who reinstalls opens Account, not the paywall,
                     // and wonders where their plan went.
@@ -171,7 +224,8 @@ class AccountScreen extends ConsumerWidget {
                   ] else ...[
                     if (user?.cancelAtPeriodEnd ?? false)
                       const Notice(
-                        text: 'Creator stays active until the end of the billing period, '
+                        text:
+                            'Creator stays active until the end of the billing period, '
                             'then you move to Free. Your videos are never deleted.',
                         icon: Icons.schedule_rounded,
                       )
@@ -184,11 +238,12 @@ class AccountScreen extends ConsumerWidget {
                         label: 'Manage subscription ↗',
                         color: AppColors.muted,
                         height: 46,
-                        onPressed: () => _open(
-                          Theme.of(context).platform == TargetPlatform.iOS
-                              ? 'https://apps.apple.com/account/subscriptions'
-                              : 'https://play.google.com/store/account/subscriptions',
-                        ),
+                        onPressed: () async {
+                          final url = await ref
+                              .read(apiClientProvider)
+                              .billingPortal();
+                          if (url != null) await _open(url);
+                        },
                       ),
                   ],
                 ],
@@ -201,9 +256,22 @@ class AccountScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             const InstagramConnectCard(),
             const SizedBox(height: 8),
-            const Text(
-              'One platform in beta — TikTok, YouTube and X arrive after launch.',
-              style: TextStyle(fontSize: 12, color: AppColors.muted2),
+            const _ChannelCard(
+              name: 'TikTok',
+              detail: 'Publish vertical clips to TikTok',
+              icon: Icons.music_note_rounded,
+            ),
+            const SizedBox(height: 8),
+            const _ChannelCard(
+              name: 'YouTube',
+              detail: 'Publish directly as YouTube Shorts',
+              icon: Icons.play_circle_fill_rounded,
+            ),
+            const SizedBox(height: 8),
+            const _ChannelCard(
+              name: 'X',
+              detail: 'Share clips with your X audience',
+              icon: Icons.alternate_email_rounded,
             ),
             const SizedBox(height: 20),
 
@@ -233,15 +301,23 @@ class AccountScreen extends ConsumerWidget {
                       children: [
                         for (final tag in prefs.allTags)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.chipOff,
-                              borderRadius: BorderRadius.circular(AppTheme.radiusChip),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusChip,
+                              ),
                               border: Border.all(color: AppColors.border),
                             ),
                             child: Text(
                               tag,
-                              style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: AppColors.muted,
+                              ),
                             ),
                           ),
                       ],
@@ -261,17 +337,35 @@ class AccountScreen extends ConsumerWidget {
                   const Text(
                     'Your videos are private to your account and kept for 90 days '
                     'during beta. They are never made public without your consent.',
-                    style: TextStyle(fontSize: 13.5, height: 1.55, color: AppColors.muted),
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      height: 1.55,
+                      color: AppColors.muted,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // Both stores require these to be reachable from inside the
                   // app. Opening the live pages is the sanctioned way to do
                   // it — rebuilding two legal documents natively buys nothing.
-                  _LinkRow(label: 'Privacy policy', onTap: () => _open(Env.privacyUrl)),
-                  _LinkRow(label: 'Terms of service', onTap: () => _open(Env.termsUrl)),
+                  _LinkRow(
+                    label: 'Privacy policy',
+                    onTap: () => context.push('/privacy'),
+                  ),
+                  _LinkRow(
+                    label: 'Terms of service',
+                    onTap: () => context.push('/terms'),
+                  ),
                   _LinkRow(
                     label: 'Report a clip or a problem',
                     onTap: () => _open('${Env.webUrl}/terms'),
+                  ),
+                  _LinkRow(
+                    label: 'Download my data',
+                    onTap: () => _open('${Env.webUrl}/account'),
+                  ),
+                  _LinkRow(
+                    label: 'Delete my account and videos',
+                    onTap: () => _open('${Env.webUrl}/account'),
                   ),
                 ],
               ),
@@ -298,8 +392,18 @@ class AccountScreen extends ConsumerWidget {
 
   static String _joined(DateTime at) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[at.month - 1]} ${at.year}';
   }
@@ -316,25 +420,76 @@ class _LinkRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 11),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.cyan,
-                  ),
-                ),
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.cyan,
               ),
-              const Icon(Icons.open_in_new_rounded, size: 15, color: AppColors.muted2),
+            ),
+          ),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 15,
+            color: AppColors.muted2,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ChannelCard extends StatelessWidget {
+  const _ChannelCard({
+    required this.name,
+    required this.detail,
+    required this.icon,
+  });
+
+  final String name, detail;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+    child: Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.panel,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: AppColors.text),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                detail,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+              ),
             ],
           ),
         ),
-      );
+        OutlinedButton(
+          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$name connection is coming next.')),
+          ),
+          child: const Text('Connect'),
+        ),
+      ],
+    ),
+  );
 }

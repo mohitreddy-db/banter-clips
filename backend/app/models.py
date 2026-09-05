@@ -20,7 +20,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
-SPORTS = ("NBA", "NFL", "Soccer", "MLB")
+SPORTS = (
+    "NBA", "NFL", "Soccer", "MLB", "F1", "Tennis",
+    "College Sports", "Combat Sports",
+)
 TONES = ("Funny", "Savage", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 

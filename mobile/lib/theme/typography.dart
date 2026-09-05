@@ -22,18 +22,70 @@ class AppType {
   /// label in the design is 15 here with no conversion.
   static const TextTheme textTheme = TextTheme(
     // Screen headline — "What's your sports take?"
-    displaySmall: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.2, color: AppColors.text),
+    displaySmall: TextStyle(
+      fontSize: 30,
+      fontWeight: FontWeight.w800,
+      height: 1.2,
+      color: AppColors.text,
+    ),
     // Card / section headline
-    headlineSmall: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, height: 1.25, color: AppColors.text),
-    titleLarge: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, height: 1.3, color: AppColors.text),
-    titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1.35, color: AppColors.text),
-    titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.35, color: AppColors.text),
-    bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, height: 1.45, color: AppColors.text),
-    bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.muted),
-    bodySmall: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.muted),
-    labelLarge: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.text),
-    labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted),
-    labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.muted2),
+    headlineSmall: TextStyle(
+      fontSize: 21,
+      fontWeight: FontWeight.w700,
+      height: 1.25,
+      color: AppColors.text,
+    ),
+    titleLarge: TextStyle(
+      fontSize: 19,
+      fontWeight: FontWeight.w700,
+      height: 1.3,
+      color: AppColors.text,
+    ),
+    titleMedium: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      height: 1.35,
+      color: AppColors.text,
+    ),
+    titleSmall: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      height: 1.35,
+      color: AppColors.text,
+    ),
+    bodyLarge: TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w500,
+      height: 1.45,
+      color: AppColors.text,
+    ),
+    bodyMedium: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      height: 1.5,
+      color: AppColors.muted,
+    ),
+    bodySmall: TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.w400,
+      height: 1.5,
+      color: AppColors.muted,
+    ),
+    labelLarge: TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w600,
+      color: AppColors.text,
+    ),
+    labelMedium: TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: AppColors.muted,
+    ),
+    labelSmall: TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w500,
+      color: AppColors.muted2,
+    ),
   );
 
   /// The all-caps section label the app uses everywhere — "SPORT", "TONE",

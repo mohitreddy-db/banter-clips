@@ -261,7 +261,7 @@ export function AppProvider({ children }) {
   //   Free  → publish-only (watermarked), no download.
   //   Paid  → download + publish without watermark.
   const plan = usage?.plan ?? user?.plan ?? "free";
-  const limit = usage?.limit ?? (plan === "creator" ? 30 : 5);
+  const limit = usage?.limit ?? (plan === "creator" ? 150 : 60);
   const used = usage?.used ?? 0;
   const left = usage?.left ?? Math.max(0, limit - used);
   const canDownload = usage?.can_download ?? plan === "creator";

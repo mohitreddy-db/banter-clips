@@ -37,18 +37,18 @@ class Publish {
   bool get hasFailed => status == 'failed';
 
   factory Publish.fromJson(Map<String, dynamic> json) => Publish(
-        id: json['id'].toString(),
-        clipId: json['clip_id'].toString(),
-        socialAccountId: json['social_account_id'].toString(),
-        caption: json['caption']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'queued',
-        error: json['error'] as String?,
-        externalUrl: json['external_url'] as String?,
-        platform: json['platform'] as String?,
-        handle: json['handle'] as String?,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
-        publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
-      );
+    id: json['id'].toString(),
+    clipId: json['clip_id'].toString(),
+    socialAccountId: json['social_account_id'].toString(),
+    caption: json['caption']?.toString() ?? '',
+    status: json['status']?.toString() ?? 'queued',
+    error: json['error'] as String?,
+    externalUrl: json['external_url'] as String?,
+    platform: json['platform'] as String?,
+    handle: json['handle'] as String?,
+    createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+    publishedAt: DateTime.tryParse(json['published_at']?.toString() ?? ''),
+  );
 }
 
 /// The seven pipeline stages, in order, with the labels the web app shows.
@@ -153,7 +153,8 @@ class Clip {
   bool get publishFailed => latestPublish?.hasFailed ?? false;
 
   /// Rounded runtime for display; falls back to the target the user chose.
-  int get displaySeconds => (durationSeconds ?? durationTarget.toDouble()).round();
+  int get displaySeconds =>
+      (durationSeconds ?? durationTarget.toDouble()).round();
 
   /// The status line shown on a card, matching `STATUS_LABEL` in `Clips.jsx`.
   String get statusLabel {
@@ -181,32 +182,32 @@ class Clip {
       'banterclips-${sport.toLowerCase()}-${id.length >= 8 ? id.substring(0, 8) : id}.mp4';
 
   factory Clip.fromJson(Map<String, dynamic> json) => Clip(
-        id: json['id'].toString(),
-        take: json['take']?.toString() ?? '',
-        sport: json['sport']?.toString() ?? '',
-        tone: json['tone']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'queued',
-        stageIndex: (json['stage_index'] as num?)?.toInt() ?? 0,
-        error: json['error'] as String?,
-        durationTarget: (json['duration_target'] as num?)?.toInt() ?? 15,
-        resolution: json['resolution']?.toString() ?? '720p',
-        durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
-        videoUrl: json['video_url'] as String?,
-        posterUrl: json['poster_url'] as String?,
-        watermarked: json['watermarked'] as bool? ?? true,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
-        completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? ''),
-        publishes: json['publishes'] is List
-            ? (json['publishes'] as List)
-                .whereType<Map>()
-                .map((e) => Publish.fromJson(Map<String, dynamic>.from(e)))
-                .toList()
-            : const [],
-        currentStep: json['current_step'] as String?,
-        isSimulated: json['is_simulated'] as bool? ?? false,
-        script: json['script'] is Map
-            ? Script.fromJson(Map<String, dynamic>.from(json['script'] as Map))
-            : null,
-        scriptApproved: json['script_approved'] as bool? ?? false,
-      );
+    id: json['id'].toString(),
+    take: json['take']?.toString() ?? '',
+    sport: json['sport']?.toString() ?? '',
+    tone: json['tone']?.toString() ?? '',
+    status: json['status']?.toString() ?? 'queued',
+    stageIndex: (json['stage_index'] as num?)?.toInt() ?? 0,
+    error: json['error'] as String?,
+    durationTarget: (json['duration_target'] as num?)?.toInt() ?? 15,
+    resolution: json['resolution']?.toString() ?? '720p',
+    durationSeconds: (json['duration_seconds'] as num?)?.toDouble(),
+    videoUrl: json['video_url'] as String?,
+    posterUrl: json['poster_url'] as String?,
+    watermarked: json['watermarked'] as bool? ?? true,
+    createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+    completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? ''),
+    publishes: json['publishes'] is List
+        ? (json['publishes'] as List)
+              .whereType<Map>()
+              .map((e) => Publish.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const [],
+    currentStep: json['current_step'] as String?,
+    isSimulated: json['is_simulated'] as bool? ?? false,
+    script: json['script'] is Map
+        ? Script.fromJson(Map<String, dynamic>.from(json['script'] as Map))
+        : null,
+    scriptApproved: json['script_approved'] as bool? ?? false,
+  );
 }

@@ -30,7 +30,8 @@ class InstagramConnectCard extends ConsumerStatefulWidget {
   const InstagramConnectCard({super.key});
 
   @override
-  ConsumerState<InstagramConnectCard> createState() => _InstagramConnectCardState();
+  ConsumerState<InstagramConnectCard> createState() =>
+      _InstagramConnectCardState();
 }
 
 class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
@@ -69,7 +70,9 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
       // The user dismissed the browser sheet — that is a choice, not a fault.
       final cancelled = e.toString().toLowerCase().contains('cancel');
       if (mounted && !cancelled) {
-        setState(() => _error = 'Instagram connect did not complete. Try again.');
+        setState(
+          () => _error = 'Instagram connect did not complete. Try again.',
+        );
       }
       // Connect may still have succeeded server-side before the sheet closed.
       await notifier.refreshSocials();
@@ -114,7 +117,11 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
                       gradient: AppColors.instagram,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.camera_alt_outlined, size: 20, color: Colors.white),
+                    child: const Icon(
+                      Icons.camera_alt_outlined,
+                      size: 20,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -122,7 +129,9 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          connected ? 'Instagram · ${account!.handle}' : 'Instagram',
+                          connected
+                              ? 'Instagram · ${account!.handle}'
+                              : 'Instagram',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 3),
@@ -132,7 +141,9 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
                               : 'Not connected',
                           style: TextStyle(
                             fontSize: 12,
-                            color: connected ? AppColors.green : AppColors.muted,
+                            color: connected
+                                ? AppColors.green
+                                : AppColors.muted,
                           ),
                         ),
                       ],

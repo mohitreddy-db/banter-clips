@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/account/account_screen.dart';
+import '../features/admin/admin_console_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/clips/clips_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/public/public_screens.dart';
+import '../features/prompts/prompts_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/studio/clip_screen.dart';
 import '../features/studio/studio_screen.dart';
@@ -27,20 +30,20 @@ final routerProvider = Provider<GoRouter>((ref) {
   // the Riverpod state through one keeps the router itself stateless.
   final refresh = ValueNotifier<int>(0);
   ref.onDispose(refresh.dispose);
-  ref.listen(
-    appStateProvider,
-    (previous, next) {
-      // Only nudge the router when something it actually gates on moved.
-      if (previous?.signedIn != next.signedIn ||
-          previous?.onboarded != next.onboarded ||
-          previous?.booted != next.booted) {
-        refresh.value++;
-      }
-    },
-  );
+  ref.listen(appStateProvider, (previous, next) {
+    // Only nudge the router when something it actually gates on moved.
+    if (previous?.signedIn != next.signedIn ||
+        previous?.onboarded != next.onboarded ||
+        previous?.booted != next.booted) {
+      refresh.value++;
+    }
+  });
 
   return GoRouter(
-    initialLocation: '/studio',
+    // An installed app starts at authentication, not the public marketing
+    // landing page. Once a valid stored session is restored, the redirect
+    // below sends returning users straight to the authenticated experience.
+    initialLocation: '/sign-in',
     refreshListenable: refresh,
     redirect: (context, routerState) {
       final app = ref.read(appStateProvider);
@@ -51,17 +54,55 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final path = routerState.matchedLocation;
       final onAuthRoute = path == '/sign-in';
+      final publicRoute =
+          path == '/' ||
+          path == '/pricing' ||
+          path == '/privacy' ||
+          path == '/terms' ||
+          path == '/reset-password' ||
+          path == '/showcase' ||
+          path.startsWith('/showcase/');
 
-      if (!app.signedIn) return onAuthRoute ? null : '/sign-in';
+      if (!app.signedIn) {
+        return (onAuthRoute || publicRoute) ? null : '/sign-in';
+      }
 
       // Signed in but the profile is empty: onboarding first. Reachable
       // again later from Account, hence the explicit allowance below.
-      if (!app.onboarded && path != '/onboarding') return '/onboarding';
+      if (!app.onboarded && path != '/onboarding' && !publicRoute) {
+        return '/onboarding';
+      }
 
       if (onAuthRoute) return app.onboarded ? '/studio' : '/onboarding';
       return null;
     },
     routes: [
+      GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
+      GoRoute(
+        path: '/pricing',
+        builder: (context, state) => const PricingScreen(),
+      ),
+      GoRoute(
+        path: '/showcase',
+        builder: (context, state) => const ShowcaseScreen(),
+      ),
+      GoRoute(
+        path: '/showcase/:slug',
+        builder: (context, state) =>
+            ShowcaseClipScreen(slug: state.pathParameters['slug']!),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (context, state) => const LegalScreen(terms: false),
+      ),
+      GoRoute(
+        path: '/terms',
+        builder: (context, state) => const LegalScreen(terms: true),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => const ResetPasswordScreen(),
+      ),
       GoRoute(
         path: '/sign-in',
         builder: (context, state) => const SignInScreen(),
@@ -70,26 +111,73 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
       ),
+      GoRoute(
+        path: '/admin',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AdminConsoleScreen(),
+      ),
+      GoRoute(
+        path: '/admin/:section',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => AdminConsoleScreen(
+          key: ValueKey(state.pathParameters['section']),
+          initialSection: state.pathParameters['section'],
+        ),
+      ),
 
       // One clip, full screen: script review, live progress, or the finished
       // player. Pushed on top of the shell so back always means "leave it".
       GoRoute(
         path: '/clip/:id',
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => ClipScreen(clipId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            ClipScreen(clipId: state.pathParameters['id']!),
       ),
 
       StatefulShellRoute.indexedStack(
-        builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
+        builder: (context, state, navigationShell) =>
+            AppShell(navigationShell: navigationShell),
         branches: [
           StatefulShellBranch(
-            routes: [GoRoute(path: '/studio', builder: (context, state) => const StudioScreen())],
+            routes: [
+              GoRoute(
+                path: '/studio',
+                builder: (context, state) => const StudioScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/clips', builder: (context, state) => const ClipsScreen())],
+            routes: [
+              GoRoute(
+                path: '/clips',
+                builder: (context, state) => const ClipsScreen(),
+              ),
+            ],
           ),
           StatefulShellBranch(
-            routes: [GoRoute(path: '/account', builder: (context, state) => const AccountScreen())],
+            routes: [
+              GoRoute(
+                path: '/prompts',
+                builder: (context, state) => const PromptsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/plans',
+                builder: (context, state) =>
+                    const PricingScreen(embedded: true),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/account',
+                builder: (context, state) => const AccountScreen(),
+              ),
+            ],
           ),
         ],
       ),

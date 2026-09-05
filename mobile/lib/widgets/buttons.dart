@@ -49,15 +49,20 @@ class GradButton extends StatelessWidget {
           ? const SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.4, color: AppColors.onGradient),
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: AppColors.onGradient,
+              ),
             )
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon,
-                      size: fontSize + 3,
-                      color: enabled ? AppColors.onGradient : AppColors.muted2),
+                  Icon(
+                    icon,
+                    size: fontSize + 3,
+                    color: enabled ? AppColors.onGradient : AppColors.muted2,
+                  ),
                   const SizedBox(width: 8),
                 ],
                 Flexible(
@@ -141,22 +146,35 @@ class GhostButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppTheme.radiusButton),
               border: dashed
                   ? null
-                  : Border.all(color: enabled ? AppColors.border : AppColors.border, width: 1),
+                  : Border.all(
+                      color: enabled ? AppColors.border : AppColors.border,
+                      width: 1,
+                    ),
             ),
             foregroundDecoration: dashed
-                ? _DashedBorder(radius: AppTheme.radiusButton, color: AppColors.border)
+                ? _DashedBorder(
+                    radius: AppTheme.radiusButton,
+                    color: AppColors.border,
+                  )
                 : null,
             child: loading
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2.2, color: AppColors.cyan),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: AppColors.cyan,
+                    ),
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (icon != null) ...[
-                        Icon(icon, size: fontSize + 3, color: enabled ? color : AppColors.muted2),
+                        Icon(
+                          icon,
+                          size: fontSize + 3,
+                          color: enabled ? color : AppColors.muted2,
+                        ),
                         const SizedBox(width: 8),
                       ],
                       Flexible(
@@ -170,7 +188,10 @@ class GhostButton extends StatelessWidget {
                           ),
                         ),
                       ),
-                      if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+                      if (trailing != null) ...[
+                        const SizedBox(width: 8),
+                        trailing!,
+                      ],
                     ],
                   ),
           ),
@@ -205,8 +226,8 @@ class AppChip extends StatelessWidget {
     final borderColor = selected
         ? AppColors.cyan
         : locked
-            ? AppColors.muted2
-            : AppColors.border;
+        ? AppColors.muted2
+        : AppColors.border;
     return Material(
       color: selected ? AppColors.chipOn : AppColors.chipOff,
       borderRadius: BorderRadius.circular(AppTheme.radiusChip),
@@ -230,8 +251,8 @@ class AppChip extends StatelessWidget {
                   color: selected
                       ? AppColors.text
                       : locked
-                          ? AppColors.muted2
-                          : AppColors.muted,
+                      ? AppColors.muted2
+                      : AppColors.muted,
                 ),
               ),
               if (trailing != null) ...[const SizedBox(width: 7), trailing!],
@@ -249,21 +270,21 @@ class CreatorPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: AppColors.cyanWash(0.12),
-          borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-        ),
-        child: const Text(
-          'CREATOR',
-          style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5,
-            color: AppColors.cyan,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: AppColors.cyanWash(0.12),
+      borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+    ),
+    child: const Text(
+      'CREATOR',
+      style: TextStyle(
+        fontSize: 8,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+        color: AppColors.cyan,
+      ),
+    ),
+  );
 }
 
 /// A borderless text action — "Maybe later", "View all →".
@@ -283,18 +304,22 @@ class TextAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => TextButton(
-        onPressed: onPressed,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          minimumSize: Size.zero,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          foregroundColor: color,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, color: color),
-        ),
-      );
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      minimumSize: Size.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: color,
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+    ),
+  );
 }
 
 /// Flutter has no dashed border, and the locked-download affordance needs
@@ -320,7 +345,10 @@ class _DashedBorderPainter extends BoxPainter {
   void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
     final size = configuration.size ?? Size.zero;
     final rect = offset & size;
-    final rrect = RRect.fromRectAndRadius(rect.deflate(0.5), Radius.circular(radius));
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.5),
+      Radius.circular(radius),
+    );
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke

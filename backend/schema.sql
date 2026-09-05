@@ -40,7 +40,7 @@ CREATE TABLE clips (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id           uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     take              text NOT NULL CHECK (char_length(take) BETWEEN 10 AND 280),
-    sport             text NOT NULL CHECK (sport IN ('NBA', 'NFL', 'Soccer', 'MLB')),
+    sport             text NOT NULL CHECK (sport IN ('NBA', 'NFL', 'Soccer', 'MLB', 'F1', 'Tennis', 'College Sports', 'Combat Sports')),
     tone              text NOT NULL CHECK (tone IN ('Funny', 'Savage', 'Hype', 'Bold')),
     status            text NOT NULL DEFAULT 'queued' CHECK (status IN (
                           'queued', 'planning_story', 'creating_voice',

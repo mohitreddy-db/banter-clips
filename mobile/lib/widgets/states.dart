@@ -28,7 +28,8 @@ class Skeleton extends StatefulWidget {
   State<Skeleton> createState() => _SkeletonState();
 }
 
-class _SkeletonState extends State<Skeleton> with SingleTickerProviderStateMixin {
+class _SkeletonState extends State<Skeleton>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1150),
@@ -42,30 +43,30 @@ class _SkeletonState extends State<Skeleton> with SingleTickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          // Sweep a cyan highlight from left to right across the block.
-          final position = _controller.value * 2 - 1;
-          return Container(
-            height: widget.height,
-            width: widget.width,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(widget.radius),
-              border: Border.all(color: AppColors.border),
-              gradient: LinearGradient(
-                begin: Alignment(position - 1, 0),
-                end: Alignment(position + 1, 0),
-                colors: [
-                  Colors.white.withValues(alpha: 0.03),
-                  AppColors.cyan.withValues(alpha: 0.14),
-                  Colors.white.withValues(alpha: 0.03),
-                ],
-                stops: const [0.0, 0.45, 1.0],
-              ),
-            ),
-          );
-        },
+    animation: _controller,
+    builder: (context, _) {
+      // Sweep a cyan highlight from left to right across the block.
+      final position = _controller.value * 2 - 1;
+      return Container(
+        height: widget.height,
+        width: widget.width,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.radius),
+          border: Border.all(color: AppColors.border),
+          gradient: LinearGradient(
+            begin: Alignment(position - 1, 0),
+            end: Alignment(position + 1, 0),
+            colors: [
+              Colors.white.withValues(alpha: 0.03),
+              AppColors.cyan.withValues(alpha: 0.14),
+              Colors.white.withValues(alpha: 0.03),
+            ],
+            stops: const [0.0, 0.45, 1.0],
+          ),
+        ),
       );
+    },
+  );
 }
 
 /// "No clips yet" — an icon, a headline, a sentence saying what to do next.
@@ -85,25 +86,25 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(icon, style: const TextStyle(fontSize: 40)),
-              const SizedBox(height: 14),
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (action != null) ...[const SizedBox(height: 22), action!],
-            ],
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(icon, style: const TextStyle(fontSize: 40)),
+          const SizedBox(height: 14),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-        ),
-      );
+          if (action != null) ...[const SizedBox(height: 22), action!],
+        ],
+      ),
+    ),
+  );
 }
 
 /// The failure state, with the retry the user needs to get out of it.
@@ -115,26 +116,30 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off_rounded, size: 38, color: AppColors.muted2),
-              const SizedBox(height: 14),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (onRetry != null) ...[
-                const SizedBox(height: 18),
-                TextButton(onPressed: onRetry, child: const Text('Try again')),
-              ],
-            ],
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 60),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.cloud_off_rounded,
+            size: 38,
+            color: AppColors.muted2,
           ),
-        ),
-      );
+          const SizedBox(height: 14),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 18),
+            TextButton(onPressed: onRetry, child: const Text('Try again')),
+          ],
+        ],
+      ),
+    ),
+  );
 }
 
 /// The boot splash, shown while the stored session is checked. Deliberately
@@ -144,15 +149,18 @@ class BootSplash extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Scaffold(
-        backgroundColor: AppColors.bg,
-        body: Center(
-          child: SizedBox(
-            width: 30,
-            height: 30,
-            child: CircularProgressIndicator(strokeWidth: 2.6, color: AppColors.cyan),
-          ),
+    backgroundColor: AppColors.bg,
+    body: Center(
+      child: SizedBox(
+        width: 30,
+        height: 30,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.6,
+          color: AppColors.cyan,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 /// A small inline spinner, sized to sit next to text.
@@ -164,8 +172,8 @@ class InlineSpinner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: size,
-        height: size,
-        child: CircularProgressIndicator(strokeWidth: size / 7.5, color: color),
-      );
+    width: size,
+    height: size,
+    child: CircularProgressIndicator(strokeWidth: size / 7.5, color: color),
+  );
 }

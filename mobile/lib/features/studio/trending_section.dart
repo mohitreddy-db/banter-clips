@@ -15,13 +15,14 @@ import '../../widgets/surfaces.dart';
 /// switching sports back and forth is cheap. An empty feed is a valid answer
 /// — it means web research is off on the server — and the section hides
 /// itself rather than showing an empty box.
-final trendingProvider =
-    FutureProvider.family.autoDispose<TrendingFeed, String>((ref, sport) async {
-  // Keep the result alive past a rebuild so flicking between sports does not
-  // refetch what we just loaded.
-  ref.keepAlive();
-  return ref.watch(apiClientProvider).trending(sport);
-});
+final trendingProvider = FutureProvider.family.autoDispose<TrendingFeed, String>(
+  (ref, sport) async {
+    // Keep the result alive past a rebuild so flicking between sports does not
+    // refetch what we just loaded.
+    ref.keepAlive();
+    return ref.watch(apiClientProvider).trending(sport);
+  },
+);
 
 class TrendingSection extends ConsumerStatefulWidget {
   const TrendingSection({super.key, required this.sport, required this.onUse});
@@ -38,6 +39,10 @@ class TrendingSection extends ConsumerStatefulWidget {
 
 class _TrendingSectionState extends ConsumerState<TrendingSection> {
   int _open = -1;
+
+  void _refresh() {
+    ref.invalidate(trendingProvider(widget.sport));
+  }
 
   @override
   void didUpdateWidget(TrendingSection oldWidget) {
@@ -70,9 +75,41 @@ class _TrendingSectionState extends ConsumerState<TrendingSection> {
           children: [
             SectionLabel(
               'TRENDING IN ${widget.sport.toUpperCase()}',
-              trailing: Text(
-                _agoLabel(data.fetchedAt),
-                style: const TextStyle(fontSize: 11, color: AppColors.muted2),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _agoLabel(data.fetchedAt),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.muted2,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  IconButton(
+                    onPressed: feed.isRefreshing ? null : _refresh,
+                    tooltip: 'Refresh trends',
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    padding: const EdgeInsets.all(7),
+                    icon: feed.isRefreshing
+                        ? const SizedBox.square(
+                            dimension: 15,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.8,
+                              color: AppColors.cyan,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.refresh_rounded,
+                            size: 18,
+                            color: AppColors.muted,
+                          ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 10),
@@ -125,7 +162,9 @@ class _TopicTile extends StatelessWidget {
 
     return AppPanel(
       onTap: onToggle,
-      borderColor: expanded ? AppColors.cyan.withValues(alpha: 0.5) : AppColors.border,
+      borderColor: expanded
+          ? AppColors.cyan.withValues(alpha: 0.5)
+          : AppColors.border,
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +191,10 @@ class _TopicTile extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         topic.whyNow,
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.muted),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: AppColors.muted,
+                        ),
                       ),
                     ],
                   ],
@@ -163,7 +205,10 @@ class _TopicTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(AppTheme.radiusPill),
@@ -180,7 +225,9 @@ class _TopicTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Icon(
-                    expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    expanded
+                        ? Icons.expand_less_rounded
+                        : Icons.expand_more_rounded,
                     size: 18,
                     color: AppColors.muted2,
                   ),
@@ -193,7 +240,11 @@ class _TopicTile extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 topic.summary,
-                style: const TextStyle(fontSize: 12.5, height: 1.5, color: AppColors.muted),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  height: 1.5,
+                  color: AppColors.muted,
+                ),
               ),
             ],
             const SizedBox(height: 12),
@@ -222,55 +273,55 @@ class _PromptTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: AppColors.cyanWash(0.06),
-        borderRadius: BorderRadius.circular(AppTheme.radiusChip),
-        child: InkWell(
-          onTap: onUse,
+    color: AppColors.cyanWash(0.06),
+    borderRadius: BorderRadius.circular(AppTheme.radiusChip),
+    child: InkWell(
+      onTap: onUse,
+      borderRadius: BorderRadius.circular(AppTheme.radiusChip),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(AppTheme.radiusChip),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppTheme.radiusChip),
-              border: Border.all(color: AppColors.cyan.withValues(alpha: 0.25)),
+          border: Border.all(color: AppColors.cyan.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              prompt.take,
+              style: const TextStyle(
+                fontSize: 13.5,
+                height: 1.45,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text,
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 7),
+            Row(
               children: [
                 Text(
-                  prompt.take,
-                  style: const TextStyle(
-                    fontSize: 13.5,
-                    height: 1.45,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
+                  [
+                    if (prompt.angle.isNotEmpty) prompt.angle,
+                    prompt.tone,
+                    '${prompt.seconds}s',
+                  ].join(' · '),
+                  style: const TextStyle(fontSize: 11, color: AppColors.muted2),
                 ),
-                const SizedBox(height: 7),
-                Row(
-                  children: [
-                    Text(
-                      [
-                        if (prompt.angle.isNotEmpty) prompt.angle,
-                        prompt.tone,
-                        '${prompt.seconds}s',
-                      ].join(' · '),
-                      style: const TextStyle(fontSize: 11, color: AppColors.muted2),
-                    ),
-                    const Spacer(),
-                    const Text(
-                      'Use this →',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.cyan,
-                      ),
-                    ),
-                  ],
+                const Spacer(),
+                const Text(
+                  'Use this →',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.cyan,
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }

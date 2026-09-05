@@ -18,14 +18,17 @@ import '../account/instagram_connect.dart';
 /// Fire-and-forget by design: the upload runs server-side and the clips
 /// library shows live status, so the user is never trapped watching a
 /// progress bar they cannot influence.
-Future<void> showPublishSheet(BuildContext context, Clip clip) => showModalBottomSheet<void>(
+Future<void> showPublishSheet(BuildContext context, Clip clip) =>
+    showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       builder: (context) => Padding(
         // Lift the sheet above the keyboard — the caption box is the point
         // of this sheet, and a covered text field is a dead end.
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: _PublishSheet(clip: clip),
       ),
     );
@@ -69,7 +72,9 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
   Future<void> _fetchSuggestions({bool regenerate = false}) async {
     setState(() => _loadingSuggestions = true);
     try {
-      final captions = await ref.read(apiClientProvider).captionSuggestions(
+      final captions = await ref
+          .read(apiClientProvider)
+          .captionSuggestions(
             widget.clip.id,
             avoid: regenerate ? _seen : const [],
           );
@@ -78,7 +83,9 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
         _seen.addAll(captions);
         _suggestions = captions;
         // Follow along unless the user has typed their own caption.
-        if (!regenerate || _seen.contains(_caption.text) || _caption.text.isEmpty) {
+        if (!regenerate ||
+            _seen.contains(_caption.text) ||
+            _caption.text.isEmpty) {
           _caption.text = captions.first;
         }
       });
@@ -97,7 +104,9 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
       _error = '';
     });
     try {
-      await ref.read(apiClientProvider).publishClip(
+      await ref
+          .read(apiClientProvider)
+          .publishClip(
             clipId: widget.clip.id,
             socialAccountId: account.id,
             caption: _caption.text,
@@ -116,7 +125,8 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
     final state = ref.watch(appStateProvider);
     final connected = state.instagramConnected;
 
-    if (_queued) return _QueuedConfirmation(watermarked: widget.clip.watermarked);
+    if (_queued)
+      return _QueuedConfirmation(watermarked: widget.clip.watermarked);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -125,7 +135,10 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Publish to Instagram', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'Publish to Instagram',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 16),
 
             if (!connected) ...[
@@ -155,7 +168,10 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
                           const SizedBox(height: 2),
                           const Text(
                             '● Connected — publishes as a Reel',
-                            style: TextStyle(fontSize: 11.5, color: AppColors.green),
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.green,
+                            ),
                           ),
                         ],
                       ),
@@ -173,7 +189,11 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
               minLines: 3,
               maxLength: 2200,
               textCapitalization: TextCapitalization.sentences,
-              style: const TextStyle(fontSize: 15, height: 1.45, color: AppColors.text),
+              style: const TextStyle(
+                fontSize: 15,
+                height: 1.45,
+                color: AppColors.text,
+              ),
               decoration: const InputDecoration(counterText: ''),
             ),
 
@@ -203,14 +223,17 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
                       color: _caption.text == suggestion
                           ? AppColors.cyanWash(0.10)
                           : Colors.transparent,
-                      borderColor:
-                          _caption.text == suggestion ? AppColors.cyan : AppColors.border,
+                      borderColor: _caption.text == suggestion
+                          ? AppColors.cyan
+                          : AppColors.border,
                       child: Text(
                         suggestion,
                         style: TextStyle(
                           fontSize: 13,
                           height: 1.45,
-                          color: _caption.text == suggestion ? AppColors.text : AppColors.muted,
+                          color: _caption.text == suggestion
+                              ? AppColors.text
+                              : AppColors.muted,
                         ),
                       ),
                     ),
@@ -220,7 +243,8 @@ class _PublishSheetState extends ConsumerState<_PublishSheet> {
             if (widget.clip.watermarked) ...[
               const SizedBox(height: 14),
               const Notice(
-                text: 'Free plan: your Reel publishes with the BanterClips watermark. '
+                text:
+                    'Free plan: your Reel publishes with the BanterClips watermark. '
                     'Creator publishes clean.',
                 icon: Icons.info_outline_rounded,
               ),
@@ -250,39 +274,43 @@ class _QueuedConfirmation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(
-                  color: AppColors.cyanWash(0.12),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Center(child: Text('🚀', style: TextStyle(fontSize: 26))),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Publishing in the background',
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Your Reel is uploading to Instagram'
-                '${watermarked ? ' (with watermark)' : ''}. '
-                'Track live status in My Clips — you can keep creating meanwhile.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 22),
-              GradButton(label: 'Done', onPressed: () => Navigator.of(context).pop()),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: AppColors.cyanWash(0.12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Center(
+              child: Text('🚀', style: TextStyle(fontSize: 26)),
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 16),
+          Text(
+            'Publishing in the background',
+            style: Theme.of(context).textTheme.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Your Reel is uploading to Instagram'
+            '${watermarked ? ' (with watermark)' : ''}. '
+            'Track live status in My Clips — you can keep creating meanwhile.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 22),
+          GradButton(
+            label: 'Done',
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    ),
+  );
 }
-

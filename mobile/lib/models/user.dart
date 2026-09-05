@@ -27,12 +27,12 @@ class Preferences {
   List<String> get allTags => [...sports, ...teams, ...players];
 
   factory Preferences.fromJson(Map<String, dynamic> json) => Preferences(
-        sports: _strings(json['sports']),
-        teams: _strings(json['teams']),
-        players: _strings(json['players']),
-        role: json['role'] as String?,
-        onboardingCompleted: json['onboarding_completed'] as bool? ?? false,
-      );
+    sports: _strings(json['sports']),
+    teams: _strings(json['teams']),
+    players: _strings(json['players']),
+    role: json['role'] as String?,
+    onboardingCompleted: json['onboarding_completed'] as bool? ?? false,
+  );
 
   Preferences copyWith({
     List<String>? sports,
@@ -40,14 +40,13 @@ class Preferences {
     List<String>? players,
     String? role,
     bool? onboardingCompleted,
-  }) =>
-      Preferences(
-        sports: sports ?? this.sports,
-        teams: teams ?? this.teams,
-        players: players ?? this.players,
-        role: role ?? this.role,
-        onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
-      );
+  }) => Preferences(
+    sports: sports ?? this.sports,
+    teams: teams ?? this.teams,
+    players: players ?? this.players,
+    role: role ?? this.role,
+    onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+  );
 }
 
 class User {
@@ -83,28 +82,34 @@ class User {
   }
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: json['id'].toString(),
-        email: json['email'] as String? ?? '',
-        displayName: json['display_name'] as String?,
-        plan: json['plan'] as String? ?? 'free',
-        cancelAtPeriodEnd: json['cancel_at_period_end'] as bool? ?? false,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
-        preferences: json['preferences'] is Map
-            ? Preferences.fromJson(Map<String, dynamic>.from(json['preferences'] as Map))
-            : const Preferences(),
-        isAdmin: json['is_admin'] as bool? ?? false,
-      );
+    id: json['id'].toString(),
+    email: json['email'] as String? ?? '',
+    displayName: json['display_name'] as String?,
+    plan: json['plan'] as String? ?? 'free',
+    cancelAtPeriodEnd: json['cancel_at_period_end'] as bool? ?? false,
+    createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+    preferences: json['preferences'] is Map
+        ? Preferences.fromJson(
+            Map<String, dynamic>.from(json['preferences'] as Map),
+          )
+        : const Preferences(),
+    isAdmin: json['is_admin'] as bool? ?? false,
+  );
 
-  User copyWith({String? plan, bool? cancelAtPeriodEnd, Preferences? preferences}) => User(
-        id: id,
-        email: email,
-        displayName: displayName,
-        plan: plan ?? this.plan,
-        cancelAtPeriodEnd: cancelAtPeriodEnd ?? this.cancelAtPeriodEnd,
-        createdAt: createdAt,
-        preferences: preferences ?? this.preferences,
-        isAdmin: isAdmin,
-      );
+  User copyWith({
+    String? plan,
+    bool? cancelAtPeriodEnd,
+    Preferences? preferences,
+  }) => User(
+    id: id,
+    email: email,
+    displayName: displayName,
+    plan: plan ?? this.plan,
+    cancelAtPeriodEnd: cancelAtPeriodEnd ?? this.cancelAtPeriodEnd,
+    createdAt: createdAt,
+    preferences: preferences ?? this.preferences,
+    isAdmin: isAdmin,
+  );
 }
 
 /// `UsageOut` — the authority on what this account may do this month.
@@ -135,21 +140,21 @@ class Usage {
   double get fraction => limit <= 0 ? 0 : (used / limit).clamp(0, 1).toDouble();
 
   factory Usage.fromJson(Map<String, dynamic> json) => Usage(
-        plan: json['plan'] as String? ?? 'free',
-        used: (json['used'] as num?)?.toInt() ?? 0,
-        limit: (json['limit'] as num?)?.toInt() ?? 5,
-        left: (json['left'] as num?)?.toInt() ?? 0,
-        canDownload: json['can_download'] as bool? ?? false,
-        watermarked: json['watermarked'] as bool? ?? true,
-      );
+    plan: json['plan'] as String? ?? 'free',
+    used: (json['used'] as num?)?.toInt() ?? 0,
+    limit: (json['limit'] as num?)?.toInt() ?? 60,
+    left: (json['left'] as num?)?.toInt() ?? 0,
+    canDownload: json['can_download'] as bool? ?? false,
+    watermarked: json['watermarked'] as bool? ?? true,
+  );
 
   /// What the app assumes before `/me/usage` has answered. Deliberately the
   /// pessimistic Free shape: never show a locked feature as unlocked.
   static const unknown = Usage(
     plan: 'free',
     used: 0,
-    limit: 5,
-    left: 5,
+    limit: 60,
+    left: 60,
     canDownload: false,
     watermarked: true,
   );

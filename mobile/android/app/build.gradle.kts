@@ -17,8 +17,8 @@ plugins {
 //     keyAlias=upload
 //     keyPassword=...
 //
-// Until that file exists, release builds fall back to the debug key so
-// `flutter run --release` still works locally.
+// A release must never silently use the debug key: Play accepts only a stable
+// upload identity, and every future update must use that same identity.
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("key.properties")
     if (file.exists()) file.inputStream().use { load(it) }
@@ -31,7 +31,9 @@ android {
     // and losing every installed user.
     namespace = "com.banterclips.app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Current native Flutter plugins require NDK 27. Android NDK releases are
+    // backward compatible, so use the highest requested plugin version.
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -53,23 +55,20 @@ android {
     }
 
     signingConfigs {
-        if (hasReleaseKey) {
-            create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
+        create("release") {
+            check(hasReleaseKey) {
+                "Release signing is not configured. Create android/key.properties before building a release."
             }
+            storeFile = file(keystoreProperties.getProperty("storeFile"))
+            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseKey) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             // Left off for now: R8 shrinking needs keep rules verified against
             // every plugin (video_player and in_app_purchase both use
             // reflection), and a silently broken release build is worse than

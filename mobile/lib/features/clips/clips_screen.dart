@@ -31,7 +31,8 @@ class ClipsScreen extends ConsumerStatefulWidget {
   ConsumerState<ClipsScreen> createState() => _ClipsScreenState();
 }
 
-class _ClipsScreenState extends ConsumerState<ClipsScreen> with WidgetsBindingObserver {
+class _ClipsScreenState extends ConsumerState<ClipsScreen>
+    with WidgetsBindingObserver {
   Timer? _poll;
   String _error = '';
   bool _foreground = true;
@@ -170,7 +171,8 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen> with WidgetsBindingOb
                 itemCount: state.clips.length + (_error.isEmpty ? 0 : 1),
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  if (_error.isNotEmpty && index == 0) return Notice.error(_error);
+                  if (_error.isNotEmpty && index == 0)
+                    return Notice.error(_error);
                   final clip = state.clips[_error.isEmpty ? index : index - 1];
                   return ClipCard(
                     clip: clip,
@@ -179,8 +181,10 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen> with WidgetsBindingOb
                     onPublish: () => showPublishSheet(context, clip),
                     onRetry: () => _retry(clip),
                     onDelete: () => _delete(clip),
-                    onLockedDownload: () =>
-                        showUpgradeSheet(context, reason: UpgradeReason.download),
+                    onLockedDownload: () => showUpgradeSheet(
+                      context,
+                      reason: UpgradeReason.download,
+                    ),
                   );
                 },
               ),
@@ -213,122 +217,130 @@ class ClipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppCard(
-        onTap: onOpen,
-        padding: const EdgeInsets.all(12),
-        child: Column(
+    onTap: onOpen,
+    padding: const EdgeInsets.all(12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _Poster(clip: clip),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            _Poster(clip: clip),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.chipOff,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${clip.sport} · ${clip.tone.toUpperCase()}',
-                              style: const TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.muted,
-                              ),
-                            ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.chipOff,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${clip.sport} · ${clip.tone.toUpperCase()}',
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.muted,
                           ),
-                          const Spacer(),
-                          if (clip.hasFailed || clip.isReady)
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, size: 19),
-                              color: AppColors.muted2,
-                              visualDensity: VisualDensity.compact,
-                              tooltip: 'Delete',
-                              onPressed: onDelete,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        clip.take,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.35,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      _StatusLine(clip: clip),
+                      const Spacer(),
+                      if (clip.hasFailed || clip.isReady)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 19,
+                          ),
+                          color: AppColors.muted2,
+                          visualDensity: VisualDensity.compact,
+                          tooltip: 'Delete',
+                          onPressed: onDelete,
+                        ),
                     ],
                   ),
-                ),
-              ],
-            ),
-            if (clip.isReady) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: GradButton(
-                      label: clip.isPublishing
-                          ? 'Publishing…'
-                          : clip.publishFailed
-                              ? 'Retry publish'
-                              : 'Publish',
-                      height: 40,
-                      fontSize: 13.5,
-                      onPressed: clip.isPublishing || clip.isPreparing ? null : onPublish,
+                  const SizedBox(height: 6),
+                  Text(
+                    clip.take,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.text,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: canDownload
-                        ? GhostButton(
-                            label: 'Share',
-                            icon: Icons.ios_share_rounded,
-                            height: 40,
-                            fontSize: 13.5,
-                            // Sharing needs the file, which the clip screen
-                            // already knows how to fetch — send them there
-                            // rather than duplicating the download here.
-                            onPressed: onOpen,
-                          )
-                        : GhostButton(
-                            label: 'Share',
-                            icon: Icons.lock_outline_rounded,
-                            height: 40,
-                            fontSize: 13,
-                            dashed: true,
-                            color: AppColors.muted2,
-                            trailing: const CreatorPill(),
-                            onPressed: onLockedDownload,
-                          ),
-                  ),
+                  const SizedBox(height: 8),
+                  _StatusLine(clip: clip),
                 ],
               ),
-            ],
-            if (clip.hasFailed) ...[
-              const SizedBox(height: 12),
-              GradButton(
-                label: '↻  Retry free',
-                height: 40,
-                fontSize: 13.5,
-                onPressed: onRetry,
-              ),
-            ],
+            ),
           ],
         ),
-      );
+        if (clip.isReady) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GradButton(
+                  label: clip.isPublishing
+                      ? 'Publishing…'
+                      : clip.publishFailed
+                      ? 'Retry publish'
+                      : 'Publish',
+                  height: 40,
+                  fontSize: 13.5,
+                  onPressed: clip.isPublishing || clip.isPreparing
+                      ? null
+                      : onPublish,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: canDownload
+                    ? GhostButton(
+                        label: 'Share',
+                        icon: Icons.ios_share_rounded,
+                        height: 40,
+                        fontSize: 13.5,
+                        // Sharing needs the file, which the clip screen
+                        // already knows how to fetch — send them there
+                        // rather than duplicating the download here.
+                        onPressed: onOpen,
+                      )
+                    : GhostButton(
+                        label: 'Share',
+                        icon: Icons.lock_outline_rounded,
+                        height: 40,
+                        fontSize: 13,
+                        dashed: true,
+                        color: AppColors.muted2,
+                        trailing: const CreatorPill(),
+                        onPressed: onLockedDownload,
+                      ),
+              ),
+            ],
+          ),
+        ],
+        if (clip.hasFailed) ...[
+          const SizedBox(height: 12),
+          GradButton(
+            label: '↻  Retry free',
+            height: 40,
+            fontSize: 13.5,
+            onPressed: onRetry,
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _Poster extends StatelessWidget {
@@ -338,49 +350,59 @@ class _Poster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: SizedBox(
-          width: 66,
-          height: 108,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // The gradient is the fallback for clips made before poster
-              // frames were stored — never a blank grey box.
-              DecoratedBox(decoration: BoxDecoration(gradient: AppColors.thumbFor(clip.id))),
-              if ((clip.posterUrl ?? '').isNotEmpty)
-                CachedNetworkImage(
-                  imageUrl: clip.posterUrl!,
-                  fit: BoxFit.cover,
-                  fadeInDuration: const Duration(milliseconds: 180),
-                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              if (clip.inFlight)
-                Container(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  child: const Center(child: InlineSpinner(size: 20, color: Colors.white)),
-                )
-              else if (clip.hasFailed)
-                Container(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  child: const Center(child: Text('⚠️', style: TextStyle(fontSize: 18))),
-                )
-              else if (clip.isReady && !clip.isPreparing)
-                Center(
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.play_arrow_rounded, size: 20, color: Colors.white),
-                  ),
-                ),
-            ],
+    borderRadius: BorderRadius.circular(10),
+    child: SizedBox(
+      width: 66,
+      height: 108,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // The gradient is the fallback for clips made before poster
+          // frames were stored — never a blank grey box.
+          DecoratedBox(
+            decoration: BoxDecoration(gradient: AppColors.thumbFor(clip.id)),
           ),
-        ),
-      );
+          if ((clip.posterUrl ?? '').isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: clip.posterUrl!,
+              fit: BoxFit.cover,
+              fadeInDuration: const Duration(milliseconds: 180),
+              errorWidget: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          if (clip.inFlight)
+            Container(
+              color: Colors.black.withValues(alpha: 0.45),
+              child: const Center(
+                child: InlineSpinner(size: 20, color: Colors.white),
+              ),
+            )
+          else if (clip.hasFailed)
+            Container(
+              color: Colors.black.withValues(alpha: 0.45),
+              child: const Center(
+                child: Text('⚠️', style: TextStyle(fontSize: 18)),
+              ),
+            )
+          else if (clip.isReady && !clip.isPreparing)
+            Center(
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _StatusLine extends StatelessWidget {
@@ -401,7 +423,11 @@ class _StatusLine extends StatelessWidget {
     if (clip.awaitingScript) {
       return const Text(
         '📝 Script ready — tap to review',
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.cyan),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.cyan,
+        ),
       );
     }
     if (clip.hasFailed) {
@@ -435,8 +461,10 @@ class _StatusLine extends StatelessWidget {
           )
         else if (published != null)
           (published.externalUrl ?? '').isEmpty
-              ? const Text('· published',
-                  style: TextStyle(fontSize: 12, color: AppColors.green))
+              ? const Text(
+                  '· published',
+                  style: TextStyle(fontSize: 12, color: AppColors.green),
+                )
               : InkWell(
                   onTap: () => launchUrl(
                     Uri.parse(published.externalUrl!),
@@ -454,11 +482,17 @@ class _StatusLine extends StatelessWidget {
         else if (clip.publishFailed)
           const Text(
             "· publish failed — retry, it's free",
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.error),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.error,
+            ),
           )
         else
-          const Text('· not published yet',
-              style: TextStyle(fontSize: 12, color: AppColors.muted2)),
+          const Text(
+            '· not published yet',
+            style: TextStyle(fontSize: 12, color: AppColors.muted2),
+          ),
       ],
     );
   }

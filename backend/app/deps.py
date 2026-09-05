@@ -65,7 +65,7 @@ def successful_clips_this_month(db: Session, user: User) -> int:
 
 
 def usage_for(db: Session, user: User) -> dict:
-    limit = settings.PLAN_LIMITS.get(user.plan, 5)
+    limit = settings.PLAN_LIMITS.get(user.plan, 60)
     used = successful_clips_this_month(db, user)
     return {
         "plan": user.plan,

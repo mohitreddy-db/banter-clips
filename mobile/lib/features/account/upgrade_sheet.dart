@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-import '../../app/env.dart';
 import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/states.dart';
@@ -20,13 +17,15 @@ enum UpgradeReason { limit, download, quality, duration }
 /// presentation of it. The one rule worth repeating here: nothing on this
 /// screen decides the user is a Creator. It shows what the server said after
 /// it verified the receipt.
-Future<void> showUpgradeSheet(BuildContext context, {required UpgradeReason reason}) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      builder: (context) => _UpgradeSheet(reason: reason),
-    );
+Future<void> showUpgradeSheet(
+  BuildContext context, {
+  required UpgradeReason reason,
+}) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  backgroundColor: AppColors.surface,
+  builder: (context) => _UpgradeSheet(reason: reason),
+);
 
 class _UpgradeSheet extends ConsumerStatefulWidget {
   const _UpgradeSheet({required this.reason});
@@ -43,7 +42,7 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
     'Publish without the watermark',
     'Full HD 1080p quality',
     'Videos up to 30 seconds',
-    '30 videos a month (vs 5)',
+    '150 credits added every month',
     'Priority render queue',
   ];
 
@@ -52,24 +51,25 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
     super.initState();
     // Ask the store what this costs here, so the price shown is the price
     // charged — in the right currency, with the right regional tax.
-    Future.microtask(() => ref.read(purchaseControllerProvider.notifier).loadProduct());
+    Future.microtask(
+      () => ref.read(purchaseControllerProvider.notifier).loadProduct(),
+    );
   }
 
   String get _title => switch (widget.reason) {
-        UpgradeReason.limit => "You've hit this month's limit",
-        UpgradeReason.download => 'Downloading is a Creator feature',
-        UpgradeReason.quality => '1080p is a Creator feature',
-        UpgradeReason.duration => 'Longer videos are a Creator feature',
-      };
+    UpgradeReason.limit => "You've hit this month's limit",
+    UpgradeReason.download => 'Downloading is a Creator feature',
+    UpgradeReason.quality => '1080p is a Creator feature',
+    UpgradeReason.duration => 'Longer videos are a Creator feature',
+  };
 
   @override
   Widget build(BuildContext context) {
     final purchase = ref.watch(purchaseControllerProvider);
     final controller = ref.read(purchaseControllerProvider.notifier);
 
-    if (purchase.phase == PurchasePhase.success) return const _WelcomeToCreator();
-
-    final storeUnavailable = purchase.phase == PurchasePhase.unavailable;
+    if (purchase.phase == PurchasePhase.success)
+      return const _WelcomeToCreator();
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -85,7 +85,11 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
                 color: AppColors.cyanWash(0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.lock_open_rounded, color: AppColors.cyan, size: 24),
+              child: const Icon(
+                Icons.lock_open_rounded,
+                color: AppColors.cyan,
+                size: 24,
+              ),
             ),
             const SizedBox(height: 16),
             Text(_title, style: Theme.of(context).textTheme.headlineSmall),
@@ -101,7 +105,11 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
                 padding: const EdgeInsets.only(bottom: 9),
                 child: Row(
                   children: [
-                    const Icon(Icons.check_rounded, size: 17, color: AppColors.green),
+                    const Icon(
+                      Icons.check_rounded,
+                      size: 17,
+                      color: AppColors.green,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -124,48 +132,36 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
 
             const SizedBox(height: 18),
 
-            if (storeUnavailable)
-              // No store on this device or the product is not live yet. The
-              // website still sells it, and saying so beats a dead button.
-              GhostButton(
-                label: 'Upgrade on banterclips.com ↗',
-                onPressed: () async {
-                  Navigator.of(context).pop();
-                  await launchUrl(
-                    Uri.parse(Env.pricingUrl),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              )
-            else
-              GradButton(
-                label: purchase.phase == PurchasePhase.verifying
-                    ? 'Activating…'
-                    : 'Upgrade to Creator — ${purchase.priceLabel}/mo',
-                height: 54,
-                loading: purchase.busy,
-                onPressed: purchase.product == null ? null : controller.buy,
-              ),
+            GradButton(
+              label: purchase.phase == PurchasePhase.unavailable
+                  ? 'Retry secure payment'
+                  : purchase.phase == PurchasePhase.verifying
+                  ? 'Activating…'
+                  : 'Upgrade to Creator — ${purchase.priceLabel}/mo',
+              height: 54,
+              loading: purchase.busy,
+              onPressed: controller.buy,
+            ),
 
             const SizedBox(height: 12),
 
-            // Both stores require a visible restore path, and Apple rejects
-            // builds without one. It is also the fix for "I paid on my old
-            // phone", which support would otherwise handle by hand.
             TextAction(
-              label: 'Restore a previous purchase',
+              label: 'Refresh an existing subscription',
               color: AppColors.muted,
               fontSize: 13,
               onPressed: purchase.busy ? null : controller.restore,
             ),
 
             const SizedBox(height: 6),
-            Text(
-              'Billed through your ${Theme.of(context).platform == TargetPlatform.iOS ? 'Apple' : 'Google'} '
-              'account and renews monthly until cancelled. Manage or cancel it '
-              'in your store subscription settings.',
+            const Text(
+              'Secure payment by Google Play. Renews monthly until cancelled; '
+              'manage or cancel it from your Play Store subscriptions.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 11, height: 1.5, color: AppColors.muted2),
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.5,
+                color: AppColors.muted2,
+              ),
             ),
             const SizedBox(height: 8),
             TextAction(
@@ -185,41 +181,46 @@ class _WelcomeToCreator extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: AppColors.greenWash(0.14),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Center(child: Text('🎉', style: TextStyle(fontSize: 26))),
-              ),
-              const SizedBox(height: 16),
-              Text('Welcome to Creator', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 10),
-              Text(
-                'Watermark-free publishing, HD downloads, 1080p and 30 videos a '
-                'month are unlocked now.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 22),
-              GradButton(
-                label: 'Continue',
-                onPressed: () {
-                  ref.read(purchaseControllerProvider.notifier).reset();
-                  Navigator.of(context).pop();
-                },
-              ),
-            ],
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: AppColors.greenWash(0.14),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Center(
+              child: Text('🎉', style: TextStyle(fontSize: 26)),
+            ),
           ),
-        ),
-      );
+          const SizedBox(height: 16),
+          Text(
+            'Welcome to Creator',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Watermark-free publishing, HD downloads, 1080p and 150 credits a '
+            'month are unlocked now.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 22),
+          GradButton(
+            label: 'Continue',
+            onPressed: () {
+              ref.read(purchaseControllerProvider.notifier).reset();
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// A small always-visible restore entry for the Account screen. Somebody who
@@ -245,7 +246,7 @@ class RestorePurchasesRow extends ConsumerWidget {
               children: [
                 const Expanded(
                   child: Text(
-                    'Restore a previous purchase',
+                    'Refresh an existing subscription',
                     style: TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
@@ -256,7 +257,11 @@ class RestorePurchasesRow extends ConsumerWidget {
                 if (purchase.phase == PurchasePhase.verifying)
                   const InlineSpinner(size: 14)
                 else
-                  const Icon(Icons.refresh_rounded, size: 16, color: AppColors.muted2),
+                  const Icon(
+                    Icons.refresh_rounded,
+                    size: 16,
+                    color: AppColors.muted2,
+                  ),
               ],
             ),
           ),

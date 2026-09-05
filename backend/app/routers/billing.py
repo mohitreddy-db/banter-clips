@@ -52,6 +52,10 @@ def stripe_configured() -> bool:
     return bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_PRICE_CREATOR)
 
 
+def native_stripe_configured() -> bool:
+    return stripe_configured() and bool(settings.STRIPE_PUBLISHABLE_KEY)
+
+
 def _stripe():
     stripe.api_key = settings.STRIPE_SECRET_KEY
     return stripe
@@ -148,6 +152,76 @@ def checkout(user: User = Depends(get_current_user), db: Session = Depends(get_d
     )
     record_event(db, "upgrade_started", user, provider="stripe")
     return {"url": session.url}
+
+
+@router.post("/mobile/payment-sheet")
+def mobile_payment_sheet(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Create a Stripe subscription for the native PaymentSheet.
+
+    Card details go directly from Stripe's native SDK to Stripe. The app gets
+    only short-lived client secrets; the API secret remains server-side.
+    """
+    if not native_stripe_configured():
+        raise HTTPException(503, detail={
+            "code": "stripe_not_configured",
+            "message": "Native payments are not configured on this server.",
+        })
+
+    sync_subscription_state(db, user)
+    if user.plan == "creator" and not user.cancel_at_period_end:
+        raise HTTPException(409, "You're already on the Creator plan.")
+
+    customer_id = _ensure_customer(db, user)
+    try:
+        ephemeral_key = _stripe().EphemeralKey.create(
+            customer=customer_id,
+            stripe_version="2025-06-30.basil",
+        )
+        subscription = _stripe().Subscription.create(
+            customer=customer_id,
+            items=[{"price": settings.STRIPE_PRICE_CREATOR}],
+            payment_behavior="default_incomplete",
+            payment_settings={"save_default_payment_method": "on_subscription"},
+            metadata={"banterclips_user_id": str(user.id), "client": "mobile"},
+            expand=["latest_invoice.confirmation_secret"],
+        )
+        invoice = _g(subscription, "latest_invoice", {})
+        confirmation_secret = _g(invoice, "confirmation_secret", {})
+        client_secret = _g(confirmation_secret, "client_secret")
+        if not client_secret:
+            client_secret = _g(_g(invoice, "payment_intent", {}), "client_secret")
+        if not client_secret:
+            _stripe().Subscription.cancel(_g(subscription, "id"))
+            raise HTTPException(502, "Stripe did not create a payable invoice.")
+    except HTTPException:
+        raise
+    except stripe.StripeError as exc:
+        log.exception("could not create native Stripe subscription")
+        raise HTTPException(502, "Stripe could not start the payment. Try again.") from exc
+
+    record_event(db, "upgrade_started", user, provider="stripe_mobile")
+    return {
+        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "payment_intent_client_secret": client_secret,
+        "customer_id": customer_id,
+        "ephemeral_key_secret": _g(ephemeral_key, "secret"),
+        "subscription_id": _g(subscription, "id"),
+        "test_mode": settings.STRIPE_PUBLISHABLE_KEY.startswith("pk_test_"),
+    }
+
+
+@router.post("/mobile/confirm")
+def confirm_mobile_payment(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Converge the user's entitlement immediately after PaymentSheet closes."""
+    if not stripe_configured():
+        raise HTTPException(503, "Payments are not configured on this server.")
+    sync_subscription_state(db, user)
+    if user.plan != "creator":
+        raise HTTPException(409, detail={
+            "code": "payment_pending",
+            "message": "Payment is still processing. Pull to refresh in a moment.",
+        })
+    return {"plan": user.plan}
 
 
 @router.post("/portal")
@@ -315,6 +389,15 @@ def verify_store_purchase(
     Idempotent: keyed on the store's own purchase token, so the app can (and
     does) retry after a dropped connection without double-granting.
     """
+    if body.product_id != settings.STORE_PRODUCT_CREATOR:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "unknown_store_product",
+                "message": "That store product is not a BanterClips Creator subscription.",
+            },
+        )
+
     if not store_billing.configured(body.platform):
         raise HTTPException(
             503,
@@ -350,6 +433,15 @@ def verify_store_purchase(
             detail={
                 "code": "purchase_not_active",
                 "message": "That subscription is no longer active.",
+            },
+        )
+
+    if entitlement.product_id != settings.STORE_PRODUCT_CREATOR:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "wrong_store_product",
+                "message": "The verified purchase is not for the Creator subscription.",
             },
         )
 

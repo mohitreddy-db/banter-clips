@@ -23,12 +23,12 @@ class SocialAccount {
   bool get isConnected => status == 'connected';
 
   factory SocialAccount.fromJson(Map<String, dynamic> json) => SocialAccount(
-        id: json['id'].toString(),
-        platform: json['platform']?.toString() ?? '',
-        handle: json['handle']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'connected',
-        connectedAt: DateTime.tryParse(json['connected_at']?.toString() ?? ''),
-      );
+    id: json['id'].toString(),
+    platform: json['platform']?.toString() ?? '',
+    handle: json['handle']?.toString() ?? '',
+    status: json['status']?.toString() ?? 'connected',
+    connectedAt: DateTime.tryParse(json['connected_at']?.toString() ?? ''),
+  );
 }
 
 /// `TakeVariation` — one sharper wording of the user's take, offered on the
@@ -46,10 +46,10 @@ class TakeVariation {
   final String why;
 
   factory TakeVariation.fromJson(Map<String, dynamic> json) => TakeVariation(
-        take: json['take']?.toString() ?? '',
-        angle: json['angle']?.toString() ?? '',
-        why: json['why']?.toString() ?? '',
-      );
+    take: json['take']?.toString() ?? '',
+    angle: json['angle']?.toString() ?? '',
+    why: json['why']?.toString() ?? '',
+  );
 }
 
 /// One ready-to-shoot take attached to a trending topic.
@@ -67,11 +67,11 @@ class TrendingPrompt {
   final String angle;
 
   factory TrendingPrompt.fromJson(Map<String, dynamic> json) => TrendingPrompt(
-        take: json['take']?.toString() ?? '',
-        tone: json['tone']?.toString() ?? 'Funny',
-        seconds: (json['seconds'] as num?)?.toInt() ?? 15,
-        angle: json['angle']?.toString() ?? '',
-      );
+    take: json['take']?.toString() ?? '',
+    tone: json['tone']?.toString() ?? 'Funny',
+    seconds: (json['seconds'] as num?)?.toInt() ?? 15,
+    angle: json['angle']?.toString() ?? '',
+  );
 }
 
 /// A story fans are talking about right now, with takes written for it.
@@ -99,21 +99,21 @@ class TrendingTopic {
   final List<TrendingPrompt> prompts;
 
   factory TrendingTopic.fromJson(Map<String, dynamic> json) => TrendingTopic(
-        title: json['title']?.toString() ?? '',
-        summary: json['summary']?.toString() ?? '',
-        whyNow: json['why_now']?.toString() ?? '',
-        heat: json['heat']?.toString() ?? 'hot',
-        who: json['who'] is List
-            ? (json['who'] as List).map((e) => e.toString()).toList()
-            : const [],
-        team: json['team']?.toString() ?? '',
-        prompts: json['prompts'] is List
-            ? (json['prompts'] as List)
-                .whereType<Map>()
-                .map((e) => TrendingPrompt.fromJson(Map<String, dynamic>.from(e)))
-                .toList()
-            : const [],
-      );
+    title: json['title']?.toString() ?? '',
+    summary: json['summary']?.toString() ?? '',
+    whyNow: json['why_now']?.toString() ?? '',
+    heat: json['heat']?.toString() ?? 'hot',
+    who: json['who'] is List
+        ? (json['who'] as List).map((e) => e.toString()).toList()
+        : const [],
+    team: json['team']?.toString() ?? '',
+    prompts: json['prompts'] is List
+        ? (json['prompts'] as List)
+              .whereType<Map>()
+              .map((e) => TrendingPrompt.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const [],
+  );
 }
 
 /// The whole feed. An empty topic list is a valid answer — it means web
@@ -127,12 +127,12 @@ class TrendingFeed {
   bool get isEmpty => topics.isEmpty;
 
   factory TrendingFeed.fromJson(Map<String, dynamic> json) => TrendingFeed(
-        topics: json['topics'] is List
-            ? (json['topics'] as List)
-                .whereType<Map>()
-                .map((e) => TrendingTopic.fromJson(Map<String, dynamic>.from(e)))
-                .toList()
-            : const [],
-        fetchedAt: DateTime.tryParse(json['fetched_at']?.toString() ?? ''),
-      );
+    topics: json['topics'] is List
+        ? (json['topics'] as List)
+              .whereType<Map>()
+              .map((e) => TrendingTopic.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+        : const [],
+    fetchedAt: DateTime.tryParse(json['fetched_at']?.toString() ?? ''),
+  );
 }

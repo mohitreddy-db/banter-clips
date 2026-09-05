@@ -250,8 +250,8 @@ const testimonials = [
 ];
 
 const plansMini = [
-  { name: "Free", price: "$0", per: "/mo", tag: "5 videos · publish-only · watermarked", cta: "Start free", popular: false },
-  { name: "Creator", price: "$9.99", per: "/mo", tag: "30 videos · HD download · no watermark", cta: "Go Creator", popular: true },
+  { name: "Free", price: "$0", per: "/mo", tag: "60 welcome credits · publish-only · watermarked", cta: "Start free", popular: false },
+  { name: "Creator", price: "$19", per: "/mo", tag: "150 credits · HD download · no watermark", cta: "Go Creator", popular: true },
 ];
 
 function Logo({ size = 30 }) {

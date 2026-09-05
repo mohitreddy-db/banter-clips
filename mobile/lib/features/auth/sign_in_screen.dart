@@ -76,7 +76,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
     switch (_mode) {
       case _Mode.signIn:
-        _run(() => notifier.signInWithPassword(email: email, password: _password.text));
+        _run(
+          () => notifier.signInWithPassword(
+            email: email,
+            password: _password.text,
+          ),
+        );
       case _Mode.signUp:
         _run(() async {
           final signedIn = await notifier.signUp(
@@ -110,6 +115,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   Widget build(BuildContext context) {
     final isSignUp = _mode == _Mode.signUp;
     final isForgot = _mode == _Mode.forgot;
+    final authError = ref.watch(
+      appStateProvider.select((state) => state.authError),
+    );
 
     return Scaffold(
       // The keyboard covers half the screen on a phone; the body scrolls
@@ -132,8 +140,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       isForgot
                           ? 'Reset your password'
                           : isSignUp
-                              ? 'Create your account'
-                              : 'Welcome back',
+                          ? 'Create your account'
+                          : 'Welcome back',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
@@ -142,8 +150,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       isForgot
                           ? "We'll email you a link to set a new one."
                           : isSignUp
-                              ? 'Five free videos a month, no card needed.'
-                              : 'Sign in to keep making clips.',
+                          ? '60 welcome credits, no card needed.'
+                          : 'Sign in to keep making clips.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
@@ -155,6 +163,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ],
                     if (_error.isNotEmpty) ...[
                       Notice.error(_error),
+                      const SizedBox(height: 14),
+                    ],
+                    if (_error.isEmpty && authError.isNotEmpty) ...[
+                      Notice.error(authError),
                       const SizedBox(height: 14),
                     ],
 
@@ -175,8 +187,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
-                      textInputAction:
-                          isForgot ? TextInputAction.done : TextInputAction.next,
+                      textInputAction: isForgot
+                          ? TextInputAction.done
+                          : TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
                       decoration: const InputDecoration(labelText: 'Email'),
                       validator: (value) {
@@ -197,17 +210,22 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         textInputAction: TextInputAction.done,
                         onFieldSubmitted: (_) => _submit(),
                         autofillHints: [
-                          isSignUp ? AutofillHints.newPassword : AutofillHints.password,
+                          isSignUp
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
                         ],
                         decoration: InputDecoration(
                           labelText: 'Password',
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              _obscure
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
                               color: AppColors.muted,
                               size: 20,
                             ),
-                            onPressed: () => setState(() => _obscure = !_obscure),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
                           ),
                         ),
                         validator: (value) {
@@ -242,8 +260,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       label: isForgot
                           ? 'Send reset link'
                           : isSignUp
-                              ? 'Create account'
-                              : 'Sign in',
+                          ? 'Create account'
+                          : 'Sign in',
                       loading: _busy,
                       onPressed: _submit,
                     ),
@@ -257,7 +275,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         icon: Icons.g_mobiledata_rounded,
                         onPressed: _busy
                             ? null
-                            : () => _run(ref.read(appStateProvider.notifier).signInWithGoogle),
+                            : () => _run(
+                                ref
+                                    .read(appStateProvider.notifier)
+                                    .signInWithGoogle,
+                              ),
                       ),
                       const SizedBox(height: 10),
                       GhostButton(
@@ -267,14 +289,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onPressed: _busy
                             ? null
                             : () {
-                                if (!(_formKey.currentState?.validate() ?? false)) return;
+                                if (!(_formKey.currentState?.validate() ??
+                                    false))
+                                  return;
                                 _run(() async {
                                   await ref
                                       .read(appStateProvider.notifier)
                                       .sendMagicLink(_email.text.trim());
                                   if (mounted) {
-                                    setState(() => _notice =
-                                        'Sign-in link sent to ${_email.text.trim()}.');
+                                    setState(
+                                      () => _notice =
+                                          'Sign-in link sent to ${_email.text.trim()}.',
+                                    );
                                   }
                                 });
                               },
@@ -287,7 +313,8 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     if (!Env.supabaseEnabled) ...[
                       const SizedBox(height: 16),
                       const Notice(
-                        text: 'Development build — signing in through the local '
+                        text:
+                            'Development build — signing in through the local '
                             'backend, which must be running with DEV_MODE=true.',
                         icon: Icons.construction_rounded,
                       ),
@@ -297,10 +324,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onPressed: _busy
                             ? null
                             : () {
-                                if (!(_formKey.currentState?.validate() ?? false)) return;
-                                _run(() => ref
-                                    .read(appStateProvider.notifier)
-                                    .devSignIn(_email.text.trim()));
+                                if (!(_formKey.currentState?.validate() ??
+                                    false))
+                                  return;
+                                _run(
+                                  () => ref
+                                      .read(appStateProvider.notifier)
+                                      .devSignIn(_email.text.trim()),
+                                );
                               },
                       ),
                     ],
@@ -310,7 +341,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          isSignUp ? 'Already have an account?' : "New to BanterClips?",
+                          isSignUp
+                              ? 'Already have an account?'
+                              : "New to BanterClips?",
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         TextAction(
@@ -344,24 +377,12 @@ class _Wordmark extends StatelessWidget {
   const _Wordmark();
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              gradient: AppColors.gradient,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.bolt_rounded, color: AppColors.onGradient, size: 30),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'BanterClips',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.text),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) => Image.asset(
+    'assets/images/banterclips-logo.png',
+    width: 132,
+    height: 132,
+    filterQuality: FilterQuality.high,
+  );
 }
 
 class _OrDivider extends StatelessWidget {
@@ -369,13 +390,16 @@ class _OrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Row(
-        children: [
-          Expanded(child: Divider(color: AppColors.border)),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text('or', style: TextStyle(fontSize: 12, color: AppColors.muted2)),
-          ),
-          Expanded(child: Divider(color: AppColors.border)),
-        ],
-      );
+    children: [
+      Expanded(child: Divider(color: AppColors.border)),
+      Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12),
+        child: Text(
+          'or',
+          style: TextStyle(fontSize: 12, color: AppColors.muted2),
+        ),
+      ),
+      Expanded(child: Divider(color: AppColors.border)),
+    ],
+  );
 }

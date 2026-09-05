@@ -80,7 +80,10 @@ class _ClipPlayerState extends State<ClipPlayer> {
       });
     } catch (_) {
       if (mounted) {
-        setState(() => _error = "This video couldn't be loaded. Pull to refresh and try again.");
+        setState(
+          () => _error =
+              "This video couldn't be loaded. Pull to refresh and try again.",
+        );
       }
     }
   }
@@ -111,56 +114,62 @@ class _ClipPlayerState extends State<ClipPlayer> {
 
   @override
   Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: 9 / 16,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            color: Colors.black,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_error.isNotEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(
-                        _error,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 13, color: AppColors.muted),
-                      ),
+    aspectRatio: 9 / 16,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_error.isNotEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    _error,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.muted,
                     ),
-                  )
-                else if (_chewie == null)
-                  const Center(child: InlineSpinner(size: 26))
-                else
-                  Chewie(controller: _chewie!),
-                if (widget.watermarked && _error.isEmpty)
-                  Positioned(
-                    right: 10,
-                    bottom: 52,
-                    child: IgnorePointer(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          '▶ BanterClips',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                  ),
+                ),
+              )
+            else if (_chewie == null)
+              const Center(child: InlineSpinner(size: 26))
+            else
+              Chewie(controller: _chewie!),
+            if (widget.watermarked && _error.isEmpty)
+              Positioned(
+                right: 10,
+                bottom: 52,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      '▶ BanterClips',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 /// The honest waiting state for a clip that finished rendering but whose URL
@@ -170,38 +179,38 @@ class ClipPreparing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: 9 / 16,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('🎬', style: TextStyle(fontSize: 28)),
-                  SizedBox(height: 10),
-                  Text(
-                    'Your video is being prepared',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.text,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    "It's finished rendering — check back in a minute.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                ],
+    aspectRatio: 9 / 16,
+    child: Container(
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('🎬', style: TextStyle(fontSize: 28)),
+              SizedBox(height: 10),
+              Text(
+                'Your video is being prepared',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                ),
               ),
-            ),
+              SizedBox(height: 6),
+              Text(
+                "It's finished rendering — check back in a minute.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
