@@ -17,6 +17,7 @@ Dev fallback — with STRIPE_* env unset, /billing/checkout returns 503
 {code: stripe_not_configured} and the frontend uses the mock /billing/upgrade.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import stripe
@@ -30,6 +31,8 @@ from ..db import get_db
 from ..deps import get_current_user, record_event
 from ..models import StripeEvent, User
 from ..schemas import PlanChangeResponse
+
+log = logging.getLogger("banter.billing")
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
