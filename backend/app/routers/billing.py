@@ -70,9 +70,31 @@ def _period_end(subscription) -> datetime | None:
     return datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
 
 
+def _customer_exists(customer_id: str) -> bool:
+    """False when Stripe does not know the id in the CURRENT mode — the
+    normal case for a customer created under live keys once the server is
+    on sandbox keys (or the reverse). Such an id is stale, not an error."""
+    try:
+        _stripe().Customer.retrieve(customer_id)
+        return True
+    except stripe.InvalidRequestError:
+        return False
+
+
+def _forget_stale_customer(db: Session, user: User) -> None:
+    log.warning("user %s: stripe customer %s does not exist in this mode; clearing",
+                user.id, user.stripe_customer_id)
+    user.stripe_customer_id = None
+    user.stripe_subscription_id = None
+    user.cancel_at_period_end = False
+    db.commit()
+
+
 def _ensure_customer(db: Session, user: User) -> str:
     if user.stripe_customer_id:
-        return user.stripe_customer_id
+        if _customer_exists(user.stripe_customer_id):
+            return user.stripe_customer_id
+        _forget_stale_customer(db, user)
     customer = _stripe().Customer.create(
         email=user.email,
         name=user.display_name or None,
@@ -87,7 +109,13 @@ def sync_subscription_state(db: Session, user: User) -> None:
     """Converge local plan state to Stripe's current truth for this customer."""
     if not (stripe_configured() and user.stripe_customer_id):
         return
-    subs = _stripe().Subscription.list(customer=user.stripe_customer_id, status="all", limit=20)
+    try:
+        subs = _stripe().Subscription.list(customer=user.stripe_customer_id, status="all", limit=20)
+    except stripe.InvalidRequestError:
+        # The id belongs to the other Stripe mode: no subscription can exist
+        # for it here. Forget it so the next checkout creates a fresh one.
+        _forget_stale_customer(db, user)
+        return
     live = [s for s in _g(subs, "data", []) if _g(s, "status") in ACTIVE_STATUSES]
 
     # Safety net: a user must never hold two live subscriptions.
@@ -195,6 +223,9 @@ def topup(body: TopupBody, user: User = Depends(get_current_user), db: Session =
 def portal(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not (stripe_configured() and user.stripe_customer_id):
         raise HTTPException(503, detail={"code": "stripe_not_configured", "message": "Billing portal is not available."})
+    if not _customer_exists(user.stripe_customer_id):
+        _forget_stale_customer(db, user)
+        raise HTTPException(503, detail={"code": "stripe_not_configured", "message": "Billing portal is not available until your next checkout."})
     session = _stripe().billing_portal.Session.create(
         customer=user.stripe_customer_id,
         return_url=f"{settings.FRONTEND_URL}/account",
