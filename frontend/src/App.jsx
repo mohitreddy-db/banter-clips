@@ -11,7 +11,7 @@ import Account from "./pages/Account.jsx";
 import Pricing from "./pages/Pricing.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import Viral from "./pages/Viral.jsx";
-import { Privacy, Terms } from "./pages/Legal.jsx";
+import { DataDeletion, Privacy, Terms } from "./pages/Legal.jsx";
 import { ShowcaseIndex, ShowcaseClip } from "./pages/Showcase.jsx";
 import AdminCatalog from "./pages/AdminCatalog.jsx";
 import AdminShell from "./admin/AdminShell.jsx";
@@ -35,6 +35,7 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      <Route path="/data-deletion" element={<DataDeletion />} />
       <Route path="/onboarding" element={<Onboarding />} />
       {/* Public on purpose: pricing is the highest-intent search query a SaaS
           gets, and inside the AppShell gate a crawler only ever saw a redirect

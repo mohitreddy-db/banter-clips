@@ -565,6 +565,7 @@ export default function Landing() {
             <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Privacy</a>
             <a href="/terms" style={{ color: "var(--muted)", textDecoration: "none" }}>Terms</a>
             <a href="/feedback" style={{ color: "var(--muted)", textDecoration: "none" }}>Feedback</a>
+            <a href="/data-deletion" style={{ color: "var(--muted)", textDecoration: "none" }}>Data deletion</a>
             {/* Google's Preferred Sources deeplink — the visitor confirms on
                 Google's side and our content gets a "preferred" badge in THEIR
                 results (Top Stories / AI Mode / AI Overviews). Per-user

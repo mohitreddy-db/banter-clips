@@ -32,6 +32,8 @@ function Layout({ title, children }) {
           <Link to="/privacy" style={{ color: "var(--muted)" }}>Privacy</Link>
           {" · "}
           <Link to="/terms" style={{ color: "var(--muted)" }}>Terms</Link>
+          {" · "}
+          <Link to="/data-deletion" style={{ color: "var(--muted)" }}>Data deletion</Link>
         </div>
       </div>
     </div>
@@ -166,7 +168,8 @@ export function Privacy() {
           <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.</LI>
         <LI>You can request full deletion of your account — including your
           videos, preferences, events, and billing identity at Stripe — by
-          emailing <B>{CONTACT}</B>. We complete deletion within 30 days.</LI>
+          emailing <B>{CONTACT}</B>. We complete deletion within 30 days.
+          Step-by-step instructions: <Link to="/data-deletion" style={{ color: "var(--cyan)" }}>Delete your data</Link>.</LI>
       </UL>
 
       <H>Your rights</H>
@@ -292,6 +295,85 @@ export function Terms() {
         We may update these terms as the product evolves; material changes
         will be noted in the product. Continued use after a change means
         acceptance.
+      </P>
+    </Layout>
+  );
+}
+
+
+/**
+ * Data deletion instructions — the public URL Meta (Instagram/Facebook)
+ * App Review requires under "User data deletion", and the same page linked
+ * from the privacy policy. Every step here must stay true of the product:
+ * Disconnect really does purge the tokens (routers/socials.py), and account
+ * deletion is handled by support within 30 days.
+ */
+export function DataDeletion() {
+  useSeo({
+    title: "Delete your data — BanterClips",
+    description:
+      "How to delete the data BanterClips holds about you: disconnect Instagram, TikTok or YouTube instantly, or delete your whole account.",
+    path: "/data-deletion",
+  });
+  return (
+    <Layout title="Delete your data">
+      <P>
+        You can remove what BanterClips holds about you at any time — either the
+        connection to one social account, or your entire BanterClips account and
+        everything in it. This page is also the data-deletion instructions we
+        provide to Meta (Instagram and Facebook), TikTok and Google.
+      </P>
+
+      <H>What we store when you connect Instagram or Facebook</H>
+      <P>
+        Only what publishing needs: your Instagram account ID and username, and the
+        access token Meta issues to BanterClips. We use it for one thing — posting
+        a clip to your account when you explicitly press Publish. We never read your
+        messages, followers or feed, and we never post without that press.
+      </P>
+
+      <H>Option 1 — Disconnect one platform (immediate)</H>
+      <UL>
+        <LI>Sign in to BanterClips and open <B>Account → Connected accounts</B>.</LI>
+        <LI>Press <B>Disconnect</B> next to Instagram, TikTok or YouTube.</LI>
+        <LI>The stored access token, refresh token, expiry and platform account ID
+          are deleted <B>immediately</B>, and the platform is told to revoke the
+          grant. Your BanterClips account and videos stay.</LI>
+        <LI>You can also remove BanterClips from the platform's side: Instagram
+          <B> Settings → Apps and websites</B>, Facebook <B>Settings → Business
+          integrations</B>, TikTok <B>Settings → Security → Manage app
+          permissions</B>, or your
+          <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.
+          Doing that invalidates the token on their end; press Disconnect in
+          BanterClips too so the record is removed here as well.</LI>
+      </UL>
+
+      <H>Option 2 — Delete your whole BanterClips account</H>
+      <UL>
+        <LI>Email <B>{CONTACT}</B> from the address you signed up with, with the
+          subject <B>“Delete my account”</B>.</LI>
+        <LI>We delete your videos and their files, scripts, preferences, connected
+          social accounts and their tokens, usage events, feedback, and your
+          billing identity at Stripe. Deletion completes within <B>30 days</B>
+          and we confirm by email when it is done.</LI>
+        <LI>Anything you already published to Instagram, TikTok or YouTube lives on
+          those platforms under your account and is not affected — delete it there
+          if you want it gone.</LI>
+      </UL>
+
+      <H>Removed BanterClips from Facebook or Instagram already?</H>
+      <P>
+        Meta invalidates the token the moment you remove the app there, so
+        BanterClips can no longer act on your account. To have the remaining
+        record (account ID and username) purged as well, use Option 1 or email
+        us under Option 2 — we will confirm once it is gone.
+      </P>
+
+      <H>What we keep after deletion</H>
+      <P>
+        Nothing that identifies you. The only records that survive are the ones
+        the law requires — Stripe's payment records for invoices already issued,
+        kept by Stripe under its own retention policy.
       </P>
     </Layout>
   );
