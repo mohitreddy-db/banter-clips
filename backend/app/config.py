@@ -221,6 +221,11 @@ class Settings(BaseSettings):
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
     CREATOR_PRICE: str = "$19/mo"
 
+    # Google Play server-side subscription verification.
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
+    ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
+    STORE_PRODUCT_CREATOR: str = "creator_monthly"
+
     @property
     def admin_emails(self) -> set[str]:
         return {e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()}

@@ -324,6 +324,31 @@ class StripeEvent(Base):
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class StoreSubscription(Base):
+    """Verified Apple or Google Creator subscription."""
+
+    __tablename__ = "store_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    product_id: Mapped[str] = mapped_column(Text, nullable=False)
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios','android')", name="store_sub_platform_check"),
+    )
+
+
 class Event(Base):
     __tablename__ = "events"
 

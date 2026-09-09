@@ -4,7 +4,7 @@ sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 pydantic-settings==2.7.0
 email-validator==2.2.0
-PyJWT==2.10.1
+PyJWT[crypto]==2.10.1  # [crypto] = ES256/RS256, needed to sign the Apple and Google store-API tokens
 httpx==0.28.1
 stripe>=11.0.0
 python-dotenv==1.0.1
