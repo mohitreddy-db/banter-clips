@@ -441,6 +441,57 @@ def test_a_fresh_job_is_never_considered_stuck():
     assert now - timedelta(minutes=5) > now - STUCK_AFTER
 
 
+# ------------------------------------------------------------------ billing
+
+def test_topup_metadata_survives_a_real_stripe_payload():
+    """Stripe deserializes a webhook payload into StripeObject, which has no
+    .get(). Reading the top-up metadata with one raised AttributeError, the
+    webhook 500'd, and credits the customer had already paid for were never
+    granted. Every read of a Stripe payload goes through _g."""
+    import stripe
+
+    from app.routers.billing import _g
+
+    session = stripe.checkout.Session.construct_from(
+        {
+            "id": "cs_test_1",
+            "object": "checkout.session",
+            "mode": "payment",
+            "payment_status": "paid",
+            "client_reference_id": "user-1",
+            "metadata": {"kind": "topup", "user_id": "user-1",
+                         "credits": "300", "pack": "pack_300"},
+        },
+        key=None,
+    )
+
+    meta = _g(session, "metadata") or {}
+    assert not hasattr(meta, "get"), "a plain dict here would hide the regression"
+    assert _g(meta, "kind") == "topup"
+    assert int(_g(meta, "credits") or 0) == 300
+    assert _g(meta, "pack", "?") == "pack_300"
+    assert _g(session, "mode") == "payment"
+    assert _g(session, "payment_status") == "paid"
+    assert _g(session, "client_reference_id") == "user-1"
+
+
+def test_topup_reads_tolerate_a_session_without_metadata():
+    """A subscription checkout carries no top-up metadata; the same reads must
+    fall through to the subscription branch instead of raising."""
+    import stripe
+
+    from app.routers.billing import _g
+
+    session = stripe.checkout.Session.construct_from(
+        {"id": "cs_test_2", "object": "checkout.session", "mode": "subscription",
+         "customer": "cus_1"},
+        key=None,
+    )
+    meta = _g(session, "metadata") or {}
+    assert _g(meta, "kind") is None
+    assert int(_g(meta, "credits") or 0) == 0
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

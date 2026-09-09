@@ -261,17 +261,17 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
             ref = _g(obj, "client_reference_id")
             user = db.get(User, ref) if ref else None
             meta = _g(obj, "metadata") or {}
-            if user is not None and _g(obj, "mode") == "payment" and meta.get("kind") == "topup":
+            if user is not None and _g(obj, "mode") == "payment" and _g(meta, "kind") == "topup":
                 # A credit pack. Idempotent: the StripeEvent dedupe above
                 # guarantees this delivery grants exactly once.
                 from ..services import credits as credit_svc
 
-                amount = int(meta.get("credits") or 0)
+                amount = int(_g(meta, "credits") or 0)
                 if amount > 0 and _g(obj, "payment_status") == "paid":
                     credit_svc.apply(db, user, amount, "topup",
-                                     note=f"pack {meta.get('pack', '?')}")
+                                     note=f"pack {_g(meta, 'pack', '?')}")
                     record_event(db, "topup_completed", user,
-                                 pack=meta.get("pack"), credits=amount)
+                                 pack=_g(meta, "pack"), credits=amount)
                 user = None  # not a subscription — skip the sync below
             elif user is not None:
                 # Link ids from the session, then converge from the API.
