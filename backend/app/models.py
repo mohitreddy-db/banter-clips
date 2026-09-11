@@ -65,6 +65,17 @@ class User(Base):
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, unique=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(Text)
+    # Stripe state is kept separately from the combined plan fields above.
+    # This prevents a Stripe webhook from downgrading an account that still has
+    # an active Apple/Google entitlement (and vice versa).
+    stripe_subscription_status: Mapped[str | None] = mapped_column(Text)
+    stripe_current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stripe_cancel_at_period_end: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    # Serializes native PaymentSheet starts so concurrent requests cannot create
+    # two payable incomplete subscriptions.
+    stripe_mobile_pending_subscription_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Blocklist. A blocked account is never told it is blocked: sign-in
@@ -322,6 +333,45 @@ class StripeEvent(Base):
     type: Mapped[str] = mapped_column(Text, nullable=False)
     event_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StoreSubscription(Base):
+    """Verified Apple App Store or Google Play Creator subscription.
+
+    Store state is persisted independently from Stripe and then folded into
+    ``users.plan`` by the shared entitlement reconciler.
+    """
+
+    __tablename__ = "store_subscriptions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
+    product_id: Mapped[str] = mapped_column(Text, nullable=False)
+    # Google purchase token or Apple's originalTransactionId.
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    auto_renewing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_verified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Throttles normal rechecks and retries after a temporary store outage.
+    next_verification_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios','android')", name="store_sub_platform_check"),
+        CheckConstraint(
+            "status IN ('active','cancelled','expired')", name="store_sub_status_check"
+        ),
+        UniqueConstraint("platform", "purchase_token", name="store_sub_provider_token"),
+        Index("store_subscriptions_user", "user_id", "expires_at"),
+    )
 
 
 class Event(Base):

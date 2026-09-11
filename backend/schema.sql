@@ -14,6 +14,10 @@ CREATE TABLE users (
     cancel_at_period_end  boolean NOT NULL DEFAULT false,
     stripe_customer_id    text UNIQUE,
     stripe_subscription_id text,
+    stripe_subscription_status text,
+    stripe_current_period_end timestamptz,
+    stripe_cancel_at_period_end boolean NOT NULL DEFAULT false,
+    stripe_mobile_pending_subscription_id text,
     created_at            timestamptz NOT NULL DEFAULT now(),
     last_login_at         timestamptz
 );
@@ -133,6 +137,25 @@ CREATE TABLE stripe_events (
     event_created_at  timestamptz,
     processed_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Verified Apple/Google subscription state. A store token is claimable by one
+-- BanterClips user only; users.plan is reconciled across this table and Stripe.
+CREATE TABLE store_subscriptions (
+    id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id               uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform              text NOT NULL CHECK (platform IN ('ios', 'android')),
+    product_id            text NOT NULL,
+    purchase_token        text NOT NULL,
+    status                text NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'cancelled', 'expired')),
+    expires_at            timestamptz,
+    auto_renewing         boolean NOT NULL DEFAULT true,
+    created_at            timestamptz NOT NULL DEFAULT now(),
+    last_verified_at      timestamptz NOT NULL DEFAULT now(),
+    next_verification_at  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT store_sub_provider_token UNIQUE (platform, purchase_token)
+);
+CREATE INDEX store_subscriptions_user ON store_subscriptions (user_id, expires_at);
 
 CREATE TABLE events (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

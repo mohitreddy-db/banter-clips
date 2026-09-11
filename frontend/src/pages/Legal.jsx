@@ -11,7 +11,7 @@ import { useSeo } from "../lib/seo.js";
  * page in the same PR.
  */
 
-const EFFECTIVE = "September 1, 2026";
+const EFFECTIVE = "September 9, 2026";
 const CONTACT = "support@banterclips.com";
 
 function Layout({ title, children }) {
@@ -167,7 +167,8 @@ export function Privacy() {
         <LI>You can also revoke Google access at any time from your
           <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.</LI>
         <LI>You can request full deletion of your account — including your
-          videos, preferences, events, and billing identity at Stripe — by
+          videos, preferences, events, and billing identifiers at Stripe,
+          Apple, or Google — by
           emailing <B>{CONTACT}</B>. We complete deletion within 30 days.
           Step-by-step instructions: <Link to="/data-deletion" style={{ color: "var(--cyan)" }}>Delete your data</Link>.</LI>
       </UL>
@@ -269,9 +270,11 @@ export function Terms() {
           Credit top-up packs are available to both plans and never expire.</LI>
         <LI>Credits are charged only when a video completes — failures,
           abandoned scripts and retries release the reservation in full.</LI>
-        <LI>Billing runs through Stripe. Upgrades apply immediately;
-          cancellation applies at the end of the paid period. Your videos are
-          never deleted for billing reasons.</LI>
+        <LI>Web billing runs through Stripe; eligible iOS and Android app
+          purchases run through Apple or Google. Upgrades apply after provider
+          verification, and cancellation applies at the end of the paid period.
+          Store subscriptions are managed in the applicable store. Your videos
+          are never deleted for billing reasons.</LI>
       </UL>
 
       <H>Availability and liability</H>
@@ -354,7 +357,7 @@ export function DataDeletion() {
           subject <B>“Delete my account”</B>.</LI>
         <LI>We delete your videos and their files, scripts, preferences, connected
           social accounts and their tokens, usage events, feedback, and your
-          billing identity at Stripe. Deletion completes within <B>30 days</B>
+          billing identifiers at Stripe, Apple, or Google. Deletion completes within <B>30 days</B>
           and we confirm by email when it is done.</LI>
         <LI>Anything you already published to Instagram, TikTok or YouTube lives on
           those platforms under your account and is not affected — delete it there

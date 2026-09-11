@@ -29,6 +29,13 @@ def get_current_user(
         # Kills already-issued session JWTs too, with the same generic 401 a
         # stale session gets — blocked users are never told they're blocked.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session")
+
+    # Store subscriptions are locally cheap to check and reverified only when
+    # due. Doing this in the auth dependency keeps every capability gate honest
+    # even when a client skips /me/usage and calls a protected action directly.
+    from .services import entitlements
+
+    entitlements.refresh_store_entitlements(db, user)
     return user
 
 
