@@ -5,6 +5,8 @@ import { api } from "../lib/api.js";
 import { SPORTS, suggestionsFor } from "../lib/sports.js";
 
 import { useSeo } from "../lib/seo.js";
+import { SocialIcon } from "../components/SocialIcon.jsx";
+import { YouTubeTerms } from "../components/YouTubeTerms.jsx";
 // One vocabulary with the create page and the backend (lib/sports.js).
 // Nothing is locked any more: every sport here generates.
 const ROLES = [
@@ -35,13 +37,6 @@ function Glyph({ kind }) {
       <svg {...common} stroke="#fff" strokeWidth="2" strokeLinecap="round">
         <path d="M14 4v9.5a3.5 3.5 0 1 1-3.5-3.5" />
         <path d="M14 4c.5 2.5 2 4 4.5 4.4" />
-      </svg>
-    );
-  if (kind === "yt")
-    return (
-      <svg {...common}>
-        <rect x="3" y="6" width="18" height="12" rx="3" fill="#e0281e" />
-        <path d="M10 9.5L15 12l-5 2.5z" fill="#fff" />
       </svg>
     );
   return (
@@ -161,7 +156,7 @@ function OnboardingFlow() {
   const doConnect = async (platform) => {
     setConnecting(platform);
     try {
-      await connectSocial(platform);
+      await connectSocial(platform, "/onboarding");
     } catch {
       /* surfaced by the button returning to Connect state */
     }
@@ -266,13 +261,18 @@ function OnboardingFlow() {
               </div>
             )}
             {PLATFORMS.map((p) => (
-              <div key={p.name} className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 14 }}>
+              <div key={p.name} className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 14, flexWrap: "wrap" }}>
                 <div style={{ width: 38, height: 38, borderRadius: 10, background: p.tile, display: "grid", placeItems: "center", border: p.glyph === "note" || p.glyph === "x" ? "1px solid var(--app-border)" : "none" }}>
-                  <Glyph kind={p.glyph} />
+                  {p.key === "youtube" ? (
+                    <a href="https://www.youtube.com/" target="_blank" rel="noreferrer" title="Open YouTube" style={{ display: "inline-flex" }}>
+                      <SocialIcon platform="youtube" size={30} />
+                    </a>
+                  ) : <Glyph kind={p.glyph} />}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{p.sub}</div>
+                  {p.key === "youtube" && <YouTubeTerms style={{ marginTop: 4 }} />}
                 </div>
                 {p.connectable ? (
                   accounts[p.key] ? (

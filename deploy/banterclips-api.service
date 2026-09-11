@@ -10,7 +10,10 @@ WorkingDirectory=/opt/banter-clips/backend
 # when QUEUE_MODE=thread (renders run in-process), but the cost of listing the
 # system directories is nothing and the failure without them is total.
 Environment=PATH=/opt/banter-clips/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/opt/banter-clips/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+# OAuth callbacks carry short-lived authorization codes and signed state in the
+# query string. Keep them out of journald; application logs still record stable
+# event/reason codes without credentials.
+ExecStart=/opt/banter-clips/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --no-access-log
 Restart=always
 RestartSec=3
 

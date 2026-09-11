@@ -242,7 +242,11 @@ export default function Account() {
           { key: "youtube", name: "YouTube", account: youtube, blurb: "Connected · vertical clips upload as Shorts · explicit per-clip publishing only", legal: true },
         ].map(({ key, name, account, blurb, legal }) => (
           <div key={key} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <SocialIcon platform={key} size={36} />
+            {key === "youtube" ? (
+              <a href="https://www.youtube.com/" target="_blank" rel="noreferrer" title="Open YouTube" style={{ display: "inline-flex" }}>
+                <SocialIcon platform={key} size={36} />
+              </a>
+            ) : <SocialIcon platform={key} size={36} />}
             <div style={{ flex: 1, minWidth: 180 }}>
               <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>
                 {name} {account ? `— ${account.handle}` : ""}
@@ -255,7 +259,19 @@ export default function Account() {
               {legal && <YouTubeTerms style={{ marginTop: 4 }} />}
             </div>
             {account ? (
-              <button className="ghost-btn" style={{ padding: "10px 18px", fontSize: 14, opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(() => disconnectSocial(key))}>
+              <button
+                className="ghost-btn"
+                style={{ padding: "10px 18px", fontSize: 14, opacity: busy ? 0.7 : 1 }}
+                disabled={busy}
+                onClick={withBusy(async () => {
+                  const detail = key === "youtube"
+                    ? "This immediately revokes BanterClips in Google and deletes stored YouTube tokens and API-returned video links. Videos already on YouTube are not deleted."
+                    : `This removes the stored ${name} connection and tokens. Published posts stay on ${name}.`;
+                  if (!window.confirm(`Disconnect ${name}?\n\n${detail}`)) return;
+                  await disconnectSocial(key);
+                  setIgNotice({ ok: true, text: `${name} disconnected and its stored authorization data was deleted.` });
+                })}
+              >
                 Disconnect
               </button>
             ) : (
@@ -290,11 +306,13 @@ export default function Account() {
       <div className="card" style={{ padding: "clamp(18px, 4.5vw, 24px) clamp(16px, 5vw, 28px)", display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1.2, color: "var(--app-muted)" }}>DATA & PRIVACY</span>
         <div style={{ fontSize: 14, color: "var(--app-muted)", lineHeight: 1.55 }}>
-          Your videos are private to your account and are kept for 90 days during beta. They will never be made public without your consent.
+          Your videos are private to your account and are kept until you delete them or request account deletion. Nothing is published without your explicit action.
         </div>
         <div style={{ display: "flex", gap: "14px 24px", paddingTop: 4, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-cyan)", cursor: "pointer" }}>Download my data</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-error)", cursor: "pointer" }}>Delete my account and videos</span>
+          <a href="/data-deletion#request-copy" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-cyan)", textDecoration: "none" }}>Request a copy of my data</a>
+          <a href="mailto:support@banterclips.com?subject=Delete%20my%20account" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-error)", textDecoration: "none" }}>Request account and video deletion</a>
+          <a href="/privacy" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-muted)", textDecoration: "none" }}>Privacy Policy</a>
+          <a href="/terms" style={{ fontSize: 13, fontWeight: 600, color: "var(--app-muted)", textDecoration: "none" }}>Terms</a>
         </div>
       </div>
       {topupOpen && <TopUpModal onClose={() => { setTopupOpen(false); refreshUsage(); }} />}

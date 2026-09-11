@@ -647,6 +647,19 @@ def caption_suggestions(
     return CaptionSuggestions(captions=options)
 
 
+def _youtube_options(body: PublishCreate) -> dict:
+    """Require the exact creator-approved metadata for every YouTube upload."""
+    if body.youtube is None:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "youtube_options_required",
+                "message": "Choose a YouTube title, description, and visibility before uploading.",
+            },
+        )
+    return body.youtube.model_dump()
+
+
 def _tiktok_options(body: PublishCreate) -> dict:
     """The creator's composer choices, checked for the rules TikTok states as
     absolutes rather than per-account settings.
@@ -707,6 +720,8 @@ def publish_clip(
     options = None
     if account.platform == "tiktok":
         options = _tiktok_options(body)
+    elif account.platform == "youtube":
+        options = _youtube_options(body)
 
     # BR-13: publishing is always an explicit per-clip action.
     pub = Publish(

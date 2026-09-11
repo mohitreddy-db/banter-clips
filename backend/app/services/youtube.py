@@ -3,8 +3,10 @@
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from sqlalchemy import update
 
 from ..config import settings
+from ..models import Publish
 
 AUTHORIZE = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN = "https://oauth2.googleapis.com/token"
@@ -32,16 +34,51 @@ def exchange_code(code: str) -> dict:
     ).json()
 
 
+def delete_stored_api_data(db, account_id) -> None:
+    """Delete data returned by YouTube while retaining BanterClips history.
+
+    The upload response gives us a YouTube video id, which is embedded in the
+    publish row's external URL. Title, description, visibility, timestamps,
+    and status are BanterClips/user-authored data; the URL is the only API Data
+    we retain from ``videos.insert``.
+    """
+    db.execute(
+        update(Publish)
+        .where(Publish.social_account_id == account_id)
+        .values(external_url=None)
+    )
+
+
+def _expire_invalid_grant(db, account) -> None:
+    account.status = "revoked"
+    account.revoked_at = datetime.now(timezone.utc)
+    account.access_token = None
+    account.refresh_token = None
+    account.platform_user_id = None
+    account.token_expires_at = None
+    delete_stored_api_data(db, account.id)
+    db.commit()
+
+
 def maybe_refresh_token(db, account) -> None:
+    """Refresh a near-expiry grant and purge data if Google revoked it.
+
+    Transport/server errors are transient and get retried on the next account
+    read, publish, or scheduled housekeeping pass. ``invalid_grant`` is
+    definitive: the user revoked access (or the grant expired), so all stored
+    credentials and YouTube-returned API Data are deleted immediately.
+    """
     if (
         account.status != "connected"
-        or not account.refresh_token
         or account.token_expires_at is None
         or account.token_expires_at - datetime.now(timezone.utc) > REFRESH_WINDOW
     ):
         return
+    if not account.refresh_token:
+        _expire_invalid_grant(db, account)
+        return
     try:
-        body = httpx.post(
+        response = httpx.post(
             TOKEN,
             data={
                 "client_id": settings.YOUTUBE_CLIENT_ID,
@@ -50,26 +87,26 @@ def maybe_refresh_token(db, account) -> None:
                 "refresh_token": account.refresh_token,
             },
             timeout=20,
-        ).json()
-    except httpx.HTTPError:
+        )
+        body = response.json()
+    except (httpx.HTTPError, ValueError):
         return
-    if "access_token" in body:
+    if response.is_success and "access_token" in body:
         account.access_token = body["access_token"]
         account.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=body.get("expires_in", 3600))
         db.commit()
-    elif account.token_expires_at < datetime.now(timezone.utc):
-        account.status = "revoked"
-        account.revoked_at = datetime.now(timezone.utc)
-        db.commit()
+    elif body.get("error") == "invalid_grant":
+        _expire_invalid_grant(db, account)
 
 
-def metadata(caption: str, fallback: str) -> tuple[str, str]:
-    text = (caption or fallback).strip()
-    first, _, rest = text.partition("\n")
-    return first[:100] or fallback[:100], (rest.strip() or text)[:5000]
-
-
-def upload_short(token: str, video: bytes, *, title: str, description: str) -> str:
+def upload_short(
+    token: str,
+    video: bytes,
+    *,
+    title: str,
+    description: str,
+    privacy_status: str,
+) -> str:
     """Create a resumable session, then upload these small clips in one PUT."""
     headers = {"Authorization": f"Bearer {token}"}
     init = httpx.post(
@@ -84,8 +121,10 @@ def upload_short(token: str, video: bytes, *, title: str, description: str) -> s
         json={
             "snippet": {"title": title, "description": description, "categoryId": "17"},
             "status": {
-                "privacyStatus": settings.YOUTUBE_PRIVACY_STATUS,
-                "selfDeclaredMadeForKids": False,
+                "privacyStatus": privacy_status,
+                # Every BanterClips render is AI-generated. The made-for-kids
+                # value is intentionally omitted rather than guessed for the
+                # creator; YouTube applies the channel's own audience setting.
                 "containsSyntheticMedia": True,
             },
         },
@@ -108,20 +147,21 @@ def upload_short(token: str, video: bytes, *, title: str, description: str) -> s
     return video_id
 
 
-def revoke(token: str) -> None:
-    """Tell Google the grant is over.
+def revoke(token: str) -> bool:
+    """Tell Google the grant is over, retrying transient failures immediately.
 
-    Deleting our copy of a token does not end the user's authorization — it
-    stays listed under their Google Account until it expires, and the YouTube
-    API Services Developer Policies require an API client to revoke it when the
-    user disconnects. Revoking either token ends the whole grant, so callers
-    pass the refresh token when they have one.
-
-    Best-effort: a disconnect must succeed even if Google is unreachable, and
-    a token Google no longer recognises returns 400, which is the outcome we
-    wanted anyway.
+    A 200 response means Google revoked the grant. A 400 means the token is
+    already invalid, which is also the desired terminal state. Local deletion
+    is never blocked on an outage, but short transient failures get three
+    attempts before the caller removes its copy of the credential.
     """
-    try:
-        httpx.post(REVOKE, data={"token": token}, timeout=10)
-    except httpx.HTTPError:
-        pass
+    for _ in range(3):
+        try:
+            response = httpx.post(REVOKE, data={"token": token}, timeout=10)
+            if response.status_code in (200, 400):
+                return True
+            if response.status_code < 500 and response.status_code != 429:
+                return False
+        except httpx.HTTPError:
+            continue
+    return False

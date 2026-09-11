@@ -182,19 +182,27 @@ def _publish_tiktok(db, pub) -> None:
 
 
 def _publish_youtube(db, pub) -> None:
+    chosen = pub.options or {}
+    required = ("title", "description", "privacy_status")
+    if any(key not in chosen for key in required):
+        return _fail(
+            db,
+            pub,
+            "YouTube upload details are missing. Reopen Publish and choose a title, description, and visibility.",
+        )
     try:
         response = httpx.get(_public_video_url(pub.clip), timeout=120)
         response.raise_for_status()
         video = response.content
     except httpx.HTTPError:
         return _fail(db, pub, "Could not read the finished video from storage. Retrying is free.")
-    title, description = youtube.metadata(pub.caption or "", pub.clip.take)
     try:
         video_id = youtube.upload_short(
             pub.account.access_token,
             video,
-            title=title,
-            description=description,
+            title=chosen["title"],
+            description=chosen["description"],
+            privacy_status=chosen["privacy_status"],
         )
     except httpx.HTTPError:
         return _fail(db, pub, "YouTube rejected or interrupted the upload. Check the channel connection and retry — it's free.")

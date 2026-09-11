@@ -271,7 +271,12 @@ export default function Studio() {
         const c = await api.getClip(id);
         if (cancelled) return;
         setClip(c);
-        if (c.status === "ready") setPhase("result");
+        if (c.status === "ready") {
+          setPhase("result");
+          if (["instagram", "tiktok", "youtube"].includes(params.get("publish"))) {
+            setPublishOpen(true);
+          }
+        }
         else if (c.status === "failed") setPhase("failed");
         else if (c.status === "paused") setPhase("paused");
         else if (c.status === "script_ready") setPhase("script");
@@ -786,7 +791,7 @@ export default function Studio() {
                       <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--app-text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.take}</div>
                       <div style={{ fontSize: 10.5, color: c.status === "failed" ? "var(--app-error)" : "var(--app-muted)", marginTop: 3, display: "flex", alignItems: "center", gap: 5 }}>
                         <span>{c.sport} · {c.tone}{c.status !== "ready" ? ` · ${c.status}` : ""}</span>
-                        <PublishedTo publishes={c.publishes} size={13} label="" />
+                        <PublishedTo publishes={c.publishes} size={24} label="" />
                       </div>
                     </div>
                   </div>
@@ -1199,7 +1204,7 @@ export default function Studio() {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               {clip.publishes?.some((p) => p.status === "published") && (
                 <div className="panel" style={{ padding: "11px 14px", borderRadius: 10, fontSize: 13 }}>
-                  <PublishedTo publishes={clip.publishes} size={20} />
+                  <PublishedTo publishes={clip.publishes} size={24} />
                 </div>
               )}
               <button className="grad-btn" style={{ padding: 15, fontSize: 16 }} onClick={() => setPublishOpen(true)}>
@@ -1316,7 +1321,13 @@ export default function Studio() {
 
       {upgradeOpen && <UpgradeModal reason="download" onClose={() => setUpgradeOpen(false)} />}
       {topupOpen && <TopUpModal needed={thisPrice} onClose={() => { setTopupOpen(false); refreshUsage(); }} />}
-      {publishOpen && clip && <PublishModal clip={clip} onClose={() => setPublishOpen(false)} />}
+      {publishOpen && clip && (
+        <PublishModal
+          clip={clip}
+          initialPlatform={new URLSearchParams(search).get("publish") || ""}
+          onClose={() => setPublishOpen(false)}
+        />
+      )}
       {scriptOpen && clip?.script && <ScriptDialog script={clip.script} onClose={() => setScriptOpen(false)} />}
     </div>
   );

@@ -1,6 +1,6 @@
 """Scheduled cleanup — `python -m app.services.housekeeping`.
 
-Two jobs, both safe to run repeatedly and safe to skip:
+Four jobs, all safe to run repeatedly and safe to skip:
 
 1. **Purge scratch.** A 15s clip leaves ~38 MB of working files (per-scene
    clips, normalised copies, the pre-branding cut, rejected keyframes) against
@@ -12,6 +12,10 @@ Two jobs, both safe to run repeatedly and safe to skip:
    UI spins, and the user cannot retry because the clip never reaches `failed`.
    Anything past the timeout is marked failed with an honest message, which
    restores the free-retry path (BR-09).
+3. **Reconfirm YouTube grants.** Refreshes expiring grants so revocation from
+   Google Account settings is detected even for dormant BanterClips users.
+4. **Expire YouTube API Data.** Removes videos.insert response IDs/URLs at 30
+   days because the upload-only scope cannot refresh them.
 
 Run it from cron on the droplet, hourly:
 
@@ -30,8 +34,8 @@ from sqlalchemy import select
 
 from ..config import settings
 from ..db import SessionLocal
-from ..models import GENERATION_STAGES, Clip
-from . import storage
+from ..models import GENERATION_STAGES, Clip, Publish, SocialAccount
+from . import storage, youtube
 
 log = logging.getLogger("banter.housekeeping")
 
@@ -131,13 +135,81 @@ def purge_evidence(days: int | None = None) -> int:
     return removed
 
 
+def reconfirm_youtube_connections() -> int:
+    """Reconfirm active Google grants on the hourly housekeeping schedule.
+
+    Access tokens expire in about an hour, so this periodic refresh detects a
+    grant revoked from Google Account settings even when the user has not
+    returned to BanterClips. The refresh helper immediately purges credentials
+    and YouTube-returned API Data when Google reports ``invalid_grant``.
+    """
+    checked = 0
+    db = SessionLocal()
+    try:
+        accounts = db.scalars(
+            select(SocialAccount).where(
+                SocialAccount.platform == "youtube",
+                SocialAccount.status == "connected",
+            )
+        ).all()
+        for account in accounts:
+            youtube.maybe_refresh_token(db, account)
+            checked += 1
+    except Exception:  # noqa: BLE001
+        log.exception("reconfirming YouTube grants failed")
+    finally:
+        db.close()
+    return checked
+
+
+YOUTUBE_API_DATA_RETENTION = timedelta(days=30)
+
+
+def purge_stale_youtube_api_data(now: datetime | None = None) -> int:
+    """Delete videos.insert response IDs/URLs before their 30-day limit.
+
+    We cannot refresh those IDs with the deliberately narrow youtube.upload
+    scope. The creator's own title, description, visibility and local publish
+    status remain; only the API-derived external URL is removed.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - YOUTUBE_API_DATA_RETENTION
+    removed = 0
+    db = SessionLocal()
+    try:
+        stale = db.scalars(
+            select(Publish)
+            .join(SocialAccount, SocialAccount.id == Publish.social_account_id)
+            .where(
+                SocialAccount.platform == "youtube",
+                Publish.external_url.is_not(None),
+                Publish.published_at.is_not(None),
+                Publish.published_at <= cutoff,
+            )
+        ).all()
+        for publish in stale:
+            publish.external_url = None
+            removed += 1
+        if removed:
+            db.commit()
+            log.info("purged API Data from %d stale YouTube publish(es)", removed)
+    except Exception:  # noqa: BLE001
+        log.exception("purging stale YouTube API Data failed")
+    finally:
+        db.close()
+    return removed
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     released = release_stuck_clips()
     removed = purge_scratch()
     evidence = purge_evidence()
+    youtube_checked = reconfirm_youtube_connections()
+    youtube_purged = purge_stale_youtube_api_data()
     print(f"released {released} stuck clip(s); removed {removed} expired item(s); "
-          f"purged {evidence} keyframe(s)")
+          f"purged {evidence} keyframe(s); reconfirmed {youtube_checked} YouTube grant(s); "
+          f"purged {youtube_purged} stale YouTube API record(s)")
     return 0
 
 

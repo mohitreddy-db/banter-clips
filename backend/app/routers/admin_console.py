@@ -19,6 +19,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import distinct, func, or_, select, text
@@ -368,9 +369,9 @@ def delete_user(user_id: uuid.UUID, body: DeleteUserBody,
                 admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     """Full erasure (the delete-user.py script as a button).
 
-    Typed-email confirmation is enforced server-side too. Stripe subscription
-    cancellation is best-effort; the Supabase Auth identity is NOT touched
-    (that stays a manual step, as in the script).
+    Typed-email confirmation is enforced server-side too. The same operation
+    revokes connected platform grants and removes the Supabase Auth identity so
+    support cannot accidentally leave Google authorization or a login behind.
     """
     u = db.get(User, user_id)
     if u is None:
@@ -389,6 +390,35 @@ def delete_user(user_id: uuid.UUID, body: DeleteUserBody,
             stripe.Subscription.cancel(u.stripe_subscription_id)
         except Exception:  # noqa: BLE001 — finish erasure; Stripe can be cleaned manually
             log.exception("could not cancel Stripe subscription for %s", u.email)
+
+    # End every platform-side grant before the cascading row deletion removes
+    # our only usable revocation token. This is mandatory for YouTube erasure.
+    from .socials import _revoke_with_platform
+
+    socials = db.scalars(select(SocialAccount).where(SocialAccount.user_id == u.id)).all()
+    for social in socials:
+        _revoke_with_platform(social)
+
+    # Delete the external authentication identity too. If Supabase is active,
+    # refusing a partial deletion is safer than reporting success while a login
+    # still exists. A 404 means it was already removed.
+    if u.supabase_uid and settings.SUPABASE_URL:
+        if not settings.SUPABASE_SERVICE_ROLE_KEY:
+            raise HTTPException(503, "Supabase identity deletion is not configured.")
+        try:
+            response = httpx.delete(
+                f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{u.supabase_uid}",
+                headers={
+                    "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
+                },
+                timeout=20,
+            )
+            if response.status_code != 404:
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            log.exception("could not delete Supabase identity for user %s", u.id)
+            raise HTTPException(502, "External auth deletion failed; retry the erasure request.") from exc
 
     # Delete stored media for every clip (row cascade will not touch bytes).
     clip_ids = db.execute(select(Clip.id).where(Clip.user_id == u.id)).scalars().all()
@@ -982,6 +1012,10 @@ def retry_publish(publish_id: uuid.UUID, body: ReasonBody = Body(default=ReasonB
         raise HTTPException(404, "No such publish")
     if p.status != "failed":
         raise HTTPException(409, "Only failed publishes can be retried.")
+    if p.account and p.account.platform == "youtube":
+        # YouTube actions require the creator's final authority. An admin-side
+        # retry would upload again without a new explicit creator click.
+        raise HTTPException(409, "YouTube retries must be started by the creator from the clip.")
     p.status = "queued"
     p.error = None
     _audit(db, admin, "retry_publish", f"publish {str(p.id)[:8]}", body.reason)

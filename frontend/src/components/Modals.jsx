@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { SocialIcon } from "./SocialIcon.jsx";
 import { YouTubeTerms } from "./YouTubeTerms.jsx";
+import YouTubeComposer, { youtubeBlocker, youtubeDefaults } from "./YouTubeComposer.jsx";
 import TikTokComposer, {
   emptyTikTokOptions,
   TikTokDeclaration,
@@ -25,7 +26,7 @@ function Overlay({ children, onClose }) {
       onClick={onClose}
       style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(4,6,12,.72)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 16, animation: "fadeUp .2s ease both" }}
     >
-      <div onClick={(e) => e.stopPropagation()} className="card app-font modal-card" style={{ width: "100%", maxWidth: 440, padding: 28 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card app-font modal-card" style={{ width: "100%", maxWidth: 500, maxHeight: "calc(100vh - 32px)", overflowY: "auto", padding: 28 }}>
         {children}
       </div>
     </div>
@@ -204,10 +205,12 @@ export function UpgradeModal({ onClose, reason }) {
   );
 }
 
-export function PublishModal({ clip, onClose }) {
+export function PublishModal({ clip, onClose, initialPlatform = "" }) {
   const nav = useNavigate();
+  const location = useLocation();
   const { instagram, tiktok, youtube, connectSocial, watermarked, refreshClips } = useApp();
   const [caption, setCaption] = useState(`${clip.take} 😤 #${clip.sport} #HotTake #BanterClips`);
+  const [ytOptions, setYtOptions] = useState(() => youtubeDefaults(clip));
   // TikTok post settings. Kept blank until the creator chooses — TikTok's UX
   // guidelines forbid pre-selecting an audience on their behalf.
   const [ttOptions, setTtOptions] = useState(emptyTikTokOptions);
@@ -217,8 +220,13 @@ export function PublishModal({ clip, onClose }) {
   const [connecting, setConnecting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  // Where this clip goes. Defaults to the first connected platform.
-  const [platform, setPlatform] = useState(instagram ? "instagram" : tiktok ? "tiktok" : youtube ? "youtube" : "instagram");
+  // Where this clip goes. An OAuth return can ask to reopen the exact platform;
+  // otherwise default to the first connected destination.
+  const [platform, setPlatform] = useState(
+    ["instagram", "tiktok", "youtube"].includes(initialPlatform)
+      ? initialPlatform
+      : instagram ? "instagram" : tiktok ? "tiktok" : youtube ? "youtube" : "instagram"
+  );
   const PLATFORMS = [
     { key: "instagram", name: "Instagram", account: instagram, how: "publishes as a Reel" },
     { key: "tiktok", name: "TikTok", account: tiktok, how: "posts to your TikTok" },
@@ -309,7 +317,8 @@ export function PublishModal({ clip, onClose }) {
     setConnecting(true);
     setError("");
     try {
-      await connectSocial(platform);
+      // Return to this exact clip and reopen this destination after OAuth.
+      await connectSocial(platform, `/studio?clip=${encodeURIComponent(clip.id)}&publish=${platform}`);
     } catch (e) {
       setError(e.message);
     }
@@ -327,8 +336,9 @@ export function PublishModal({ clip, onClose }) {
       const pub = await api.publishClip(
         clip.id,
         selected.account.id,
-        caption,
-        selected.key === "tiktok" ? toApiOptions(ttOptions) : null
+        selected.key === "youtube" ? "" : caption,
+        selected.key === "tiktok" ? toApiOptions(ttOptions) : null,
+        selected.key === "youtube" ? ytOptions : null
       );
       // Show it in flight at once; the poll above takes over from here.
       setPublishes((list) => [
@@ -347,14 +357,24 @@ export function PublishModal({ clip, onClose }) {
   // TikTok is the one destination that can be connected and still not ready to
   // post: the audience is a required choice, and disclosure must be resolved.
   const ttBlocker = platform === "tiktok" && connected ? tiktokBlocker(ttOptions, ttInfo) : "";
-  // TikTok's guidelines call the action "Post"; the rest of the product (and
-  // the other two platforms) say "Publish". Follow each where it applies.
-  const verb = platform === "tiktok" ? "Post" : "Publish";
+  const ytBlocker = platform === "youtube" && connected ? youtubeBlocker(ytOptions) : "";
+  const publishBlocker = ttBlocker || ytBlocker;
+  // Use YouTube's own action language so the API action is unmistakable.
+  const verb = platform === "tiktok" ? "Post" : platform === "youtube" ? "Upload" : "Publish";
+  const callbackParams = new URLSearchParams(location.search);
+  const callbackStatus = callbackParams.get(platform === "instagram" ? "ig" : platform === "tiktok" ? "tt" : "yt");
 
   return (
     <Overlay onClose={onClose}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 20, color: "var(--app-text)" }}>Publish clip</div>
+          {callbackStatus && (
+            <div style={{ fontSize: 12.5, lineHeight: 1.45, color: callbackStatus === "connected" ? "var(--app-green)" : "var(--app-error)", background: callbackStatus === "connected" ? "rgba(52,226,122,.08)" : "rgba(240,84,108,.1)", borderRadius: 10, padding: "9px 12px" }}>
+              {callbackStatus === "connected"
+                ? `${selected.name} connected. Review the upload details below.`
+                : `${selected.name} connection ${callbackStatus === "denied" ? "was cancelled" : "failed"}. Try connecting again.`}
+            </div>
+          )}
           {/* platform picker — two big tap targets, wraps on narrow screens */}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {PLATFORMS.map((p) => (
@@ -395,7 +415,11 @@ export function PublishModal({ clip, onClose }) {
                 const s = PUBLISH_STATE[pub.status] || { text: pub.status, color: "var(--app-muted)" };
                 return (
                   <div key={p.key} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <SocialIcon platform={p.key} size={22} />
+                    {p.key === "youtube" ? (
+                      <a href={pub.external_url || "https://www.youtube.com/"} target="_blank" rel="noreferrer" title="Open YouTube" style={{ display: "inline-flex" }}>
+                        <SocialIcon platform={p.key} size={24} />
+                      </a>
+                    ) : <SocialIcon platform={p.key} size={22} />}
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--app-text)" }}>
                         {p.name}{pub.handle ? ` · ${pub.handle}` : ""}
@@ -405,6 +429,9 @@ export function PublishModal({ clip, onClose }) {
                           <span style={{ width: 9, height: 9, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
                         )}
                         {s.text}
+                        {p.key === "youtube" && pub.options?.privacy_status
+                          ? ` · ${pub.options.privacy_status[0].toUpperCase()}${pub.options.privacy_status.slice(1)}`
+                          : ""}
                       </div>
                     </div>
                     {pub.status === "published" && pub.external_url && (
@@ -423,11 +450,15 @@ export function PublishModal({ clip, onClose }) {
               Not connected is the one case that still needs a panel + CTA. */}
           {connected ? (
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: -6 }}>
-              Publishing to <b style={{ color: "var(--app-text)" }}>{selected.account.handle}</b> — {selected.how}.
+              {platform === "youtube" ? "Uploading" : platform === "tiktok" ? "Posting" : "Publishing"} to <b style={{ color: "var(--app-text)" }}>{selected.account.handle}</b> — {selected.how}.
             </div>
           ) : (
             <div className="panel" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
-              <SocialIcon platform={selected.key} size={30} />
+              {selected.key === "youtube" ? (
+                <a href="https://www.youtube.com/" target="_blank" rel="noreferrer" title="Open YouTube" style={{ display: "inline-flex" }}>
+                  <SocialIcon platform={selected.key} size={30} />
+                </a>
+              ) : <SocialIcon platform={selected.key} size={30} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--app-text)" }}>Connect {selected.name} to publish</div>
                 {selected.key === "youtube" && <YouTubeTerms style={{ marginTop: 2 }} />}
@@ -437,6 +468,7 @@ export function PublishModal({ clip, onClose }) {
               </button>
             </div>
           )}
+          {platform !== "youtube" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" }}>CAPTION</label>
             <textarea
@@ -483,6 +515,15 @@ export function PublishModal({ clip, onClose }) {
               </div>
             )}
           </div>
+          )}
+          {platform === "youtube" && connected && (
+            <YouTubeComposer
+              clip={clip}
+              account={selected.account}
+              value={ytOptions}
+              onChange={setYtOptions}
+            />
+          )}
           {watermarked && (
             <div style={{ fontSize: 12.5, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 12px", lineHeight: 1.5 }}>
               ℹ️ Free plan: your clip is published <b style={{ color: "var(--app-text)" }}>with the BanterClips watermark</b>. Upgrade to Creator to publish clean.
@@ -508,16 +549,16 @@ export function PublishModal({ clip, onClose }) {
               and a post the user deleted is worth re-posting. */}
           <button
             className="grad-btn"
-            style={{ padding: 14, fontSize: 15.5, opacity: sending || ttBlocker ? 0.7 : 1 }}
-            disabled={!connected || sending || !!ttBlocker}
+            style={{ padding: 14, fontSize: 15.5, opacity: sending || publishBlocker ? 0.7 : 1 }}
+            disabled={!connected || sending || !!publishBlocker}
             onClick={publish}
           >
             {!connected
               ? `Connect ${selected.name} first`
-              : ttBlocker
-                ? ttBlocker
+              : publishBlocker
+                ? publishBlocker
                 : sending
-                  ? "Sending…"
+                  ? `${verb}ing…`
                   : selectedPub?.status === "published"
                     ? `${verb} to ${selected.name} again`
                     : ["queued", "uploading"].includes(selectedPub?.status)

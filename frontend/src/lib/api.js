@@ -124,12 +124,18 @@ export const api = {
   sendFeedback: (body) => request("/feedback", { method: "POST", body }),
 
   // publishing
-  // `tiktok` carries the composer's choices (audience, interactions,
-  // commercial disclosure). Required for a TikTok account, ignored elsewhere.
-  publishClip: (clipId, social_account_id, caption, tiktok = null) =>
+  // Destination-specific objects carry the exact creator-approved controls.
+  // YouTube requires title, description, and public/private/unlisted for every
+  // upload; TikTok requires audience, interactions, and disclosure choices.
+  publishClip: (clipId, social_account_id, caption, tiktok = null, youtube = null) =>
     request(`/clips/${clipId}/publish`, {
       method: "POST",
-      body: { social_account_id, caption, ...(tiktok ? { tiktok } : {}) },
+      body: {
+        social_account_id,
+        caption,
+        ...(tiktok ? { tiktok } : {}),
+        ...(youtube ? { youtube } : {}),
+      },
     }),
   getPublish: (clipId, publishId) => request(`/clips/${clipId}/publishes/${publishId}`),
 

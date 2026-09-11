@@ -199,7 +199,8 @@ def instagram_callback(
     the real account, and bounces the browser back to the frontend."""
 
     def bounce(next_path: str, **params) -> RedirectResponse:
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+        separator = "&" if "?" in next_path else "?"
+        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
@@ -299,7 +300,8 @@ def youtube_oauth_url(
             "scope": youtube.SCOPE,
             "access_type": "offline",
             "prompt": "consent",
-            "include_granted_scopes": "true",
+            # Do not combine grants from earlier Google authorizations: this
+            # client uses and represents exactly youtube.upload.
             "state": _oauth_state(user, "yt_oauth", next),
         }
     )
@@ -318,7 +320,8 @@ def tiktok_callback(
     account, and bounces the browser back to the frontend (?tt=...)."""
 
     def bounce(next_path: str, **params) -> RedirectResponse:
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+        separator = "&" if "?" in next_path else "?"
+        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
@@ -367,7 +370,8 @@ def youtube_callback(
     db: Session = Depends(get_db),
 ):
     def bounce(next_path: str, **params) -> RedirectResponse:
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}?{urlencode(params)}")
+        separator = "&" if "?" in next_path else "?"
+        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
@@ -382,6 +386,10 @@ def youtube_callback(
     try:
         tok = youtube.exchange_code(code)
         token = tok["access_token"]
+        granted = set((tok.get("scope") or youtube.SCOPE).split())
+        if granted != {youtube.SCOPE}:
+            youtube.revoke(tok.get("refresh_token") or token)
+            return bounce(next_path, yt="error", reason="unexpected_scope")
     except Exception:
         return bounce(next_path, yt="error", reason="token_exchange_failed")
 
@@ -472,6 +480,13 @@ def list_accounts(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.post("/connect", response_model=SocialAccountOut, status_code=201)
 def connect(body: SocialConnectRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # A missing production OAuth configuration must be visible, never replaced
+    # by a connected-looking mock account that cannot actually publish.
+    if not settings.DEV_MODE:
+        raise HTTPException(
+            503,
+            detail={"code": "mock_disabled", "message": "Social OAuth is not configured on this server."},
+        )
     if body.platform not in CONNECTABLE:
         raise HTTPException(
             400,
@@ -520,6 +535,10 @@ def disconnect(platform: str, user: User = Depends(get_current_user), db: Sessio
     account.status = "revoked"
     account.revoked_at = datetime.now(timezone.utc)
     _clear_credentials(account)
+    if account.platform == "youtube":
+        # videos.insert returns a video id that we retain only in the external
+        # URL. Revocation deletes that API Data along with the credentials.
+        youtube.delete_stored_api_data(db, account.id)
     db.commit()
     record_event(db, "social_disconnected", user, platform=platform)
     return account

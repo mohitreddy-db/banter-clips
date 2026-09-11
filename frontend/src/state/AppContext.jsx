@@ -227,19 +227,21 @@ export function AppProvider({ children }) {
   }, []);
 
   const connectSocial = useCallback(
-    async (platform) => {
+    async (platform, returnTo = "") => {
       if (["instagram", "tiktok", "youtube"].includes(platform)) {
         // Real OAuth when the platform app is configured — the whole tab
         // goes to the platform's consent screen and comes back.
         try {
-          const { url } = await api.oauthUrl(platform, window.location.pathname);
+          const current = `${window.location.pathname}${window.location.search}`;
+          const { url } = await api.oauthUrl(platform, returnTo || current);
           if (url) {
             window.location.href = url;
             return null;
           }
         } catch (e) {
           if (e.status !== 503) throw e;
-          // 503 → OAuth not configured; fall through to the mock connector.
+          // 503 → fall through only for local DEV_MODE. Production rejects
+          // the mock endpoint too, surfacing a real configuration error.
         }
       }
       const acc = await api.connectSocial(platform);

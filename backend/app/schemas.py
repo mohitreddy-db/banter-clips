@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from .models import SPORTS, TONES
 
@@ -161,6 +161,7 @@ class PublishOut(BaseModel):
     clip_id: uuid.UUID
     social_account_id: uuid.UUID
     caption: str
+    options: dict | None = None
     status: str
     error: str | None
     external_url: str | None
@@ -300,11 +301,36 @@ class TikTokCreatorInfo(BaseModel):
     unaudited: bool
 
 
+class YouTubeOptions(BaseModel):
+    """The exact metadata the creator approved for one YouTube upload.
+
+    YouTube's Required Minimum Functionality requires all three fields to be
+    user-controlled.  Keep this separate from the cross-platform caption so no
+    server default can silently choose the title, description, or visibility.
+    """
+
+    title: str = Field(min_length=1, max_length=100)
+    description: str = ""
+    privacy_status: Literal["public", "private", "unlisted"]
+
+    @field_validator("title", "description")
+    @classmethod
+    def youtube_text(cls, value: str, info):
+        if "<" in value or ">" in value:
+            raise ValueError(f"YouTube {info.field_name} cannot contain < or >")
+        if info.field_name == "title" and not value.strip():
+            raise ValueError("YouTube title cannot be blank")
+        if info.field_name == "description" and len(value.encode("utf-8")) > 5000:
+            raise ValueError("YouTube description cannot exceed 5000 UTF-8 bytes")
+        return value
+
+
 class PublishCreate(BaseModel):
     social_account_id: uuid.UUID
     caption: str = Field(default="", max_length=2200)
-    # Required when the target account is TikTok; ignored for other platforms.
+    # Required for the matching destination; ignored for other platforms.
     tiktok: TikTokOptions | None = None
+    youtube: YouTubeOptions | None = None
 
 
 # ---------- billing ----------

@@ -159,6 +159,11 @@ export default function AppShell({ children }) {
               : "Top up to keep creating"}
           </div>
         </div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, padding: "4px 4px 0", fontSize: 10.5 }}>
+          <a href="/privacy" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Privacy</a>
+          <a href="/terms" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Terms</a>
+          <a href="/data-deletion" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Data deletion</a>
+        </div>
       </aside>
 
       {/* main */}

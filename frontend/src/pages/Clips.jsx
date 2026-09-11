@@ -202,13 +202,13 @@ export default function Clips() {
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
                       publishing to
-                      <SocialIcon platform={latestPub?.platform} size={13} />…
+                      <SocialIcon platform={latestPub?.platform} size={24} />…
                     </span>
                   )}
                   {/* Where it landed, as the platforms' own logos — each one
                       links straight to the live post. */}
                   {c.status === "ready" && !pubInFlight && published && (
-                    <PublishedTo publishes={c.publishes} size={15} />
+                    <PublishedTo publishes={c.publishes} size={24} />
                   )}
                   {c.status === "ready" && !pubInFlight && !published && !pubFailed && <span>· not published yet</span>}
                   {c.status === "ready" && pubFailed && (

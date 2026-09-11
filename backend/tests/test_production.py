@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi import HTTPException  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.routers.clips import _tiktok_options, reference_matches  # noqa: E402
+from app.routers.clips import _tiktok_options, _youtube_options, reference_matches  # noqa: E402
 from app.routers.socials import _clear_credentials, _revoke_with_platform  # noqa: E402
 from app.schemas import PublishCreate  # noqa: E402
 from app.services import markers, publishing, spend, storage, tiktok, youtube  # noqa: E402
@@ -64,10 +64,21 @@ def test_stripping_leaves_an_unmarked_take_alone():
     assert markers.strip(take) == take
 
 
-def test_youtube_metadata_uses_first_line_as_title_and_clamps_it():
-    title, description = youtube.metadata("A" * 120 + "\nFull description", "fallback")
-    assert len(title) == 100
-    assert description == "Full description"
+def test_youtube_upload_requires_creator_selected_metadata():
+    missing = PublishCreate(social_account_id=uuid.uuid4(), caption="not enough")
+    with pytest.raises(HTTPException) as exc:
+        _youtube_options(missing)
+    assert exc.value.detail["code"] == "youtube_options_required"
+
+    chosen = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        youtube={"title": "Exact title", "description": "Exact description", "privacy_status": "unlisted"},
+    )
+    assert _youtube_options(chosen) == {
+        "title": "Exact title",
+        "description": "Exact description",
+        "privacy_status": "unlisted",
+    }
 
 
 def test_reference_upload_checks_file_signatures():

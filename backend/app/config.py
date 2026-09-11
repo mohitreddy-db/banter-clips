@@ -79,12 +79,12 @@ class Settings(BaseSettings):
     # matter what this says.
     TIKTOK_UNAUDITED: bool = True
 
-    # YouTube Data API OAuth + videos.insert. Unverified API projects may have
-    # uploads forced private by Google even when public is requested.
+    # YouTube Data API OAuth + videos.insert. Visibility is deliberately not a
+    # server setting: every upload carries the creator's public/private/unlisted
+    # choice from the publish composer.
     YOUTUBE_CLIENT_ID: str = ""
     YOUTUBE_CLIENT_SECRET: str = ""
     YOUTUBE_REDIRECT_URI: str = ""
-    YOUTUBE_PRIVACY_STATUS: str = "public"
 
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 

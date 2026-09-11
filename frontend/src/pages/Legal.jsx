@@ -11,7 +11,7 @@ import { useSeo } from "../lib/seo.js";
  * page in the same PR.
  */
 
-const EFFECTIVE = "September 9, 2026";
+const EFFECTIVE = "September 12, 2026";
 const CONTACT = "support@banterclips.com";
 
 function Layout({ title, children }) {
@@ -82,17 +82,22 @@ export function Privacy() {
           them to a connected social account.</LI>
         <LI><B>Social connections.</B> If you explicitly connect Instagram,
           TikTok or YouTube, we store the connection record and OAuth tokens
-          needed to publish. For YouTube this includes an access token, refresh
-          token and expiry for the <code>youtube.upload</code> permission. We do
-          not read your existing YouTube videos or channel content, and nothing
-          is ever posted automatically.</LI>
-        <LI><B>YouTube API Services.</B> YouTube publishing uses YouTube API
-          Services. By connecting a YouTube channel you agree to the
+          needed to publish. For YouTube this includes a server-side access
+          token, refresh token, token expiry and a connection identifier for the
+          <code>youtube.upload</code> permission. We do not read your existing
+          YouTube videos, channel library, subscribers, comments, analytics or
+          viewer data, and nothing is ever posted automatically.</LI>
+        <LI><B>YouTube API Services and API Data.</B> YouTube publishing uses
+          YouTube API Services. By connecting a YouTube channel you agree to the
           <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> YouTube Terms of Service</a>,
           and Google&rsquo;s handling of your data is described in the
           <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Privacy Policy</a>.
-          The only YouTube data we hold is the token above; we store no video,
-          channel or viewer data from YouTube.</LI>
+          In addition to the authorization data above, a successful upload
+          returns a YouTube video ID. We temporarily store that ID in the Shorts
+          link shown in your BanterClips publish history, together with our own
+          upload status and timestamp. We delete the API-returned ID/link within
+          30 days because our upload-only permission cannot refresh it. We do
+          not download or store the uploaded video back from YouTube.</LI>
         <LI><B>Payment details.</B> Payments run through Stripe. Your card
           number never touches our servers; we store only your Stripe customer
           and subscription identifiers and your plan status.</LI>
@@ -101,6 +106,37 @@ export function Privacy() {
           and improve the product. We use no third-party advertising or
           cross-site trackers and show no ads.</LI>
       </UL>
+
+      <H>Cookies, browser storage and device information</H>
+      <P>
+        BanterClips stores and accesses information on your browser or device
+        using the strictly necessary technologies below. We do not use
+        advertising cookies, cross-site tracking pixels, fingerprinting, or
+        similar technology to build advertising profiles.
+      </P>
+      <UL>
+        <LI><B>Local storage for sign-in.</B> Your browser stores a BanterClips
+          session token and, when Supabase authentication is enabled, Supabase
+          authentication session data needed to keep you signed in and refresh
+          that session. It remains until you sign out, clear site data, or the
+          session is removed or expires.</LI>
+        <LI><B>Session storage for performance.</B> The trending-sports feed is
+          cached in your current browser tab for up to 20 minutes so navigating
+          back does not repeat the same request. The browser removes it when the
+          tab session ends, and it contains no YouTube API Data.</LI>
+        <LI><B>Necessary request and security data.</B> Our hosting,
+          authentication and infrastructure providers (Vercel, DigitalOcean,
+          Cloudflare and Supabase) receive ordinary request information such as
+          IP address, browser/user-agent, timestamps and security headers when
+          your device connects. Cloudflare may set a short-lived, strictly
+          necessary bot-management cookie such as <code>__cf_bm</code> on our
+          authentication domain. These providers process essential routing,
+          security or session signals solely to deliver and protect the service.</LI>
+      </UL>
+      <P>
+        You can remove this local information through Sign out or your browser&rsquo;s
+        site-data controls. Blocking necessary browser storage may prevent sign-in.
+      </P>
 
       <H>How we use it</H>
       <UL>
@@ -142,14 +178,17 @@ export function Privacy() {
           picture) solely to create and authenticate your BanterClips account.</LI>
         <LI><B>YouTube publishing.</B> If you separately connect YouTube, we
           request only <code>https://www.googleapis.com/auth/youtube.upload</code>.
-          We use it solely to upload the completed video, title and description
-          you selected after you explicitly press Publish. We do not read your
-          existing videos, publish in the background, or take actions unrelated
-          to that upload.</LI>
+          Before every upload, you set and review the title, description and
+          visibility (Public, Unlisted or Private). We send those exact values
+          with the completed video only after you explicitly press <B>Upload to
+          YouTube</B>. We do not read your existing videos, upload in the
+          background, or take actions unrelated to that upload.</LI>
         <LI><B>Storage and sharing.</B> OAuth access and refresh tokens are kept
           server-side while the connection is active and are never exposed to
           the browser. The selected video and metadata are sent to Google/YouTube
-          only to complete your requested upload.</LI>
+          only to complete your requested upload. We retain the returned video
+          ID/link for no more than 30 days as described above; we do not share
+          YouTube API Data with any other third party.</LI>
         <LI><B>Limited use.</B> Google user data is never sold, used for
           advertising, or used to train AI models. Our use of information from
           Google APIs follows the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}>Google API Services User Data Policy</a>,
@@ -158,18 +197,29 @@ export function Privacy() {
 
       <H>Retention and deletion</H>
       <UL>
-        <LI>Your content is kept while your account is active. Deleting a clip
-          removes its video files, not just the listing.</LI>
-        <LI>Disconnecting a social account revokes the grant with the platform
-          (Google, TikTok) and immediately deletes its stored access token,
-          refresh token, expiry and platform identifier. Publish history
-          remains with the clip until you delete that clip or your account.</LI>
-        <LI>You can also revoke Google access at any time from your
-          <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.</LI>
+        <LI>Your content is kept while your account is active, until you delete
+          the clip or request account deletion. Deleting a clip removes its
+          video files, not just the listing.</LI>
+        <LI>YouTube access tokens are refreshed when they are close to expiring:
+          before an upload, when connected accounts load, and by hourly
+          housekeeping. This also detects grants revoked from Google settings.
+          Authorization tokens are retained only while your connection is active.</LI>
+        <LI>A YouTube video ID/link returned by <code>videos.insert</code> is
+          deleted after no more than 30 days because we do not request the read
+          permission needed to refresh it. Our own upload status, timestamp and
+          the title, description and visibility you entered remain with the clip
+          until you delete that clip or your account.</LI>
+        <LI>Disconnecting YouTube immediately asks Google to revoke the grant
+          and deletes our stored access token, refresh token, expiry, connection
+          identifier and every retained YouTube video ID/link. You can also
+          revoke access from
+          <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Security settings</a>;
+          our scheduled check detects that change and removes the same data.</LI>
         <LI>You can request full deletion of your account — including your
-          videos, preferences, events, and billing identifiers at Stripe,
-          Apple, or Google — by
-          emailing <B>{CONTACT}</B>. We complete deletion within 30 days.
+          videos, preferences, events, social connections and billing
+          identifiers — by emailing <B>{CONTACT}</B>. YouTube API Data and
+          authorization tokens are deleted as soon as possible and within seven
+          calendar days; remaining account deletion completes within 30 days.
           Step-by-step instructions: <Link to="/data-deletion" style={{ color: "var(--cyan)" }}>Delete your data</Link>.</LI>
       </UL>
 
@@ -335,6 +385,16 @@ export function DataDeletion() {
         messages, followers or feed, and we never post without that press.
       </P>
 
+      <span id="request-copy" />
+      <H>Request a copy of your data</H>
+      <P>
+        Email <a href={`mailto:${CONTACT}?subject=Data%20export%20request`} style={{ color: "var(--cyan)" }}>{CONTACT}</a> from
+        the address on your account with the subject <B>“Data export request”</B>.
+        After verifying the request, we provide a copy of the account and
+        content information BanterClips holds about you.
+      </P>
+
+      <span id="disconnect" />
       <H>Option 1 — Disconnect one platform (immediate)</H>
       <UL>
         <LI>Sign in to BanterClips and open <B>Account → Connected accounts</B>.</LI>
@@ -346,7 +406,7 @@ export function DataDeletion() {
           <B> Settings → Apps and websites</B>, Facebook <B>Settings → Business
           integrations</B>, TikTok <B>Settings → Security → Manage app
           permissions</B>, or your
-          <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Account connections</a>.
+          <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer" style={{ color: "var(--cyan)" }}> Google Security settings</a>.
           Doing that invalidates the token on their end; press Disconnect in
           BanterClips too so the record is removed here as well.</LI>
       </UL>
@@ -357,8 +417,10 @@ export function DataDeletion() {
           subject <B>“Delete my account”</B>.</LI>
         <LI>We delete your videos and their files, scripts, preferences, connected
           social accounts and their tokens, usage events, feedback, and your
-          billing identifiers at Stripe, Apple, or Google. Deletion completes within <B>30 days</B>
-          and we confirm by email when it is done.</LI>
+          billing identifiers at Stripe, Apple, or Google. YouTube API Data and
+          authorization tokens are removed as soon as possible and within
+          <B> seven calendar days</B>; the rest of the deletion completes within
+          <B> 30 days</B>. We confirm by email when it is done.</LI>
         <LI>Anything you already published to Instagram, TikTok or YouTube lives on
           those platforms under your account and is not affected — delete it there
           if you want it gone.</LI>
