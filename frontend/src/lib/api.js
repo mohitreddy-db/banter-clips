@@ -151,6 +151,7 @@ export const api = {
   packs: () => request("/billing/packs"),
   topup: (pack) => request("/billing/topup", { method: "POST", body: { pack } }),
   checkout: () => request("/billing/checkout", { method: "POST" }),
+  billingStatus: () => request("/billing/status"),
   billingPortal: () => request("/billing/portal", { method: "POST" }),
   upgrade: () => request("/billing/upgrade", { method: "POST" }),
   cancelPlan: () => request("/billing/cancel", { method: "POST" }),

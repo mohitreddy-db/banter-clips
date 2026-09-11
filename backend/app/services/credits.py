@@ -90,11 +90,14 @@ def pack(db: Session, key: str) -> dict | None:
 
 def apply(db: Session, user: User, delta: int, kind: str,
           clip: Clip | None = None, note: str = "",
-          allow_negative: bool = False) -> int:
+          allow_negative: bool = False, commit: bool = True) -> int:
     """Move credits atomically and write the ledger row. Returns the new
     balance. A debit that would go below zero raises ValueError — callers
     check first and answer with `insufficient_credits`; this is the backstop
     against concurrent spends.
+
+    `commit=False` lets a caller include the wallet movement in a larger atomic
+    transaction (the Stripe webhook uses it with its idempotency marker).
 
     `allow_negative` exists for exactly one caller: charging a video that has
     already finished rendering. The user was balance-checked at create and at
@@ -118,8 +121,11 @@ def apply(db: Session, user: User, delta: int, kind: str,
     db.add(CreditEntry(user_id=user.id, delta=delta, balance_after=balance,
                        kind=kind, clip_id=clip.id if clip is not None else None,
                        note=note or None))
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        db.flush()
     return balance
 
 

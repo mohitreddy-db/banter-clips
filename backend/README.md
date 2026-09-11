@@ -64,7 +64,10 @@ Inspect local data anytime:
 | `API_BASE_URL` | `http://localhost:8000` | `https://api.banterclips.com` — Instagram fetches videos from here |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` | same as prod | same |
 | `META_APP_ID/SECRET`, `IG_REDIRECT_URI` | empty (mock) or tunnel | real app + prod callback |
+| `APPLE_*`, `GOOGLE_PLAY_*` | empty (store billing disabled) | server-side store verification credentials |
 | `FRONTEND_URL` | `http://localhost:5173` | `https://www.banterclips.com` |
+
+Mobile purchase setup and API contract: [`MOBILE-BILLING.md`](MOBILE-BILLING.md).
 
 Full commented reference: [`.env.example`](.env.example). Real prod values:
 `/opt/banter-clips/backend/.env` on the droplet + `infra/` locally.
@@ -85,9 +88,11 @@ app/
 │   ├── me.py          GET /me · GET /me/usage · PATCH /me/preferences
 │   ├── clips.py       CRUD · /retry · /download (Creator) · /publish · publish status
 │   ├── socials.py     Instagram OAuth (authorize-url/callback) · token auto-refresh · mock connect
-│   ├── billing.py     /billing/upgrade · /billing/cancel (mock Stripe, webhook-shaped)
+│   ├── billing.py     Stripe web/top-ups + native Stripe + Apple/Google verification
 │   └── events.py      POST /events — client-side analytics (BR-11)
 ├── services/
+│   ├── entitlements.py Combined Stripe/Apple/Google Creator reconciliation
+│   ├── store_billing.py Apple App Store + Google Play server verification
 │   ├── generation.py  Dummy generation worker (stage machine → ready/failed)
 │   └── publishing.py  Publish worker — real Reels path + mock path
 └── pipeline/          Legacy real-generation experiments (deps: requirements-pipeline.txt)

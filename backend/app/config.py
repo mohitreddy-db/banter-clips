@@ -25,8 +25,13 @@ class Settings(BaseSettings):
     # Stripe (BR-15 Creator plan). When unset, /billing/upgrade acts as the
     # dev mock. STRIPE_PRICE_CREATOR is the recurring monthly price id ($19 since 2026-08-26; earlier subs grandfathered at $9.99).
     STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_PRICE_CREATOR: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    # Stripe requires the mobile SDK's API version when minting an ephemeral
+    # customer key. Keep this configurable so an SDK upgrade does not require
+    # a backend release.
+    STRIPE_MOBILE_API_VERSION: str = "2025-06-30.basil"
 
     # Meta / Instagram Business Login (BR-13 real publishing). When unset,
     # /socials/connect falls back to the mock connector.
@@ -220,6 +225,23 @@ class Settings(BaseSettings):
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 5, "creator": 30}
     CREATOR_PRICE: str = "$19/mo"
+
+    # Apple App Store / Google Play Creator subscriptions. Store credentials
+    # stay server-side; mobile clients submit only transaction identifiers or
+    # purchase tokens for verification.
+    APPLE_KEY_ID: str = ""
+    APPLE_ISSUER_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_BUNDLE_ID: str = ""
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
+    ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
+    STORE_PRODUCT_CREATOR: str = "creator_monthly"
+    # Re-check active store subscriptions periodically while users are active.
+    # Expiry is always checked immediately even when this window has not elapsed.
+    STORE_REVERIFY_HOURS: int = 24
+    # If a store is unreachable exactly at renewal, preserve the last known
+    # entitlement briefly, then fail closed while continuing verification.
+    STORE_OUTAGE_GRACE_HOURS: int = 24
 
     @property
     def admin_emails(self) -> set[str]:

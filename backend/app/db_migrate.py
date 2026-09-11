@@ -46,6 +46,12 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "edit_pending", "jsonb"),
     ("clips", "credits_edits", "integer NOT NULL DEFAULT 0"),
     ("publishes", "options", "jsonb"),
+    # Provider-specific Stripe state. users.plan remains the combined cache
+    # across Stripe plus Apple/Google store subscriptions.
+    ("users", "stripe_subscription_status", "text"),
+    ("users", "stripe_current_period_end", "timestamptz"),
+    ("users", "stripe_cancel_at_period_end", "boolean NOT NULL DEFAULT false"),
+    ("users", "stripe_mobile_pending_subscription_id", "text"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied
@@ -61,6 +67,37 @@ def _statements() -> tuple[str, ...]:
     # (which had no constraint) passed its tests. Sport and tone carry the
     # same trap — the sport list grew from 4 to 12 and tones gained "Roast".
     return (
+        # Explicit fallback for deployments where schema provisioning is run
+        # separately from SQLAlchemy's create_all.
+        "CREATE TABLE IF NOT EXISTS store_subscriptions ("
+        "id uuid PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+        "platform text NOT NULL CHECK (platform IN ('ios','android')), "
+        "product_id text NOT NULL, purchase_token text NOT NULL, "
+        "status text NOT NULL DEFAULT 'active' "
+        "CHECK (status IN ('active','cancelled','expired')), "
+        "expires_at timestamptz, auto_renewing boolean NOT NULL DEFAULT true, "
+        "created_at timestamptz NOT NULL DEFAULT now(), "
+        "last_verified_at timestamptz NOT NULL DEFAULT now(), "
+        "next_verification_at timestamptz NOT NULL DEFAULT now(), "
+        "CONSTRAINT store_sub_provider_token UNIQUE (platform, purchase_token))",
+        # The draft branch may have created this table before next_verification_at
+        # existed. CREATE TABLE IF NOT EXISTS cannot repair a partial table.
+        "ALTER TABLE store_subscriptions ADD COLUMN IF NOT EXISTS "
+        "next_verification_at timestamptz DEFAULT now()",
+        "UPDATE store_subscriptions SET next_verification_at = now() "
+        "WHERE next_verification_at IS NULL",
+        "ALTER TABLE store_subscriptions ALTER COLUMN next_verification_at SET NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS store_sub_provider_token "
+        "ON store_subscriptions (platform, purchase_token)",
+        "CREATE INDEX IF NOT EXISTS store_subscriptions_user "
+        "ON store_subscriptions (user_id, expires_at)",
+        # Existing main rows only carry subscription_id. That id was written by
+        # a successful Stripe sync, so preserve it as active until the next
+        # webhook/API sync supplies the current status.
+        "UPDATE users SET stripe_subscription_status = 'active' "
+        "WHERE stripe_subscription_id IS NOT NULL "
+        "AND stripe_subscription_status IS NULL",
         # "creating_voice" left the vocabulary (2026-08-31). Any row still
         # carrying it is a job that died mid-stage long ago; without this
         # UPDATE the rebuilt status constraint below would fail validation
@@ -89,11 +126,58 @@ def _statements() -> tuple[str, ...]:
     )
 
 
-def apply() -> None:
-    """Bring an existing database up to the current model. Never raises.
+def _verify_required_billing_schema() -> None:
+    """Fail deployment before traffic if mapped billing columns are absent."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "SELECT stripe_subscription_status, stripe_current_period_end, "
+                    "stripe_cancel_at_period_end, stripe_mobile_pending_subscription_id "
+                    "FROM users LIMIT 0"
+                )
+            )
+            conn.execute(
+                text(
+                    "SELECT id, user_id, platform, product_id, purchase_token, status, "
+                    "expires_at, auto_renewing, created_at, last_verified_at, "
+                    "next_verification_at FROM store_subscriptions LIMIT 0"
+                )
+            )
+            token_unique = conn.scalar(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM ("
+                    "SELECT array_agg(a.attname ORDER BY key_col.ordinality) AS columns "
+                    "FROM pg_index i "
+                    "JOIN pg_class t ON t.oid = i.indrelid "
+                    "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    "JOIN LATERAL unnest(i.indkey::smallint[]) WITH ORDINALITY "
+                    "AS key_col(attnum, ordinality) ON key_col.attnum > 0 "
+                    "JOIN pg_attribute a ON a.attrelid = t.oid "
+                    "AND a.attnum = key_col.attnum "
+                    "WHERE n.nspname = current_schema() "
+                    "AND t.relname = 'store_subscriptions' AND i.indisunique "
+                    "GROUP BY i.indexrelid) unique_indexes "
+                    "WHERE columns = ARRAY['purchase_token']::name[] "
+                    "OR columns = ARRAY['platform','purchase_token']::name[])"
+                )
+            )
+            if not token_unique:
+                raise RuntimeError("store purchase tokens are not uniquely constrained")
+    except Exception as exc:  # a half-migrated User mapping breaks every auth request
+        raise RuntimeError(
+            "required mobile billing schema is missing; apply "
+            "backend/migrations/20260909_mobile_billing.sql before deployment"
+        ) from exc
 
-    A failure here must not stop the API booting: the columns are additive, so
-    the worst case is a feature degrading rather than the service being down.
+
+def apply() -> None:
+    """Bring an existing database up to the current model.
+
+    Historical additive migrations remain best-effort, but the billing fields
+    mapped on every User query are verified afterwards. A missing required
+    field fails startup instead of producing 500s on every authenticated route.
     """
     try:
         with engine.begin() as conn:
@@ -103,5 +187,6 @@ def apply() -> None:
                 )
             for statement in _statements():
                 conn.execute(text(statement))
-    except Exception:  # noqa: BLE001 — boot must survive a migration problem
-        log.exception("additive migrations failed; continuing with the existing schema")
+    except Exception:  # noqa: BLE001 — verification below decides if boot is safe
+        log.exception("one or more additive migrations failed")
+    _verify_required_billing_schema()

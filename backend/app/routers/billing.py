@@ -1,9 +1,10 @@
-"""Plan changes (BR-15) — Stripe Checkout + webhooks.
+"""Plan changes (BR-15) — web Stripe plus native/store subscriptions.
 
 Design principles (payments are delicate):
-- **Stripe is the ledger.** We never mirror invoices/charges locally; the DB
-  stores only the derived entitlement (users.plan + subscription pointers)
-  and an audit log of processed webhook deliveries (stripe_events).
+- **Each provider is its own ledger.** Stripe, Apple and Google state is kept
+  independently; users.plan is derived as the OR of active sources.
+- **Stripe is the web-payment ledger.** We never mirror invoices/charges locally;
+  the DB stores derived subscription state and an audit log of webhook deliveries.
 - **Webhooks are triggers, not truth.** Stripe delivers at-least-once and in
   any order, so handlers never trust event payloads for state: every billing
   event triggers a fetch of the customer's CURRENT subscriptions from the
@@ -19,18 +20,21 @@ Dev fallback — with STRIPE_* env unset, /billing/checkout returns 503
 
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
-from ..models import StripeEvent, User
+from ..models import Event, StripeEvent, User
 from ..schemas import PlanChangeResponse
+from ..services import entitlements, store_billing
 
 log = logging.getLogger("banter.billing")
 
@@ -48,6 +52,10 @@ BILLING_EVENTS = {
 
 def stripe_configured() -> bool:
     return bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_PRICE_CREATOR)
+
+
+def native_stripe_configured() -> bool:
+    return stripe_configured() and bool(settings.STRIPE_PUBLISHABLE_KEY)
 
 
 def _stripe():
@@ -89,8 +97,12 @@ def _forget_stale_customer(db: Session, user: User) -> None:
                 user.id, user.stripe_customer_id)
     user.stripe_customer_id = None
     user.stripe_subscription_id = None
-    user.cancel_at_period_end = False
-    db.commit()
+    user.stripe_subscription_status = None
+    user.stripe_current_period_end = None
+    user.stripe_cancel_at_period_end = False
+    user.stripe_mobile_pending_subscription_id = None
+    # Clearing stale Stripe state must not clear a valid Apple/Google plan.
+    entitlements.reconcile_user_entitlements(db, user, event_provider="stripe")
 
 
 def _ensure_customer(db: Session, user: User) -> str:
@@ -133,25 +145,21 @@ def sync_subscription_state(db: Session, user: User) -> None:
         live = live[:1]
 
     current = live[0] if live else None
-    was_creator = user.plan == "creator"
-
     if current is not None:
-        user.plan = "creator"
         user.stripe_subscription_id = _g(current, "id")
-        user.cancel_at_period_end = bool(_g(current, "cancel_at_period_end"))
-        user.plan_renews_at = _period_end(current)
+        user.stripe_subscription_status = _g(current, "status")
+        user.stripe_cancel_at_period_end = bool(_g(current, "cancel_at_period_end"))
+        user.stripe_current_period_end = _period_end(current)
+        user.stripe_mobile_pending_subscription_id = None
     else:
-        user.plan = "free"
         user.stripe_subscription_id = None
-        user.cancel_at_period_end = False
-        user.plan_renews_at = None
-    db.commit()
+        user.stripe_subscription_status = None
+        user.stripe_cancel_at_period_end = False
+        user.stripe_current_period_end = None
 
-    # Analytics only on real transitions — replay-safe.
-    if not was_creator and user.plan == "creator":
-        record_event(db, "upgrade_completed", user, provider="stripe")
-    elif was_creator and user.plan == "free":
-        record_event(db, "plan_downgraded", user, provider="stripe")
+    # Stripe owns only its source fields. Shared access is the OR of Stripe and
+    # every verified store source, so one provider can never clobber another.
+    entitlements.reconcile_user_entitlements(db, user, event_provider="stripe")
 
 
 @router.post("/checkout")
@@ -160,8 +168,10 @@ def checkout(user: User = Depends(get_current_user), db: Session = Depends(get_d
         raise HTTPException(503, detail={"code": "stripe_not_configured", "message": "Payments are not configured on this server."})
     # Re-check against Stripe, not just our mirror, to close drift windows.
     sync_subscription_state(db, user)
-    if user.plan == "creator" and not user.cancel_at_period_end:
-        raise HTTPException(409, "You're already on the Creator plan.")
+    if user.plan == "creator":
+        providers = entitlements.active_providers(db, user)
+        billed_by = ", ".join(providers) if providers else "an existing entitlement"
+        raise HTTPException(409, f"You're already on the Creator plan through {billed_by}.")
 
     session = _stripe().checkout.Session.create(
         mode="subscription",
@@ -222,6 +232,185 @@ def topup(body: TopupBody, user: User = Depends(get_current_user), db: Session =
     return {"url": session.url}
 
 
+# ------------------------------------------------ native Stripe PaymentSheet
+
+class MobilePaymentSheetBody(BaseModel):
+    # The app persists one request id for one checkout attempt and reuses it on
+    # network retries. It becomes Stripe's idempotency key.
+    request_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+
+
+def _lock_billing_user(db: Session, user: User) -> User:
+    """Serialize payment starts for one account at the database boundary."""
+    return db.scalar(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+def _mobile_client_secret(subscription) -> str | None:
+    invoice = _g(subscription, "latest_invoice", {})
+    confirmation = _g(invoice, "confirmation_secret", {})
+    return _g(confirmation, "client_secret") or _g(
+        _g(invoice, "payment_intent", {}), "client_secret"
+    )
+
+
+def _pending_mobile_subscription(customer_id: str, user: User):
+    """Reuse one pending native subscription and cancel accidental extras."""
+    if user.stripe_mobile_pending_subscription_id:
+        try:
+            saved = _stripe().Subscription.retrieve(
+                user.stripe_mobile_pending_subscription_id,
+                expand=["latest_invoice.confirmation_secret"],
+            )
+        except stripe.InvalidRequestError:
+            user.stripe_mobile_pending_subscription_id = None
+        else:
+            metadata = _g(saved, "metadata", {}) or {}
+            if (
+                _g(saved, "status") == "incomplete"
+                and _g(metadata, "client") == "mobile"
+                and _g(metadata, "banterclips_user_id") == str(user.id)
+            ):
+                return saved
+            user.stripe_mobile_pending_subscription_id = None
+
+    subscriptions = _stripe().Subscription.list(customer=customer_id, status="all", limit=20)
+    pending = []
+    for subscription in _g(subscriptions, "data", []):
+        metadata = _g(subscription, "metadata", {}) or {}
+        if (
+            _g(subscription, "status") == "incomplete"
+            and _g(metadata, "client") == "mobile"
+            and _g(metadata, "banterclips_user_id") == str(user.id)
+        ):
+            pending.append(subscription)
+    pending.sort(key=lambda item: _g(item, "created", 0), reverse=True)
+    for extra in pending[1:]:
+        try:
+            _stripe().Subscription.cancel(_g(extra, "id"))
+        except stripe.StripeError:
+            log.warning("could not cancel duplicate pending subscription %s", _g(extra, "id"))
+    if not pending:
+        return None
+    return _stripe().Subscription.retrieve(
+        _g(pending[0], "id"), expand=["latest_invoice.confirmation_secret"]
+    )
+
+
+@router.post("/mobile/payment-sheet")
+def mobile_payment_sheet(
+    body: MobilePaymentSheetBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create or resume a Stripe subscription for native PaymentSheet.
+
+    App Store and Google Play builds should use their required in-app purchase
+    SDKs plus ``/mobile/verify`` for digital Creator access. This endpoint is
+    for distributions where native Stripe billing is permitted.
+    """
+    if not native_stripe_configured():
+        raise HTTPException(
+            503,
+            detail={
+                "code": "stripe_not_configured",
+                "message": "Native Stripe payments are not configured on this server.",
+            },
+        )
+
+    try:
+        sync_subscription_state(db, user)
+    except stripe.StripeError as exc:
+        raise HTTPException(502, "Stripe could not refresh billing. Try again.") from exc
+    if user.plan == "creator":
+        raise HTTPException(409, "You're already on the Creator plan.")
+
+    created = False
+    try:
+        # Lock once before customer creation (which may commit), then reacquire
+        # before subscription creation. Concurrent requests cannot both pass
+        # the pending-subscription check while holding this row lock.
+        locked_user = _lock_billing_user(db, user)
+        customer_id = _ensure_customer(db, locked_user)
+        locked_user = _lock_billing_user(db, user)
+
+        subscription = _pending_mobile_subscription(customer_id, locked_user)
+        client_secret = _mobile_client_secret(subscription) if subscription is not None else None
+        if subscription is not None and not client_secret:
+            _stripe().Subscription.cancel(_g(subscription, "id"))
+            locked_user.stripe_mobile_pending_subscription_id = None
+            subscription = None
+
+        if subscription is None:
+            subscription = _stripe().Subscription.create(
+                customer=customer_id,
+                items=[{"price": settings.STRIPE_PRICE_CREATOR}],
+                payment_behavior="default_incomplete",
+                payment_settings={"save_default_payment_method": "on_subscription"},
+                metadata={"banterclips_user_id": str(user.id), "client": "mobile"},
+                expand=["latest_invoice.confirmation_secret"],
+                idempotency_key=f"banter-mobile-sub:{user.id}:{body.request_id}",
+            )
+            created = True
+            client_secret = _mobile_client_secret(subscription)
+        if not client_secret:
+            _stripe().Subscription.cancel(_g(subscription, "id"))
+            locked_user.stripe_mobile_pending_subscription_id = None
+            raise HTTPException(502, "Stripe did not create a payable invoice.")
+
+        locked_user.stripe_mobile_pending_subscription_id = _g(subscription, "id")
+        db.commit()
+        ephemeral_key = _stripe().EphemeralKey.create(
+            customer=customer_id,
+            stripe_version=settings.STRIPE_MOBILE_API_VERSION,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except stripe.StripeError as exc:
+        db.rollback()
+        log.exception("could not create or resume native Stripe subscription")
+        raise HTTPException(502, "Stripe could not start the payment. Try again.") from exc
+
+    if created:
+        record_event(db, "upgrade_started", user, provider="stripe_mobile")
+    return {
+        "publishable_key": settings.STRIPE_PUBLISHABLE_KEY,
+        "payment_intent_client_secret": client_secret,
+        "customer_id": customer_id,
+        "ephemeral_key_secret": _g(ephemeral_key, "secret"),
+        "subscription_id": _g(subscription, "id"),
+        "test_mode": settings.STRIPE_PUBLISHABLE_KEY.startswith("pk_test_"),
+        "reused": not created,
+    }
+
+
+@router.post("/mobile/confirm")
+def confirm_mobile_payment(
+    user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Converge Creator access immediately after PaymentSheet completes."""
+    if not stripe_configured():
+        raise HTTPException(503, "Payments are not configured on this server.")
+    try:
+        sync_subscription_state(db, user)
+    except stripe.StripeError as exc:
+        raise HTTPException(502, "Stripe could not refresh billing. Try again.") from exc
+    if not entitlements.stripe_is_active(user):
+        raise HTTPException(
+            409,
+            detail={
+                "code": "payment_pending",
+                "message": "Payment is still processing. Pull to refresh in a moment.",
+            },
+        )
+    return {"plan": user.plan}
+
+
 @router.post("/portal")
 def portal(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not (stripe_configured() and user.stripe_customer_id):
@@ -268,10 +457,41 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
 
                 amount = int(_g(meta, "credits") or 0)
                 if amount > 0 and _g(obj, "payment_status") == "paid":
-                    credit_svc.apply(db, user, amount, "topup",
-                                     note=f"pack {_g(meta, 'pack', '?')}")
-                    record_event(db, "topup_completed", user,
-                                 pack=_g(meta, "pack"), credits=amount)
+                    # Claim the Stripe event before moving the wallet, then
+                    # commit marker + credit ledger together. Concurrent
+                    # deliveries cannot double-grant the same paid pack.
+                    ts = _g(event, "created")
+                    db.add(
+                        StripeEvent(
+                            id=event_id,
+                            type=event_type,
+                            event_created_at=(
+                                datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
+                            ),
+                        )
+                    )
+                    try:
+                        db.flush()
+                    except IntegrityError:
+                        db.rollback()
+                        return {"received": True, "duplicate": True}
+                    credit_svc.apply(
+                        db,
+                        user,
+                        amount,
+                        "topup",
+                        note=f"pack {_g(meta, 'pack', '?')}",
+                        commit=False,
+                    )
+                    db.add(
+                        Event(
+                            user_id=user.id,
+                            name="topup_completed",
+                            props={"pack": _g(meta, "pack"), "credits": amount},
+                        )
+                    )
+                    db.commit()
+                    return {"received": True}
                 user = None  # not a subscription — skip the sync below
             elif user is not None:
                 # Link ids from the session, then converge from the API.
@@ -298,6 +518,120 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     return {"received": True}
 
 
+# ----------------------------------------------- Apple / Google subscriptions
+
+class StorePurchaseBody(BaseModel):
+    platform: Literal["ios", "android"]
+    product_id: str = Field(min_length=1, max_length=128)
+    # Android requires the purchase token. Apple uses transaction_id; an
+    # optional receipt may still be sent by older clients but is never trusted.
+    purchase_token: str | None = Field(default=None, max_length=16384)
+    transaction_id: str | None = Field(default=None, max_length=128)
+
+
+@router.post("/mobile/verify", response_model=PlanChangeResponse)
+def verify_store_purchase(
+    body: StorePurchaseBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Verify an Apple/Google subscription and apply Creator to the account."""
+    if body.product_id != settings.STORE_PRODUCT_CREATOR:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "unknown_store_product",
+                "message": "That store product is not a BanterClips Creator subscription.",
+            },
+        )
+    if body.platform == "android" and not body.purchase_token:
+        raise HTTPException(400, detail={"code": "purchase_token_required"})
+    if body.platform == "ios" and not body.transaction_id:
+        raise HTTPException(400, detail={"code": "transaction_id_required"})
+    if not store_billing.configured(body.platform):
+        raise HTTPException(
+            503,
+            detail={
+                "code": "store_not_configured",
+                "message": "In-app purchases are not configured on this server.",
+            },
+        )
+
+    try:
+        verified = store_billing.verify(
+            body.platform,
+            purchase_token=body.purchase_token or body.transaction_id or "",
+            product_id=body.product_id,
+            transaction_id=body.transaction_id,
+        )
+    except store_billing.StoreError as exc:
+        log.warning("store verification failed for user %s: %s", user.id, exc)
+        raise HTTPException(
+            502,
+            detail={
+                "code": "store_unreachable",
+                "message": "We couldn't confirm the purchase with the store. "
+                "Your purchase is safe; retry or restore purchases in a moment.",
+            },
+        ) from exc
+
+    if verified.account_token != str(user.id):
+        record_event(db, "store_account_token_mismatch", user, platform=body.platform)
+        raise HTTPException(
+            409,
+            detail={
+                "code": "purchase_account_mismatch",
+                "message": "This purchase was not created for the signed-in BanterClips account.",
+            },
+        )
+    if verified.product_id != settings.STORE_PRODUCT_CREATOR:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "wrong_store_product",
+                "message": "The verified purchase is not for the Creator subscription.",
+            },
+        )
+    if not verified.is_entitled:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "purchase_not_active",
+                "message": "That subscription is no longer active.",
+            },
+        )
+
+    try:
+        entitlements.apply_store_purchase(db, user, body.platform, verified)
+    except entitlements.ReceiptAlreadyUsed as exc:
+        db.rollback()
+        record_event(db, "store_receipt_reuse_blocked", user, platform=body.platform)
+        raise HTTPException(
+            409,
+            detail={
+                "code": "receipt_already_used",
+                "message": "That purchase is already linked to another BanterClips account.",
+            },
+        ) from exc
+
+    return PlanChangeResponse(
+        plan=user.plan,
+        cancel_at_period_end=user.cancel_at_period_end,
+        message="Welcome to Creator — access is unlocked on mobile and web.",
+    )
+
+
+@router.get("/status")
+def billing_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Combined billing state for clients deciding which purchase UI to show."""
+    return {
+        "plan": user.plan,
+        "providers": entitlements.active_providers(db, user),
+        "renews_at": user.plan_renews_at,
+        "cancel_at_period_end": user.cancel_at_period_end,
+    }
+
+
 @router.post("/upgrade", response_model=PlanChangeResponse)
 def upgrade_mock(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Dev-only mock upgrade — disabled once Stripe is configured."""
@@ -317,17 +651,59 @@ def upgrade_mock(user: User = Depends(get_current_user), db: Session = Depends(g
 
 @router.post("/cancel", response_model=PlanChangeResponse)
 def cancel(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # BR-09/BR-15: downgrades apply at period end; videos are never deleted.
+    # A Stripe subscription is cancelled here. Store subscriptions must be
+    # cancelled in Apple/Google settings; pretending otherwise would leave the
+    # customer being charged after our UI said cancellation succeeded.
     if stripe_configured() and user.stripe_subscription_id:
         try:
-            _stripe().Subscription.modify(user.stripe_subscription_id, cancel_at_period_end=True)
-        except stripe.StripeError:
-            raise HTTPException(502, "Stripe could not process the cancellation. Try again.")
-        sync_subscription_state(db, user)  # mirror Stripe immediately
-    else:
-        user.cancel_at_period_end = True
-        db.commit()
-    record_event(db, "plan_cancelled", user)
+            _stripe().Subscription.modify(
+                user.stripe_subscription_id, cancel_at_period_end=True
+            )
+        except stripe.InvalidRequestError as exc:
+            _forget_stale_customer(db, user)
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "stripe_subscription_not_found",
+                    "message": "That Stripe subscription no longer exists. Billing state was refreshed.",
+                },
+            ) from exc
+        except stripe.StripeError as exc:
+            raise HTTPException(
+                502, "Stripe could not process the cancellation. Try again."
+            ) from exc
+        else:
+            sync_subscription_state(db, user)
+            record_event(db, "plan_cancelled", user, provider="stripe")
+            providers = entitlements.active_providers(db, user)
+            message = "Creator stays active until the end of the billing period."
+            if any(provider in ("ios", "android") for provider in providers):
+                message = "Stripe is cancelled; Creator remains active through your app store."
+            return PlanChangeResponse(
+                plan=user.plan,
+                cancel_at_period_end=user.cancel_at_period_end,
+                message=message,
+            )
+
+    store_providers = [
+        provider for provider in entitlements.active_providers(db, user)
+        if provider in ("ios", "android")
+    ]
+    if store_providers:
+        store_name = "Apple" if store_providers[0] == "ios" else "Google Play"
+        raise HTTPException(
+            409,
+            detail={
+                "code": "cancel_in_store",
+                "message": f"This subscription is billed by {store_name}. "
+                "Cancel it in your store subscription settings.",
+            },
+        )
+
+    # Dev-only mock entitlement.
+    user.cancel_at_period_end = True
+    db.commit()
+    record_event(db, "plan_cancelled", user, provider="mock")
     return PlanChangeResponse(
         plan=user.plan,
         cancel_at_period_end=user.cancel_at_period_end,

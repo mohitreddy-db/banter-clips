@@ -26,6 +26,21 @@ export default function Account() {
   const [error, setError] = useState("");
   const [params, setParams] = useSearchParams();
   const [igNotice, setIgNotice] = useState(null);
+  const [billingStatus, setBillingStatus] = useState(null);
+
+  // The shared plan can be funded by Stripe, Apple, Google, or more than one.
+  // Load source-level state before offering provider-specific management.
+  useEffect(() => {
+    if (!isCreator) {
+      setBillingStatus(null);
+      return;
+    }
+    let active = true;
+    api.billingStatus()
+      .then((status) => { if (active) setBillingStatus(status); })
+      .catch(() => { if (active) setBillingStatus({ providers: [] }); });
+    return () => { active = false; };
+  }, [isCreator, user?.id]);
 
   // Result of an OAuth round-trip (?ig=... for Instagram, ?tt=... for TikTok).
   useEffect(() => {
@@ -104,6 +119,10 @@ export default function Account() {
   const joined = user?.created_at
     ? new Date(user.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })
     : "";
+  const billingProviders = billingStatus?.providers || [];
+  const hasStripeBilling = billingProviders.includes("stripe");
+  const hasAppleBilling = billingProviders.includes("ios");
+  const hasGoogleBilling = billingProviders.includes("android");
 
   return (
     <div style={{ maxWidth: 760, display: "flex", flexDirection: "column", gap: 20 }}>
@@ -160,27 +179,57 @@ export default function Account() {
               Creator plan — 1080p, 30s, 500-char prompts, no watermark, 150 credits/mo
             </button>
           </div>
-        ) : user?.cancel_at_period_end ? (
-          <div style={{ fontSize: 13, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 14px" }}>
-            Creator stays active until the end of the billing period, then you move to Free. Your videos are never deleted.
-          </div>
+        ) : billingStatus === null ? (
+          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Loading billing details…</div>
         ) : (
-          <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
-            <button
-              className="ghost-btn"
-              style={{ padding: "11px 20px", fontSize: 13.5, opacity: busy ? 0.7 : 1, color: "var(--app-text)" }}
-              disabled={busy}
-              onClick={withBusy(async () => {
-                const { url } = await api.billingPortal();
-                window.location.href = url;
-              })}
-            >
-              Manage billing ↗
-            </button>
-            <button className="ghost-btn" style={{ padding: "11px 20px", fontSize: 13.5, color: "var(--app-muted)", opacity: busy ? 0.7 : 1 }} disabled={busy} onClick={withBusy(cancelPlan)}>
-              Cancel Creator — applies at period end
-            </button>
-          </div>
+          <>
+            {user?.cancel_at_period_end && (
+              <div style={{ fontSize: 13, color: "var(--app-muted)", background: "rgba(34,211,238,.07)", borderRadius: 10, padding: "10px 14px" }}>
+                Creator stays active until the end of the billing period, then you move to Free unless another subscription remains active. Your videos are never deleted.
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 12, paddingTop: 4, flexWrap: "wrap" }}>
+              {hasStripeBilling && (
+                <>
+                  <button
+                    className="ghost-btn"
+                    style={{ padding: "11px 20px", fontSize: 13.5, opacity: busy ? 0.7 : 1, color: "var(--app-text)" }}
+                    disabled={busy}
+                    onClick={withBusy(async () => {
+                      const { url } = await api.billingPortal();
+                      window.location.href = url;
+                    })}
+                  >
+                    Manage Stripe billing ↗
+                  </button>
+                  <button
+                    className="ghost-btn"
+                    style={{ padding: "11px 20px", fontSize: 13.5, color: "var(--app-muted)", opacity: busy ? 0.7 : 1 }}
+                    disabled={busy}
+                    onClick={withBusy(async () => {
+                      await cancelPlan();
+                      setBillingStatus(await api.billingStatus());
+                    })}
+                  >
+                    Cancel Stripe — applies at period end
+                  </button>
+                </>
+              )}
+              {hasAppleBilling && (
+                <a className="ghost-btn" style={{ padding: "11px 20px", fontSize: 13.5, color: "var(--app-text)", textDecoration: "none" }} href="https://apps.apple.com/account/subscriptions" target="_blank" rel="noreferrer">
+                  Manage Apple subscription ↗
+                </a>
+              )}
+              {hasGoogleBilling && (
+                <a className="ghost-btn" style={{ padding: "11px 20px", fontSize: 13.5, color: "var(--app-text)", textDecoration: "none" }} href="https://play.google.com/store/account/subscriptions" target="_blank" rel="noreferrer">
+                  Manage Google Play subscription ↗
+                </a>
+              )}
+              {billingProviders.length === 0 && (
+                <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Creator access is managed by BanterClips support.</span>
+              )}
+            </div>
+          </>
         )}
       </div>
 
