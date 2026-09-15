@@ -1,0 +1,61 @@
+# Codemagic CI — builds the Flutter iOS app and uploads it to TestFlight.
+#
+# Why CI and not a local Xcode: the team's Macs cannot run an Xcode new
+# enough for App Store uploads (Apple requires a current SDK), so the build
+# runs on Codemagic's macOS machines instead. See mobile/README.md "iOS".
+#
+# One-time setup in the Codemagic UI (not in this file):
+#   1. Teams → Integrations → App Store Connect: add the API key (.p8, Key ID,
+#      Issuer ID) under the name referenced in `integrations` below.
+#   2. Teams → Environment variables: create group `banterclips_env` holding
+#      SUPABASE_URL and SUPABASE_ANON_KEY (mark both "secure"). Without them
+#      the release build falls back to the dev magic-link and login breaks.
+#   3. Set APP_STORE_APPLE_ID below to the numeric Apple ID shown in
+#      App Store Connect → App → App Information → General Information.
+workflows:
+  ios-testflight:
+    name: iOS → TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: mobile
+    integrations:
+      app_store_connect: BanterClips ASC
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.banterclips.app
+      groups:
+        - banterclips_env
+      vars:
+        APP_STORE_APPLE_ID: 6809008960
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []   # manual only — start builds from the Codemagic UI
+    scripts:
+      - name: Set up code signing
+        script: xcode-project use-profiles
+      - name: Fetch packages
+        script: flutter pub get
+      - name: Analyze
+        script: flutter analyze
+      - name: Build IPA
+        script: |
+          # Build number = latest TestFlight build + 1, so uploads never
+          # collide with a number App Store Connect has already seen.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+          BUILD_NUMBER=$((LATEST + 1))
+          echo "Building with build number $BUILD_NUMBER"
+          flutter build ipa --release \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
