@@ -21,9 +21,14 @@ workflows:
     integrations:
       app_store_connect: BanterClips ASC
     environment:
+      # Explicit signing files uploaded under Settings -> Code signing
+      # identities. Automatic mode cannot create a certificate here: the
+      # Apple team is already at its distribution-certificate limit.
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.banterclips.app
+        certificates:
+          - Banterclip_KT
+        provisioning_profiles:
+          - banterclips_appstore
       groups:
         - banterclips_env
       vars:
