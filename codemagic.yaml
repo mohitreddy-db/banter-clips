@@ -63,8 +63,9 @@ workflows:
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --export-options-plist=/Users/builder/export_options.plist
+    # Artifact paths are relative to the repository root, not working_directory.
     artifacts:
-      - build/ios/ipa/*.ipa
+      - mobile/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
