@@ -52,6 +52,12 @@ workflows:
           LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
           BUILD_NUMBER=$((LATEST + 1))
           echo "Building with build number $BUILD_NUMBER"
+          # Strip stray whitespace/newlines from the pasted secrets: a value
+          # ending in a newline makes Flutter treat the whole --dart-define
+          # as a positional "target file" argument.
+          SUPABASE_URL="$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')"
+          SUPABASE_ANON_KEY="$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')"
+          echo "SUPABASE_URL length: ${#SUPABASE_URL}, SUPABASE_ANON_KEY length: ${#SUPABASE_ANON_KEY}"
           flutter build ipa --release \
             --build-number="$BUILD_NUMBER" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
