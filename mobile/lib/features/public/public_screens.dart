@@ -12,6 +12,7 @@ import '../../state/app_state.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/surfaces.dart';
 import '../account/upgrade_sheet.dart';
+import 'legal_text.dart';
 
 const _showcaseBase =
     'https://taphbakizdagamimbhjh.supabase.co/storage/v1/object/public/clips/showcase';
@@ -793,73 +794,101 @@ class PricingScreen extends ConsumerWidget {
   const PricingScreen({super.key, this.embedded = false});
   final bool embedded;
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-    appBar: embedded
-        ? AppBar(title: const Text('Pricing'))
-        : const PublicHeader(),
-    body: ListView(
-      padding: const EdgeInsets.fromLTRB(20, 38, 20, 32),
-      children: [
-        const Text(
-          'Simple, creator-friendly pricing',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 34,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -.8,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(appStateProvider);
+    final signedIn = state.signedIn;
+    final isCreator = state.isCreator;
+    return Scaffold(
+      appBar: embedded
+          ? AppBar(title: const Text('Pricing'))
+          : const PublicHeader(),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 38, 20, 32),
+        children: [
+          Text(
+            signedIn ? 'Pick your plan' : 'Simple, creator-friendly pricing',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -.8,
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'Turn a written sports take into a finished 9:16 AI video — voiceover, animated captions, one-click publish to Instagram & TikTok. Start free, no credit card.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted, height: 1.5),
-        ),
-        const SizedBox(height: 28),
-        _Plan(
-          name: 'Free',
-          price: r'$0',
-          note: 'Your clips, published everywhere.',
-          features: const [
-            '60 welcome credits — your first video on us',
-            'One-click publish to Instagram & TikTok',
-            'Funny · Savage · Hype tones',
-            'Free retries — failures never count',
-            '— 720p HD only',
-            '— Publishes with BanterClips watermark',
-            '— No downloads',
-          ],
-          onTap: () =>
-              embedded ? context.go('/studio') : context.go('/sign-in'),
-        ),
-        const SizedBox(height: 16),
-        _Plan(
-          name: 'Creator',
-          price: r'$19',
-          note: 'For creators posting every week.',
-          popular: true,
-          features: const [
-            '150 credits added every month',
-            'Full HD 1080p quality',
-            'Download in HD — no watermark',
-            'Publish without the watermark',
-            'Priority render queue',
-            'First access to new platforms',
-            'Everything in Free',
-          ],
-          onTap: () => embedded
-              ? showUpgradeSheet(context, reason: UpgradeReason.limit)
-              : context.go('/sign-in'),
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Prices are introductory and may change after beta. The AI-parody disclosure stays on every video on every plan. Only successful videos use credits — failures are refunded. Cancel anytime — your videos are never deleted.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, height: 1.55, color: AppColors.muted2),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 10),
+          Text(
+            signedIn
+                ? 'Publish free — every share promotes you. Upgrade to download without the watermark.'
+                : 'Turn a written sports take into a finished 9:16 AI video — voiceover, animated captions, one-click publish to Instagram & TikTok. Start free, no credit card.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.muted, height: 1.5),
+          ),
+          const SizedBox(height: 28),
+          _Plan(
+            name: 'Free',
+            price: r'$0',
+            note: 'Your clips, published everywhere.',
+            features: const [
+              '60 welcome credits — your first video on us',
+              'One-click publish to Instagram & TikTok',
+              'Funny · Savage · Hype tones',
+              'Free retries — failures never count',
+              'Prompts up to 280 characters',
+              '— 720p HD only',
+              '— Publishes with BanterClips watermark',
+              '— No downloads',
+            ],
+            // The web's exact states: signed out → start; on Free → this is
+            // your current plan; on Creator → Free is included.
+            cta: !signedIn
+                ? 'Start free'
+                : isCreator
+                ? 'Included in Creator'
+                : 'Current plan',
+            current: signedIn && !isCreator,
+            onTap: signedIn ? null : () => context.go('/sign-in'),
+          ),
+          const SizedBox(height: 16),
+          _Plan(
+            name: 'Creator',
+            price: r'$19',
+            note: 'For creators posting every week.',
+            popular: true,
+            features: const [
+              '150 credits added every month',
+              'Full HD 1080p quality',
+              'Prompts up to 500 characters',
+              'Download in HD — no watermark',
+              'Publish without the watermark',
+              'Priority render queue',
+              'First access to new platforms',
+              'Everything in Free',
+            ],
+            cta: !signedIn
+                ? 'Go Creator'
+                : isCreator
+                ? '✓ Your plan'
+                : 'Upgrade to Creator',
+            current: signedIn && isCreator,
+            onTap: !signedIn
+                ? () => context.go('/sign-in')
+                : isCreator
+                ? null
+                : () => showUpgradeSheet(context, reason: UpgradeReason.limit),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Prices are introductory and may change after beta. The AI-parody disclosure stays on every video on every plan. Only successful videos use credits — failures are refunded. Cancel anytime — your videos are never deleted.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.55,
+              color: AppColors.muted2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Plan extends StatelessWidget {
@@ -868,26 +897,42 @@ class _Plan extends StatelessWidget {
     required this.price,
     required this.note,
     required this.features,
+    required this.cta,
     required this.onTap,
     this.popular = false,
+    this.current = false,
   });
-  final String name, price, note;
+  final String name, price, note, cta;
   final List<String> features;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool popular;
+
+  /// The plan the signed-in account is on — highlighted, and its button is
+  /// a label rather than an action.
+  final bool current;
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(22),
     decoration: BoxDecoration(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: popular ? AppColors.cyan : AppColors.border),
+      border: Border.all(
+        color: current
+            ? AppColors.green
+            : popular
+            ? AppColors.cyan
+            : AppColors.border,
+        width: current ? 1.5 : 1,
+      ),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (popular) const _Eyebrow('POPULAR'),
-        if (popular) const SizedBox(height: 8),
+        if (current)
+          const _Eyebrow('YOUR PLAN')
+        else if (popular)
+          const _Eyebrow('MOST POPULAR'),
+        if (current || popular) const SizedBox(height: 8),
         Text(
           name,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
@@ -937,10 +982,18 @@ class _Plan extends StatelessWidget {
             ),
           ),
         const SizedBox(height: 10),
-        if (popular)
-          GradButton(label: 'Go Creator', onPressed: onTap)
+        if (popular && !current)
+          GradButton(label: cta, onPressed: onTap)
         else
-          GhostButton(label: 'Start free', onPressed: onTap),
+          GhostButton(
+            label: cta,
+            color: current
+                ? AppColors.green
+                : onTap == null
+                ? AppColors.muted
+                : AppColors.text,
+            onPressed: onTap,
+          ),
       ],
     ),
   );
@@ -1175,25 +1228,85 @@ class LegalScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Last updated September 2026',
+          'Effective $legalEffectiveDate',
           style: TextStyle(color: AppColors.muted2),
         ),
         const SizedBox(height: 26),
-        for (final section in (terms ? _terms : _privacy)) ...[
-          Text(
-            section.$1,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            section.$2,
-            style: const TextStyle(color: AppColors.muted, height: 1.6),
-          ),
-          const SizedBox(height: 22),
+        for (final section in (terms ? termsOfService : privacyPolicy)) ...[
+          if (section.heading.isNotEmpty) ...[
+            Text(
+              section.heading,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          for (final block in section.blocks)
+            Padding(
+              padding: EdgeInsets.only(bottom: 10, left: block.bullet ? 4 : 0),
+              child: block.bullet
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '•  ',
+                          style: TextStyle(color: AppColors.muted, height: 1.6),
+                        ),
+                        Expanded(child: _LegalText(block.text)),
+                      ],
+                    )
+                  : _LegalText(block.text),
+            ),
+          const SizedBox(height: 14),
         ],
+        const Divider(color: AppColors.border),
+        const SizedBox(height: 12),
+        Text(
+          'Questions? Email $legalSupportEmail',
+          style: const TextStyle(fontSize: 13, color: AppColors.muted2),
+        ),
       ],
     ),
   );
+}
+
+/// Renders a legal paragraph, turning `**bold**` lead-ins into bold runs.
+class _LegalText extends StatelessWidget {
+  const _LegalText(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <TextSpan>[];
+    final parts = text.split('**');
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].isEmpty) continue;
+      spans.add(
+        TextSpan(
+          text: parts[i],
+          style: i.isOdd
+              ? const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.text,
+                )
+              : null,
+        ),
+      );
+    }
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+          fontSize: 14.5,
+          color: AppColors.muted,
+          height: 1.6,
+        ),
+        children: spans,
+      ),
+    );
+  }
 }
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
@@ -1331,42 +1444,6 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   );
 }
 
-const _privacy = [
-  (
-    'Information we collect',
-    'We collect account details, preferences, submitted sports takes, generated media, usage events and connected social-account information needed to provide the service.',
-  ),
-  (
-    'How we use information',
-    'We use this information to authenticate you, generate and deliver clips, operate billing, improve reliability and prevent abuse.',
-  ),
-  (
-    'Storage and sharing',
-    'Service providers such as Supabase, generation providers, Stripe and connected publishing platforms process only the data needed for their function.',
-  ),
-  (
-    'Your choices',
-    'You may disconnect social accounts, request deletion or contact support about access and correction.',
-  ),
-];
-const _terms = [
-  (
-    'The service',
-    'BanterClips turns written sports opinions into AI-generated parody videos. Generated output can contain errors and must be reviewed before publishing.',
-  ),
-  (
-    'Plans and credits',
-    r'Free includes 60 welcome credits. Creator costs $19 per month and adds 150 monthly credits, 1080p output and watermark-free downloads.',
-  ),
-  (
-    'Your responsibilities',
-    'You are responsible for your takes, generated clips and publication choices, including compliance with platform rules and applicable law.',
-  ),
-  (
-    'Subscriptions',
-    'Subscriptions renew until cancelled. Access continues through the paid billing period after cancellation.',
-  ),
-];
 
 class _LandingSection extends StatelessWidget {
   const _LandingSection({

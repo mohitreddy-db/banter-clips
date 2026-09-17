@@ -30,9 +30,9 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
-from ..models import StoreSubscription, StripeEvent, User
+from ..models import StorePurchase, StoreSubscription, StripeEvent, User
 from ..schemas import PlanChangeResponse
-from ..services import store_billing
+from ..services import credits, store_billing
 
 log = logging.getLogger("banter.billing")
 
@@ -286,13 +286,159 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
 
 # ------------------------------------------------------- store billing (app)
 
-class StorePurchase(BaseModel):
+class StorePurchaseBody(BaseModel):
     platform: Literal["ios", "android"]
     product_id: str = Field(max_length=128)
     # Google: the purchase token. iOS: the base64 receipt, kept only as a
     # fallback — `transaction_id` is what the App Store Server API needs.
-    purchase_token: str = Field(max_length=8192)
+    purchase_token: str = Field(max_length=16384)
     transaction_id: str | None = Field(default=None, max_length=128)
+
+
+def _pack_for_product(product_id: str) -> str | None:
+    """`credits_starter` → `starter`, or None when it is not a pack."""
+    prefix = settings.STORE_CREDIT_PACK_PREFIX
+    if not product_id.startswith(prefix):
+        return None
+    key = product_id[len(prefix):]
+    return key if key in credits.CREDIT_PACKS else None
+
+
+@router.get("/packs")
+def packs(user: User = Depends(get_current_user)):
+    """The credit packs on sale. `android_product_id` / `ios_product_id` are
+    what the app asks the store for; the store's own price is what the
+    customer sees and pays, `usd` is the list price for the website."""
+    prefix = settings.STORE_CREDIT_PACK_PREFIX
+    return {
+        "available": True,
+        "packs": [
+            {
+                "key": key,
+                "name": spec["name"],
+                "credits": spec["credits"],
+                "usd": spec["usd"],
+                "popular": spec["popular"],
+                "android_product_id": f"{prefix}{key}",
+                "ios_product_id": f"{prefix}{key}",
+            }
+            for key, spec in credits.CREDIT_PACKS.items()
+        ],
+    }
+
+
+def _verify_credit_pack(body: StorePurchaseBody, pack: str, user: User, db: Session) -> dict:
+    """Grant a credit pack bought in a store, exactly once per purchase token."""
+    if not store_billing.configured(body.platform):
+        raise HTTPException(
+            503,
+            detail={
+                "code": "store_not_configured",
+                "message": "In-app purchases are not configured on this server.",
+            },
+        )
+
+    # Already granted? Answer the same thing again — the app retries after a
+    # dropped connection, and must converge rather than double-grant.
+    existing = db.scalar(
+        select(StorePurchase).where(StorePurchase.purchase_token == body.purchase_token)
+    )
+    if existing is not None:
+        if existing.user_id != user.id:
+            record_event(db, "store_receipt_reuse_blocked", user, platform=body.platform)
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "receipt_already_used",
+                    "message": "That purchase is already linked to another BanterClips account.",
+                },
+            )
+        return {
+            "plan": user.plan,
+            "cancel_at_period_end": user.cancel_at_period_end,
+            "credits": user.credits,
+            "credits_granted": existing.credits,
+            "message": f"{existing.credits} credits are already in your wallet.",
+        }
+
+    try:
+        purchase = store_billing.verify_product(
+            body.platform,
+            purchase_token=body.purchase_token,
+            product_id=body.product_id,
+            transaction_id=body.transaction_id,
+        )
+    except store_billing.StoreError as exc:
+        log.warning("store product verification failed for user %s: %s", user.id, exc)
+        raise HTTPException(
+            502,
+            detail={
+                "code": "store_unreachable",
+                "message": "We couldn't confirm the purchase with the store. "
+                "It will apply automatically — reopen the app in a minute.",
+            },
+        )
+
+    if not purchase.is_paid:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "purchase_not_active",
+                "message": "That purchase is still pending or was cancelled."
+                if purchase.status == "pending"
+                else "That purchase is not valid.",
+            },
+        )
+    if _pack_for_product(purchase.product_id) != pack:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "wrong_store_product",
+                "message": "The verified purchase is not for that credit pack.",
+            },
+        )
+    if purchase.consumed:
+        # Consumed by the store already but never recorded here — it was
+        # granted before a crash, or it is a replay. Either way, not again.
+        raise HTTPException(
+            409,
+            detail={
+                "code": "purchase_already_consumed",
+                "message": "That purchase has already been used.",
+            },
+        )
+
+    granted = credits.grant_topup(db, user, pack)
+    db.add(
+        StorePurchase(
+            user_id=user.id,
+            platform=body.platform,
+            product_id=purchase.product_id,
+            purchase_token=purchase.purchase_token,
+            pack=pack,
+            credits=granted,
+        )
+    )
+    db.commit()
+    record_event(db, "topup_completed", user, provider=body.platform, pack=pack, credits=granted)
+
+    # Consume server-side too (see consume_google_product). A failure here
+    # is logged, not surfaced: the credits are granted and recorded, and the
+    # app consumes on its side as well.
+    try:
+        store_billing.consume_product(
+            body.platform, purchase_token=purchase.purchase_token, product_id=purchase.product_id
+        )
+    except store_billing.StoreError as exc:
+        log.warning("could not consume store purchase %s: %s", purchase.purchase_token[:12], exc)
+
+    return {
+        "plan": user.plan,
+        "cancel_at_period_end": user.cancel_at_period_end,
+        "credits": user.credits,
+        "credits_granted": granted,
+        "message": f"{granted} credits added to your wallet.",
+    }
 
 
 def sync_store_subscription(db: Session, user: User, sub: StoreSubscription) -> None:
@@ -373,13 +519,14 @@ def refresh_expired_store_plan(db: Session, user: User) -> None:
     sync_store_subscription(db, user, sub)
 
 
-@router.post("/mobile/verify", response_model=PlanChangeResponse)
+@router.post("/mobile/verify")
 def verify_store_purchase(
-    body: StorePurchase,
+    body: StorePurchaseBody,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Verify a store receipt and grant Creator if it checks out.
+    """Verify a store receipt and grant what it bought: Creator for the
+    subscription, credits for a pack.
 
     This is the ONLY way a mobile purchase becomes an entitlement. The client
     telling us a purchase succeeded is a request to go and ask Apple or
@@ -388,13 +535,20 @@ def verify_store_purchase(
 
     Idempotent: keyed on the store's own purchase token, so the app can (and
     does) retry after a dropped connection without double-granting.
+
+    The response is `PlanChangeResponse` plus, for a pack, `credits` and
+    `credits_granted`.
     """
+    pack = _pack_for_product(body.product_id)
+    if pack is not None:
+        return _verify_credit_pack(body, pack, user, db)
+
     if body.product_id != settings.STORE_PRODUCT_CREATOR:
         raise HTTPException(
             400,
             detail={
                 "code": "unknown_store_product",
-                "message": "That store product is not a BanterClips Creator subscription.",
+                "message": "That store product is not a BanterClips subscription or credit pack.",
             },
         )
 
@@ -478,7 +632,7 @@ def verify_store_purchase(
         plan=user.plan,
         cancel_at_period_end=user.cancel_at_period_end,
         message="Welcome to Creator — downloads and watermark-free publishing are unlocked.",
-    )
+    ).model_dump()
 
 
 @router.post("/upgrade", response_model=PlanChangeResponse)

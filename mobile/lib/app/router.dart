@@ -6,12 +6,14 @@ import '../features/account/account_screen.dart';
 import '../features/admin/admin_console_screen.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/clips/clips_screen.dart';
+import '../features/feedback/feedback_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/public/public_screens.dart';
 import '../features/prompts/prompts_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/studio/clip_screen.dart';
 import '../features/studio/studio_screen.dart';
+import '../features/viral/viral_screen.dart';
 import '../state/app_state.dart';
 
 /// Routing and the auth gate — the Dart counterpart of `App.jsx`.
@@ -62,6 +64,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           path == '/reset-password' ||
           path == '/showcase' ||
           path.startsWith('/showcase/');
+
+      // The root path is also where an auth deep link lands: Google sign-in
+      // and magic links return to `banterclips://login-callback`, whose path
+      // is empty, and the app used to open the marketing landing page while
+      // the session was still being exchanged. An installed app never needs
+      // that page — signed out it means sign-in, signed in it means the
+      // product.
+      if (path == '/') {
+        if (!app.signedIn) return '/sign-in';
+        return app.onboarded ? '/studio' : '/onboarding';
+      }
 
       if (!app.signedIn) {
         return (onAuthRoute || publicRoute) ? null : '/sign-in';
@@ -134,6 +147,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             ClipScreen(clipId: state.pathParameters['id']!),
       ),
 
+      // Plans is reached from Account and from every locked control, not
+      // from the tab bar — the web's bottom nav does not carry it either.
+      GoRoute(
+        path: '/plans',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PricingScreen(embedded: true),
+      ),
+
+      // The tab bar, in the order the web's bottom nav uses.
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
@@ -149,8 +171,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/clips',
-                builder: (context, state) => const ClipsScreen(),
+                path: '/viral',
+                builder: (context, state) => const ViralScreen(),
               ),
             ],
           ),
@@ -165,9 +187,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/plans',
-                builder: (context, state) =>
-                    const PricingScreen(embedded: true),
+                path: '/clips',
+                builder: (context, state) => const ClipsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/feedback',
+                builder: (context, state) => const FeedbackScreen(),
               ),
             ],
           ),

@@ -2,6 +2,10 @@
     <!-- The whole app is an API client: without this every request fails on a
          release build, where cleartext and network access are not implicit. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Saving a downloaded clip into the gallery. Android 10+ writes through
+         MediaStore with no permission; only older devices need this one. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
 
     <application
         android:label="BanterClips"

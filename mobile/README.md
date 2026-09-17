@@ -48,6 +48,20 @@ publishable key in the git-ignored `config/supabase.local.json`, then run:
 flutter run --dart-define-from-file=config/supabase.local.json
 ```
 
+Build installable APKs through the checked wrapper so an authentication-disabled
+APK cannot be produced accidentally:
+
+```powershell
+# Debug APK
+.\scripts\build-apk.ps1
+
+# Release APK
+.\scripts\build-apk.ps1 -Release
+```
+
+The wrapper validates `config/supabase.local.json` and passes it to Flutter with
+`--dart-define-from-file` on every build.
+
 **`10.0.2.2`, not `localhost`.** That is how the Android emulator reaches the
 host machine; inside the emulator `localhost` is the emulator itself. On a
 physical device use your machine's LAN IP, and make sure the backend's
@@ -95,14 +109,20 @@ lib/
 | Web screen | Here | Why |
 |---|---|---|
 | Sign in · Reset | ✅ | nothing works without it |
-| Onboarding | ✅ | four steps, all skippable |
-| Studio (all phases) | ✅ | split across `/studio` and `/clip/:id` |
-| Clips | ✅ | list, play, publish, share, delete |
-| Account | ✅ | usage, plan, Instagram, preferences, legal |
-| Pricing | ↗ web | store-billing rules — see below |
-| Privacy · Terms | ↗ web | both stores need reachable links; rebuilding buys nothing |
+| Onboarding | ✅ | five steps: sports, teams & players, role, connect accounts, pick a plan |
+| Studio (all phases) | ✅ | split across `/studio` and `/clip/:id`; same controls as the web (multi-sport, subjects, direction, reference upload, five tones) |
+| Viral | ✅ | own tab — today's stories per sport, one-tap presets into the Studio |
+| Prompts | ✅ | own tab |
+| Clips | ✅ | list, play, publish (Instagram · TikTok · YouTube), download, delete |
+| Feedback | ✅ | own tab — category, message, rating, straight to the admin console |
+| Account | ✅ | wallet, plan, top-up, connected accounts, preferences, legal |
+| Pricing | ✅ | `/plans`, reached from Account and every locked control; sells through the store |
+| Privacy · Terms | ✅ | the website's text, verbatim, in `features/public/legal_text.dart` |
 | Landing · Showcase | ❌ | marketing and SEO surfaces; an installed user has converted |
-| `admin/*` | ❌ | ops tooling, desktop browser forever |
+| `admin/*` | read-only | a small console for admins; ops tooling stays on the desktop |
+
+The tab bar is the web's bottom nav in the web's order: Create · Viral ·
+Prompts · My Clips · Feedback · Account.
 
 ### Billing runs through the stores
 
@@ -150,6 +170,42 @@ store subscription, and Account deep-links to the right settings screen.
 Setting our own flag instead would be worse than useless: the customer would
 see "cancelled" here and keep being charged.
 
+### Credit packs are store consumables
+
+Top-ups are digital goods consumed in the app, so they go through store
+billing too — the website's Stripe top-up URL must never be opened from
+here. Each pack in `GET /billing/packs` maps to a **one-time (consumable)
+product** in the store with the id `credits_<pack key>`:
+
+| Pack | Credits | Product id |
+|---|---|---|
+| Starter | 100 | `credits_starter` |
+| Creator Pack | 300 | `credits_creator` |
+| Pro Pack | 750 | `credits_pro` |
+| Studio Pack | 2,000 | `credits_studio` |
+
+The flow is the subscription's, with a consume at the end:
+
+```
+tap pack -> store sheet -> purchase stream -> POST /billing/mobile/verify
+    -> server asks Google (purchases.products.get) -> grants credits
+    -> writes store_purchases (unique on purchase token)
+    -> consumes the purchase server-side -> app completePurchase()
+```
+
+`autoConsume` is off on purpose: consuming before the server has granted
+would let a verification failure eat a paid purchase. The server side lives
+in `backend/app/routers/billing.py` (`_verify_credit_pack`) and
+`backend/app/services/credits.py`.
+
+### Prices
+
+The plan is **$19/month** everywhere it is written down; the store bills in
+the customer's currency at whatever is configured in its console. The
+paywall shows both ("Upgrade to Creator — $19/mo" and, underneath, "Billed by
+Google Play as ₹…/month"). If those two disagree by more than the exchange
+rate, the fix is in the Play Console pricing template, not in the app.
+
 ## Long jobs and the phone lifecycle
 
 A browser tab can poll forever. A phone cannot: iOS suspends the process
@@ -168,41 +224,34 @@ The real fix is a push notification when the worker finishes — that needs
 `POST /me/devices`, a Firebase project, and a hook in `app/worker.py`. It is
 v2, on purpose.
 
-## Backend change still required: Instagram OAuth
+## Backend and console changes the app depends on
 
-**This is the one thing that is not finished, and it is a backend change, not
-a Flutter one.**
+All of these are in `backend/` on the same branch as the app; the droplet
+must be running them before the corresponding feature works on a phone.
 
-`GET /socials/instagram/oauth-url` mints a state JWT holding a `next` path
-and rejects anything not starting with `/`:
-
-```python
-# backend/app/routers/socials.py
-"next": next if next.startswith("/") else "/account",
-```
-
-Correct for a website; wrong for an app, because a phone has no browser tab
-to return to. The app already asks for `banterclips://oauth/instagram`, the
-scheme is registered on both platforms, and `flutter_web_auth_2` is wired to
-catch it. Until the backend allow-lists that exact URI, the consent flow ends
-on the website instead of back in the app — the account still connects, and
-pulling to refresh Account picks it up, but the hand-back is ugly.
-
-The fix, both in `oauth-url` and wherever the callback redirects:
-
-```python
-MOBILE_RETURN = "banterclips://oauth/instagram"
-
-def _safe_next(next: str) -> str:
-    # Exactly one non-web destination is allowed, matched in full. Do NOT
-    # relax this to "any custom scheme" — that is an open-redirect hole.
-    if next == MOBILE_RETURN:
-        return next
-    return next if next.startswith("/") else "/account"
-```
-
-Then add `banterclips://oauth/instagram` to the Meta app's valid OAuth
-redirect list, alongside the web one.
+1. **OAuth hand-back.** `GET /socials/{platform}/oauth-url` allow-lists
+   exactly three non-web `next` values — `banterclips://oauth/instagram`,
+   `…/tiktok`, `…/youtube` — and the callbacks bounce to them without the
+   `FRONTEND_URL` prefix (`routers/socials.py`, `MOBILE_RETURNS`). Without
+   this the consent flow ends on the website; the account still connects and
+   pull-to-refresh on Account picks it up, but the hand-back is ugly. Each
+   platform's developer console must also list the same URI as a valid
+   redirect.
+2. **Credit packs through the store.** `POST /billing/mobile/verify` accepts
+   `credits_<pack>` product ids and grants the pack (see above), and
+   `GET /billing/packs` names the product ids. Needs the Play service
+   account (`GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`) that the subscription
+   already needs.
+3. **500-character prompts.** The `clips.take` column was capped at 280 by
+   the original DDL, so a Creator's longer take failed at the database even
+   though the API accepted it. `db_migrate.py` widens the constraint on
+   boot.
+4. **Supabase redirect URLs.** Google sign-in and magic links return to
+   `banterclips://login-callback`, password resets to
+   `banterclips://reset-password`. Both must be in the Supabase project's
+   *Authentication → URL Configuration → Redirect URLs*; otherwise Supabase
+   falls back to the Site URL and the sign-in finishes in the browser on
+   the website instead of in the app.
 
 ## Before the first store submission
 
@@ -212,7 +261,10 @@ Ordered by how expensive they get if left late.
    Console, with the id `creator_monthly` in both. The same string on both
    stores is what lets the server verify a receipt without caring where it
    came from. Until it exists the paywall shows its "not available from the
-   store on this build yet" state rather than a dead button.
+   store on this build yet" state rather than a dead button. Create the four
+   **consumable** credit-pack products too (`credits_starter`,
+   `credits_creator`, `credits_pro`, `credits_studio`) — without them the
+   top-up sheet lists the packs but cannot sell them.
 2. **Register the Google Play account ($25).** New accounts must run a closed
    test with 12 testers for 14 days before public release. Start that clock
    early; it runs in the background while you build.

@@ -173,6 +173,12 @@ class Settings(BaseSettings):
     # never has to care which one a receipt came from.
     STORE_PRODUCT_CREATOR: str = "creator_monthly"
 
+    # Credit packs sold in the stores are one-time (consumable) products
+    # named `<prefix><pack key>` — `credits_starter`, `credits_pro`, … — the
+    # same key `/billing/packs` and the Stripe top-up use. Create them in the
+    # Play Console / App Store Connect under exactly these ids.
+    STORE_CREDIT_PACK_PREFIX: str = "credits_"
+
     # Plan matrix (BR-15). Only successful videos count (BR-09).
     PLAN_LIMITS: dict = {"free": 60, "creator": 150}
     CREATOR_PRICE: str = "$19/mo"

@@ -206,9 +206,10 @@ class AppChip extends StatelessWidget {
   const AppChip({
     super.key,
     required this.label,
-    required this.selected,
+    this.selected = false,
     this.onTap,
     this.locked = false,
+    this.dashed = false,
     this.trailing,
   });
 
@@ -219,6 +220,10 @@ class AppChip extends StatelessWidget {
   /// Locked chips are still tappable — tapping one opens the upgrade sheet,
   /// which is the whole point of showing it (BR-08).
   final bool locked;
+
+  /// A suggestion rather than a choice ("+ Mbappé"): transparent, smaller,
+  /// and it disappears once tapped.
+  final bool dashed;
   final Widget? trailing;
 
   @override
@@ -229,13 +234,19 @@ class AppChip extends StatelessWidget {
         ? AppColors.muted2
         : AppColors.border;
     return Material(
-      color: selected ? AppColors.chipOn : AppColors.chipOff,
+      color: dashed
+          ? Colors.transparent
+          : selected
+          ? AppColors.chipOn
+          : AppColors.chipOff,
       borderRadius: BorderRadius.circular(AppTheme.radiusChip),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.radiusChip),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          padding: dashed
+              ? const EdgeInsets.symmetric(horizontal: 12, vertical: 7)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppTheme.radiusChip),
             border: Border.all(color: borderColor, width: 1),
@@ -246,7 +257,7 @@ class AppChip extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: dashed ? 12 : 14,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected
                       ? AppColors.text

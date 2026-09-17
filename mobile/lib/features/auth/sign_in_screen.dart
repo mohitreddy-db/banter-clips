@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import '../../api/errors.dart';
 import '../../app/env.dart';
@@ -56,17 +57,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      // Supabase throws its own AuthException type; its message is already
-      // written for humans ("Invalid login credentials").
-      if (mounted) setState(() => _error = _readable(e));
+      if (mounted) setState(() => _error = readableAuthError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  String _readable(Object error) {
-    final text = error.toString().replaceFirst('AuthException: ', '');
-    return text.startsWith('Exception: ') ? text.substring(11) : text;
   }
 
   void _submit() {
@@ -373,6 +367,58 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       ),
     );
   }
+}
+
+/// Turn whatever Supabase threw into a sentence a person can act on.
+///
+/// `AuthException.toString()` is `AuthApiException(message: …, statusCode:
+/// …, code: …)` — developer output, which is exactly what used to reach the
+/// screen. The `code` is the stable part; the message is the fallback.
+String readableAuthError(Object error) {
+  if (error is AuthException) {
+    switch (error.code) {
+      case 'invalid_credentials':
+        return "That email and password don't match. Try again, or reset your password.";
+      case 'email_not_confirmed':
+        return 'Confirm your email first — check your inbox for the link we sent.';
+      case 'user_already_exists':
+      case 'email_exists':
+        return 'An account with that email already exists. Sign in instead.';
+      case 'weak_password':
+        return 'Pick a stronger password — at least 6 characters.';
+      case 'over_email_send_rate_limit':
+      case 'over_request_rate_limit':
+        return 'Too many attempts — wait a minute and try again.';
+      case 'validation_failed':
+        return "That doesn't look like a valid email address.";
+      case 'user_not_found':
+        return 'No account with that email. Create one to get started.';
+      case 'signup_disabled':
+        return 'Sign-ups are closed right now.';
+      case 'provider_disabled':
+        return 'That sign-in method is not available right now.';
+      case 'flow_state_expired':
+      case 'flow_state_not_found':
+      case 'otp_expired':
+        return 'That link has expired — request a new one.';
+    }
+    final message = error.message.trim();
+    if (message.toLowerCase().contains('invalid login')) {
+      return "That email and password don't match. Try again, or reset your password.";
+    }
+    if (message.toLowerCase().contains('network') ||
+        message.toLowerCase().contains('socket')) {
+      return "Can't reach the sign-in service. Check your connection.";
+    }
+    return message.isEmpty
+        ? 'Sign-in failed. Please try again.'
+        : message[0].toUpperCase() + message.substring(1);
+  }
+  final text = error.toString();
+  if (text.contains('SocketException') || text.contains('Failed host lookup')) {
+    return "Can't reach the sign-in service. Check your connection.";
+  }
+  return 'Something went wrong signing you in. Please try again.';
 }
 
 class _Wordmark extends StatelessWidget {

@@ -3,24 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../api/errors.dart';
+import '../../models/catalog.dart' as catalog;
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/surfaces.dart';
 import '../account/instagram_connect.dart';
+import '../account/purchases.dart';
+import '../account/upgrade_sheet.dart';
 
 /// Onboarding — the port of `frontend/src/pages/Onboarding.jsx`.
 ///
-/// Four steps, all skippable: sports, favourite teams and players, what kind
-/// of creator you are, and connecting Instagram. Each step saves as it is
-/// completed (so nothing is lost if the app is killed, or if the Instagram
-/// consent screen takes the user out to the browser and back); the
-/// `onboarding_completed` flag is only set at the very end.
+/// Five steps: sports, favourite teams and players, what kind of creator you
+/// are, connecting your accounts, and picking a plan. Steps 2–5 are
+/// skippable. Each step saves as it is completed (so nothing is lost if the
+/// app is killed, or if a consent screen takes the user out to the browser
+/// and back); the `onboarding_completed` flag is only set at the very end.
 ///
-/// The web's fifth step — choosing a plan — is deliberately absent. Selling a
-/// subscription inside the app means store billing (Apple 3.1.1); v1 points
-/// at the website instead. See `AccountScreen`.
+/// The plan step sells through the store, not Stripe (Apple 3.1.1 / Google
+/// Play policy): "Go Creator" opens the same paywall every locked control
+/// opens, and the server decides the plan after verifying the receipt.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -29,17 +32,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _totalSteps = 4;
-
-  /// The four sports the pipeline actually supports today. The web shows
-  /// eight and greys out the rest; on a phone that is four dead tiles taking
-  /// up a screen, so only the live ones appear.
-  static const _sports = [
-    ('NBA', '🏀'),
-    ('NFL', '🏈'),
-    ('Soccer', '⚽'),
-    ('MLB', '⚾'),
-  ];
+  static const _totalSteps = 5;
 
   static const _roles = [
     ('Sports Fan', '🙌'),
@@ -129,33 +122,49 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
+  void _skip() {
+    ref.read(apiClientProvider).track('onboarding_step_skipped', {
+      'step': _step,
+    });
+    _next();
+  }
+
+  /// "Go Creator" on the last step: open the paywall, and once the server
+  /// has confirmed the plan, finish setup as normal.
+  Future<void> _goCreator() async {
+    await showUpgradeSheet(context, reason: UpgradeReason.limit);
+    if (!mounted) return;
+    if (ref.read(appStateProvider).isCreator) {
+      ref.read(purchaseControllerProvider.notifier).reset();
+      await _finish();
+    }
+  }
+
   void _addTag(TextEditingController controller, List<String> into) {
     final value = controller.text.trim();
-    if (value.isEmpty || into.contains(value)) {
-      controller.clear();
-      return;
-    }
-    setState(() {
-      into.add(value);
-      controller.clear();
-    });
+    controller.clear();
+    if (value.isEmpty || into.contains(value)) return;
+    setState(() => into.add(value));
   }
 
   @override
   Widget build(BuildContext context) {
     const titles = {
-      1: 'What do you follow?',
-      2: 'Favourite teams & players',
-      3: 'What kind of creator are you?',
-      4: 'Connect Instagram',
+      1: 'What sports are you into?',
+      2: 'Favorite teams & players',
+      3: 'How will you use BanterClips?',
+      4: 'Connect your accounts',
+      5: 'Pick your plan',
     };
     const subtitles = {
-      1: 'Your Studio opens on these.',
-      2: 'We name them in your clips when they fit.',
+      1: "Pick as many as you like — we'll pre-select your Studio and tailor example takes.",
+      2: "Optional — helps us suggest take ideas you'll actually want to post.",
       3: 'It shapes the tone we suggest.',
-      4: 'Optional — you can do this later from Account.',
+      4: 'Publish everywhere in one click. You can always do this later.',
+      5: 'Start free and publish today — or unlock downloads from day one. Change anytime.',
     };
-    final optional = _step >= 2;
+    final optional = _step >= 4;
+    final isCreator = ref.watch(appStateProvider).isCreator;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -215,7 +224,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   1 => _sportsStep(),
                   2 => _tagsStep(),
                   3 => _roleStep(),
-                  _ => const _InstagramStep(),
+                  4 => const _AccountsStep(),
+                  _ => _planStep(isCreator),
                 },
               ),
             ),
@@ -230,56 +240,65 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 children: [
                   if (_step > 1)
                     GhostButton(
-                      label: 'Back',
+                      label: '← Back',
                       expand: false,
-                      onPressed: () => setState(() => _step--),
+                      onPressed: _busy ? null : () => setState(() => _step--),
                     ),
                   if (_step > 1) const SizedBox(width: 10),
                   Expanded(
-                    child: GradButton(
-                      label: _step == _totalSteps ? "I'm ready" : 'Continue',
-                      loading: _busy,
-                      onPressed: _step == 1 && _sportsPicked.isEmpty
-                          ? null
-                          : _next,
-                    ),
+                    child: _step == _totalSteps
+                        ? GradButton(
+                            label: isCreator
+                                ? "I'm ready"
+                                : 'Start free & finish setup',
+                            loading: _busy,
+                            onPressed: _busy ? null : _next,
+                          )
+                        : GradButton(
+                            label: 'Continue →',
+                            loading: _busy,
+                            onPressed: _step == 1 && _sportsPicked.isEmpty
+                                ? null
+                                : _next,
+                          ),
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: TextAction(
-                label: _step == _totalSteps
-                    ? 'Skip — finish setup'
-                    : 'Skip for now',
-                color: AppColors.muted,
-                onPressed: _busy
-                    ? null
-                    : () => _step == _totalSteps
-                          ? _finish()
-                          : setState(() => _step++),
-              ),
-            ),
+            if (_step > 1 && _step < _totalSteps)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: TextAction(
+                  label: 'Skip for now',
+                  color: AppColors.muted,
+                  onPressed: _busy ? null : _skip,
+                ),
+              )
+            else
+              const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  Widget _sportsStep() => Wrap(
-    spacing: 12,
-    runSpacing: 12,
+  Widget _sportsStep() => GridView.count(
+    crossAxisCount: 3,
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    mainAxisSpacing: 10,
+    crossAxisSpacing: 10,
+    childAspectRatio: 1.15,
     children: [
-      for (final (name, emoji) in _sports)
+      for (final sport in catalog.sports)
         _Tile(
-          emoji: emoji,
-          label: name,
-          selected: _sportsPicked.contains(name),
+          emoji: sport.emoji,
+          label: sport.key,
+          selected: _sportsPicked.contains(sport.key),
           onTap: () => setState(
-            () => _sportsPicked.contains(name)
-                ? _sportsPicked.remove(name)
-                : _sportsPicked.add(name),
+            () => _sportsPicked.contains(sport.key)
+                ? _sportsPicked.remove(sport.key)
+                : _sportsPicked.add(sport.key),
           ),
         ),
     ],
@@ -289,20 +308,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _TagField(
-        label: 'FAVOURITE TEAMS',
+        label: 'FAVORITE TEAMS',
         hint: 'Lakers, Chiefs, Real Madrid…',
         controller: _teamInput,
         tags: _teams,
+        suggestions: catalog
+            .subjectSuggestions(_sportsPicked, players: false, limit: 10)
+            .where((s) => !_teams.contains(s))
+            .toList(),
         onAdd: () => _addTag(_teamInput, _teams),
+        onPick: (tag) => setState(() => _teams.add(tag)),
         onRemove: (tag) => setState(() => _teams.remove(tag)),
       ),
       const SizedBox(height: 24),
       _TagField(
-        label: 'FAVOURITE PLAYERS',
+        label: 'FAVORITE PLAYERS',
         hint: 'LeBron, Mahomes, Messi…',
         controller: _playerInput,
         tags: _players,
+        suggestions: catalog
+            .subjectSuggestions(_sportsPicked, players: true, limit: 10)
+            .where((s) => !_players.contains(s))
+            .toList(),
         onAdd: () => _addTag(_playerInput, _players),
+        onPick: (tag) => setState(() => _players.add(tag)),
         onRemove: (tag) => setState(() => _players.remove(tag)),
       ),
     ],
@@ -344,6 +373,43 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ),
     ],
   );
+
+  Widget _planStep(bool isCreator) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _PlanCard(
+        name: 'Free',
+        price: r'$0',
+        features: const [
+          'Welcome credits — your first video on us',
+          'One-click publish to Instagram, TikTok & YouTube',
+          'All five tones, Funny to Roast',
+          'Watermark on every clip',
+        ],
+        cta: isCreator ? 'Included in Creator' : 'Start free',
+        current: !isCreator,
+        onTap: isCreator ? null : _next,
+      ),
+      const SizedBox(height: 14),
+      _PlanCard(
+        name: 'Creator',
+        price: r'$19',
+        popular: true,
+        features: const [
+          '150 credits every month',
+          'Full HD 1080p quality',
+          '30-second videos',
+          '500-character prompts',
+          'Download in HD — no watermark',
+          'Publish without the watermark',
+          'Priority render queue',
+        ],
+        cta: isCreator ? '✓ Your plan' : 'Go Creator',
+        current: isCreator,
+        onTap: isCreator ? null : _goCreator,
+      ),
+    ],
+  );
 }
 
 class _Tile extends StatelessWidget {
@@ -360,33 +426,29 @@ class _Tile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    // Two per row on any phone width, with the gutter and spacing removed.
-    final width = (MediaQuery.sizeOf(context).width - 40 - 12) / 2;
-    return SizedBox(
-      width: width,
-      child: AppPanel(
-        onTap: onTap,
-        color: selected ? AppColors.chipOn : AppColors.panel,
-        borderColor: selected ? AppColors.cyan : AppColors.border,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14.5,
-                fontWeight: FontWeight.w700,
-                color: selected ? AppColors.cyan : AppColors.text,
-              ),
-            ),
-          ],
+  Widget build(BuildContext context) => AppPanel(
+    onTap: onTap,
+    color: selected ? AppColors.chipOn : AppColors.panel,
+    borderColor: selected ? AppColors.cyan : AppColors.border,
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 26)),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selected ? AppColors.cyan : AppColors.text,
+          ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
 
 class _TagField extends StatelessWidget {
@@ -395,7 +457,9 @@ class _TagField extends StatelessWidget {
     required this.hint,
     required this.controller,
     required this.tags,
+    required this.suggestions,
     required this.onAdd,
+    required this.onPick,
     required this.onRemove,
   });
 
@@ -403,7 +467,9 @@ class _TagField extends StatelessWidget {
   final String hint;
   final TextEditingController controller;
   final List<String> tags;
+  final List<String> suggestions;
   final VoidCallback onAdd;
+  final void Function(String) onPick;
   final void Function(String) onRemove;
 
   @override
@@ -419,6 +485,7 @@ class _TagField extends StatelessWidget {
         onSubmitted: (_) => onAdd(),
         decoration: InputDecoration(
           hintText: hint,
+          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.muted2),
           suffixIcon: IconButton(
             icon: const Icon(Icons.add_rounded, color: AppColors.cyan),
             onPressed: onAdd,
@@ -437,8 +504,8 @@ class _TagField extends StatelessWidget {
                   tag,
                   style: const TextStyle(fontSize: 13, color: AppColors.text),
                 ),
-                backgroundColor: AppColors.chipOff,
-                side: const BorderSide(color: AppColors.border),
+                backgroundColor: AppColors.chipOn,
+                side: BorderSide(color: AppColors.cyan.withValues(alpha: 0.5)),
                 deleteIcon: const Icon(
                   Icons.close_rounded,
                   size: 16,
@@ -449,26 +516,206 @@ class _TagField extends StatelessWidget {
           ],
         ),
       ],
+      if (suggestions.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 7,
+          runSpacing: 7,
+          children: [
+            for (final suggestion in suggestions)
+              AppChip(
+                label: '+ $suggestion',
+                dashed: true,
+                onTap: () => onPick(suggestion),
+              ),
+          ],
+        ),
+      ],
     ],
   );
 }
 
-/// The last step reuses the same connect widget the Account screen uses, so
-/// there is exactly one Instagram flow in the app.
-class _InstagramStep extends StatelessWidget {
-  const _InstagramStep();
+/// Step 4 reuses the same connect widgets the Account screen uses, so there
+/// is exactly one connect flow per platform in the app.
+class _AccountsStep extends StatelessWidget {
+  const _AccountsStep();
 
   @override
-  Widget build(BuildContext context) => const Column(
+  Widget build(BuildContext context) => Column(
     children: [
-      InstagramConnectCard(),
-      SizedBox(height: 16),
-      Notice(
+      const InstagramConnectCard(),
+      const SizedBox(height: 10),
+      const SocialConnectCard(platform: 'tiktok'),
+      const SizedBox(height: 10),
+      const SocialConnectCard(platform: 'youtube'),
+      const SizedBox(height: 10),
+      AppCard(
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.panel,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.alternate_email_rounded,
+                color: AppColors.text,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('X', style: TextStyle(fontWeight: FontWeight.w700)),
+                  SizedBox(height: 3),
+                  Text(
+                    'Video post with caption',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.chipOff,
+                borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Text(
+                'Coming soon',
+                style: TextStyle(fontSize: 11, color: AppColors.muted),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      const Notice(
         text:
-            'Clips publish as Reels, one at a time, and only when you '
-            'explicitly tap Publish. Nothing is posted automatically.',
+            'Clips publish one at a time, and only when you explicitly tap '
+            'Publish. Nothing is posted automatically.',
         icon: Icons.lock_outline_rounded,
       ),
     ],
+  );
+}
+
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.name,
+    required this.price,
+    required this.features,
+    required this.cta,
+    required this.current,
+    required this.onTap,
+    this.popular = false,
+  });
+
+  final String name;
+  final String price;
+  final List<String> features;
+  final String cta;
+  final bool current;
+  final bool popular;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+    borderColor: current
+        ? AppColors.green
+        : popular
+        ? AppColors.cyan
+        : AppColors.border,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (current || popular)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              current ? 'YOUR PLAN' : 'MOST POPULAR',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: current ? AppColors.green : AppColors.cyan,
+              ),
+            ),
+          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppColors.text,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              price,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: AppColors.text,
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 5, left: 3),
+              child: Text(
+                '/mo',
+                style: TextStyle(fontSize: 13, color: AppColors.muted),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (final feature in features)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '✓',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.green,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    feature,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.text,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+        if (popular && !current)
+          GradButton(label: cta, height: 46, onPressed: onTap)
+        else
+          GhostButton(
+            label: cta,
+            height: 46,
+            color: current ? AppColors.green : AppColors.text,
+            onPressed: onTap,
+          ),
+      ],
+    ),
   );
 }

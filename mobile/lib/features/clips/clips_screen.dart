@@ -14,6 +14,7 @@ import '../../widgets/buttons.dart';
 import '../../widgets/states.dart';
 import '../../widgets/surfaces.dart';
 import '../account/upgrade_sheet.dart';
+import 'download.dart';
 import 'publish_sheet.dart';
 
 /// My Clips — the port of `frontend/src/pages/Clips.jsx`.
@@ -111,6 +112,18 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen>
     }
   }
 
+  bool _downloading = false;
+
+  Future<void> _download(Clip clip) async {
+    if (_downloading) return;
+    setState(() => _downloading = true);
+    try {
+      await downloadClipToGallery(context, ref, clip);
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
   Future<void> _retry(Clip clip) async {
     try {
       final updated = await ref.read(apiClientProvider).retryClip(clip.id);
@@ -131,12 +144,17 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen>
       appBar: AppBar(
         title: const Text('My clips'),
         actions: [
+          // The wallet, not a monthly quota: "47 ⚡ left" on every plan.
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 14),
             child: Center(
               child: Text(
-                '${state.left}/${state.limit} left',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                '${state.credits} ⚡ left',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.muted,
+                ),
               ),
             ),
           ),
@@ -178,8 +196,10 @@ class _ClipsScreenState extends ConsumerState<ClipsScreen>
                   return ClipCard(
                     clip: clip,
                     canDownload: state.canDownload,
+                    downloading: _downloading,
                     onOpen: () => context.push('/clip/${clip.id}'),
                     onPublish: () => showPublishSheet(context, clip),
+                    onDownload: () => _download(clip),
                     onRetry: () => _retry(clip),
                     onDelete: () => _delete(clip),
                     onLockedDownload: () => showUpgradeSheet(
@@ -203,15 +223,19 @@ class ClipCard extends StatelessWidget {
     required this.canDownload,
     required this.onOpen,
     required this.onPublish,
+    required this.onDownload,
     required this.onRetry,
     required this.onDelete,
     required this.onLockedDownload,
+    this.downloading = false,
   });
 
   final Clip clip;
   final bool canDownload;
+  final bool downloading;
   final VoidCallback onOpen;
   final VoidCallback onPublish;
+  final VoidCallback onDownload;
   final VoidCallback onRetry;
   final VoidCallback onDelete;
   final VoidCallback onLockedDownload;
@@ -244,7 +268,9 @@ class ClipCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '${clip.sport} · ${clip.tone.toUpperCase()}',
+                          '${clip.sportLabel} · ${clip.tone.toUpperCase()}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 9.5,
                             fontWeight: FontWeight.w700,
@@ -252,6 +278,7 @@ class ClipCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      const SizedBox(width: 6),
                       const Spacer(),
                       if (clip.hasFailed || clip.isReady)
                         IconButton(
@@ -305,19 +332,19 @@ class ClipCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
+                // Download is a Creator feature (BR-08): Free sees the
+                // locked button and the paywall, never a file.
                 child: canDownload
                     ? GhostButton(
-                        label: 'Share',
-                        icon: Icons.ios_share_rounded,
+                        label: 'Download',
+                        icon: Icons.download_rounded,
                         height: 40,
                         fontSize: 13.5,
-                        // Sharing needs the file, which the clip screen
-                        // already knows how to fetch — send them there
-                        // rather than duplicating the download here.
-                        onPressed: onOpen,
+                        loading: downloading,
+                        onPressed: clip.isPreparing ? null : onDownload,
                       )
                     : GhostButton(
-                        label: 'Share',
+                        label: 'Download',
                         icon: Icons.lock_outline_rounded,
                         height: 40,
                         fontSize: 13,
@@ -438,6 +465,17 @@ class _StatusLine extends StatelessWidget {
       );
     }
 
+    if (clip.isPaused) {
+      return const Text(
+        'Paused — open to continue',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.cyan,
+        ),
+      );
+    }
+
     // Ready. Say where the publish got to.
     final published = clip.publishedPost;
     return Wrap(
@@ -455,7 +493,7 @@ class _StatusLine extends StatelessWidget {
               InlineSpinner(size: 10),
               SizedBox(width: 5),
               Text(
-                'publishing to Instagram…',
+                'publishing…',
                 style: TextStyle(fontSize: 12, color: AppColors.cyan),
               ),
             ],

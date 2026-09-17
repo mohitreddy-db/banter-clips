@@ -53,24 +53,37 @@ class TakeVariation {
 }
 
 /// One ready-to-shoot take attached to a trending topic.
+///
+/// Also the shape of a one-tap *preset* on the Viral screen: a preset carries
+/// a [key], an [icon] and a [label] as well, and its [take] is written for
+/// the user rather than shown to them first.
 class TrendingPrompt {
   const TrendingPrompt({
     required this.take,
     this.tone = 'Funny',
     this.seconds = 15,
     this.angle = '',
+    this.key = '',
+    this.icon = '',
+    this.label = '',
   });
 
   final String take;
   final String tone;
   final int seconds;
   final String angle;
+  final String key;
+  final String icon;
+  final String label;
 
   factory TrendingPrompt.fromJson(Map<String, dynamic> json) => TrendingPrompt(
     take: json['take']?.toString() ?? '',
     tone: json['tone']?.toString() ?? 'Funny',
     seconds: (json['seconds'] as num?)?.toInt() ?? 15,
     angle: json['angle']?.toString() ?? '',
+    key: json['key']?.toString() ?? '',
+    icon: json['icon']?.toString() ?? '',
+    label: json['label']?.toString() ?? '',
   );
 }
 
@@ -86,6 +99,7 @@ class TrendingTopic {
     this.who = const [],
     this.team = '',
     this.prompts = const [],
+    this.presets = const [],
   });
 
   final String title;
@@ -98,6 +112,10 @@ class TrendingTopic {
   final String team;
   final List<TrendingPrompt> prompts;
 
+  /// One-tap angles ("Hot take", "Roast it"…) the Viral screen shows above
+  /// the ready-written takes.
+  final List<TrendingPrompt> presets;
+
   factory TrendingTopic.fromJson(Map<String, dynamic> json) => TrendingTopic(
     title: json['title']?.toString() ?? '',
     summary: json['summary']?.toString() ?? '',
@@ -107,24 +125,44 @@ class TrendingTopic {
         ? (json['who'] as List).map((e) => e.toString()).toList()
         : const [],
     team: json['team']?.toString() ?? '',
-    prompts: json['prompts'] is List
-        ? (json['prompts'] as List)
-              .whereType<Map>()
-              .map((e) => TrendingPrompt.fromJson(Map<String, dynamic>.from(e)))
-              .toList()
-        : const [],
+    prompts: _prompts(json['prompts']),
+    presets: _prompts(json['presets']),
   );
+
+  static List<TrendingPrompt> _prompts(dynamic value) => value is List
+      ? value
+            .whereType<Map>()
+            .map((e) => TrendingPrompt.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+      : const [];
 }
 
 /// The whole feed. An empty topic list is a valid answer — it means web
 /// research is off server-side, and the section simply hides itself.
 class TrendingFeed {
-  const TrendingFeed({this.topics = const [], this.fetchedAt});
+  const TrendingFeed({
+    this.topics = const [],
+    this.fetchedAt,
+    this.refreshAfter = 0,
+  });
 
   final List<TrendingTopic> topics;
   final DateTime? fetchedAt;
 
+  /// Seconds after [fetchedAt] before the server will rebuild the feed. A
+  /// refresh pressed before then just returns the cache, so the button
+  /// counts down instead.
+  final int refreshAfter;
+
   bool get isEmpty => topics.isEmpty;
+
+  /// Seconds until a refresh would actually do something; 0 = now.
+  int get secondsUntilRefresh {
+    final at = fetchedAt;
+    if (at == null || refreshAfter <= 0) return 0;
+    final elapsed = DateTime.now().difference(at).inSeconds;
+    return (refreshAfter - elapsed).clamp(0, refreshAfter);
+  }
 
   factory TrendingFeed.fromJson(Map<String, dynamic> json) => TrendingFeed(
     topics: json['topics'] is List
@@ -134,5 +172,53 @@ class TrendingFeed {
               .toList()
         : const [],
     fetchedAt: DateTime.tryParse(json['fetched_at']?.toString() ?? ''),
+    refreshAfter: (json['refresh_after'] as num?)?.toInt() ?? 0,
   );
+}
+
+/// `TikTokCreatorInfo` — what TikTok says this account may post, fetched
+/// right before publishing. TikTok's rules: the privacy list, the disabled
+/// interactions and the unaudited flag all come from here, never from us.
+class TikTokCreatorInfo {
+  const TikTokCreatorInfo({
+    required this.nickname,
+    required this.username,
+    required this.avatarUrl,
+    required this.privacyLevelOptions,
+    required this.commentDisabled,
+    required this.duetDisabled,
+    required this.stitchDisabled,
+    required this.maxVideoPostDurationSec,
+    required this.unaudited,
+  });
+
+  final String nickname;
+  final String username;
+  final String avatarUrl;
+  final List<String> privacyLevelOptions;
+  final bool commentDisabled;
+  final bool duetDisabled;
+  final bool stitchDisabled;
+  final int maxVideoPostDurationSec;
+
+  /// The app has not cleared TikTok's review yet: posts must be "Only me".
+  final bool unaudited;
+
+  factory TikTokCreatorInfo.fromJson(Map<String, dynamic> json) =>
+      TikTokCreatorInfo(
+        nickname: json['nickname']?.toString() ?? '',
+        username: json['username']?.toString() ?? '',
+        avatarUrl: json['avatar_url']?.toString() ?? '',
+        privacyLevelOptions: json['privacy_level_options'] is List
+            ? (json['privacy_level_options'] as List)
+                  .map((e) => e.toString())
+                  .toList()
+            : const [],
+        commentDisabled: json['comment_disabled'] as bool? ?? false,
+        duetDisabled: json['duet_disabled'] as bool? ?? false,
+        stitchDisabled: json['stitch_disabled'] as bool? ?? false,
+        maxVideoPostDurationSec:
+            (json['max_video_post_duration_sec'] as num?)?.toInt() ?? 0,
+        unaudited: json['unaudited'] as bool? ?? false,
+      );
 }

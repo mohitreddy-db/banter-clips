@@ -65,6 +65,9 @@ class User(Base):
     # returns the same generic 401 as a bad token, and existing sessions die
     # the same way — from the outside it looks like a login that won't stick.
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # The wallet (PRICING.md). Every change goes through `services/credits.py`,
+    # which also writes the `credit_entries` row that explains it.
+    credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     @property
     def is_admin(self) -> bool:
@@ -220,7 +223,8 @@ class Clip(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("char_length(take) BETWEEN 10 AND 280", name="clips_take_len"),
+        # 500 is the Creator limit; Free is capped at 280 by the API, not here.
+        CheckConstraint("char_length(take) BETWEEN 10 AND 500", name="clips_take_len"),
         CheckConstraint(f"sport IN {SPORTS!r}", name="clips_sport_check"),
         CheckConstraint(f"tone IN {TONES!r}", name="clips_tone_check"),
         Index("clips_owner_month", "user_id", "status", "completed_at"),
@@ -322,6 +326,72 @@ class StoreSubscription(Base):
 
     __table_args__ = (
         CheckConstraint("platform IN ('ios','android')", name="store_sub_platform_check"),
+    )
+
+
+CREDIT_ENTRY_KINDS = (
+    "grant_signup",
+    "grant_monthly",
+    "grant_admin",
+    "topup",
+    "video_charge",
+    "video_refund",
+    "enhance_charge",
+    "edit_charge",
+)
+
+
+class CreditEntry(Base):
+    """One line of the credit ledger: what changed the wallet, and by how much.
+
+    `balance_after` is stored so the history reads like a bank statement
+    without replaying every row. Append-only.
+    """
+
+    __tablename__ = "credit_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    clip_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clips.id", ondelete="SET NULL")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(f"kind IN {CREDIT_ENTRY_KINDS!r}", name="credit_entries_kind_check"),
+    )
+
+
+class StorePurchase(Base):
+    """A credit pack bought through Apple or Google — a consumable.
+
+    Same rule as `StoreSubscription`: the store is the ledger, this only
+    records that a given purchase token has been granted, so a retry after a
+    dropped connection converges instead of granting twice, and a token
+    passed to another account hits the unique constraint.
+    """
+
+    __tablename__ = "store_purchases"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)  # "ios" | "android"
+    product_id: Mapped[str] = mapped_column(Text, nullable=False)
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    pack: Mapped[str] = mapped_column(Text, nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios','android')", name="store_purchase_platform_check"),
     )
 
 

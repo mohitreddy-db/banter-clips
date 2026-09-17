@@ -20,6 +20,8 @@ class AppShell extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
+  /// The web's bottom nav, in its order. Pricing is not a tab there either;
+  /// it opens from Account and from every locked control.
   static const _tabs = [
     (
       icon: Icons.add_circle_outline_rounded,
@@ -27,22 +29,34 @@ class AppShell extends ConsumerWidget {
       label: 'Create',
     ),
     (
-      icon: Icons.video_library_outlined,
-      active: Icons.video_library_rounded,
-      label: 'Clips',
+      icon: Icons.local_fire_department_outlined,
+      active: Icons.local_fire_department_rounded,
+      label: 'Viral',
     ),
     (
       icon: Icons.auto_awesome_outlined,
       active: Icons.auto_awesome_rounded,
       label: 'Prompts',
     ),
-    (icon: Icons.sell_outlined, active: Icons.sell_rounded, label: 'Pricing'),
+    (
+      icon: Icons.video_library_outlined,
+      active: Icons.video_library_rounded,
+      label: 'My Clips',
+    ),
+    (
+      icon: Icons.chat_bubble_outline_rounded,
+      active: Icons.chat_bubble_rounded,
+      label: 'Feedback',
+    ),
     (
       icon: Icons.person_outline_rounded,
       active: Icons.person_rounded,
       label: 'Account',
     ),
   ];
+
+  /// The branch index of My Clips — the one that earns the "rendering" dot.
+  static const _clipsTab = 3;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,7 +82,7 @@ class AppShell extends ConsumerWidget {
                     child: _Tab(
                       tab: _tabs[i],
                       selected: navigationShell.currentIndex == i,
-                      showDot: i == 1 && busy,
+                      showDot: i == _clipsTab && busy,
                       // `initialLocation: true` when re-tapping the current
                       // tab pops it back to its root — the behaviour every
                       // phone user expects from a tab bar.
@@ -111,7 +125,7 @@ class _Tab extends StatelessWidget {
           children: [
             Icon(
               selected ? tab.active : tab.icon,
-              size: 23,
+              size: 22,
               color: selected ? AppColors.cyan : AppColors.muted,
             ),
             if (showDot)
@@ -132,8 +146,10 @@ class _Tab extends StatelessWidget {
         const SizedBox(height: 3),
         Text(
           tab.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontSize: 10.5,
+            fontSize: 10,
             fontWeight: FontWeight.w600,
             color: selected ? AppColors.cyan : AppColors.muted,
           ),

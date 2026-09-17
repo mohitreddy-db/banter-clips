@@ -20,9 +20,23 @@ final trendingProvider = FutureProvider.family.autoDispose<TrendingFeed, String>
     // Keep the result alive past a rebuild so flicking between sports does not
     // refetch what we just loaded.
     ref.keepAlive();
+    // A forced refresh (Viral screen) fetched the feed itself; hand it over
+    // instead of asking the server a second time.
+    final fresh = trendingCache.take(sport);
+    if (fresh != null) return fresh;
     return ref.watch(apiClientProvider).trending(sport);
   },
 );
+
+/// A one-shot hand-off: a screen that fetched a feed with `refresh=1` puts
+/// it here, invalidates [trendingProvider], and the rebuild takes it.
+final trendingCache = _TrendingHandoff();
+
+class _TrendingHandoff {
+  final _pending = <String, TrendingFeed>{};
+  void put(String sport, TrendingFeed feed) => _pending[sport] = feed;
+  TrendingFeed? take(String sport) => _pending.remove(sport);
+}
 
 class TrendingSection extends ConsumerStatefulWidget {
   const TrendingSection({super.key, required this.sport, required this.onUse});

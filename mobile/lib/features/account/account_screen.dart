@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../api/errors.dart';
 import '../../app/env.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
@@ -10,6 +13,7 @@ import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/surfaces.dart';
 import 'instagram_connect.dart';
+import 'top_up_sheet.dart';
 import 'upgrade_sheet.dart';
 
 /// Account — the port of `frontend/src/pages/Account.jsx`.
@@ -116,13 +120,16 @@ class AccountScreen extends ConsumerWidget {
               const SizedBox(height: 16),
             ],
 
-            // ---- plan & allowance ---------------------------------------
+            // ---- plan & credits -----------------------------------------
+            // The port of the web's PLAN & CREDITS card: the wallet, what it
+            // buys, a top-up, and — on Creator — where the subscription is
+            // managed. Never "X of Y videos": credits are the only unit.
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SectionLabel(
-                    'PLAN & ALLOWANCE',
+                    'PLAN & CREDITS',
                     trailing: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -138,7 +145,7 @@ class AccountScreen extends ConsumerWidget {
                         border: Border.all(color: AppColors.border),
                       ),
                       child: Text(
-                        state.isCreator ? r'CREATOR · $19/mo' : 'FREE',
+                        state.isCreator ? 'CREATOR' : 'FREE',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -154,7 +161,7 @@ class AccountScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '${state.left} of ${state.limit}',
+                        '⚡ ${state.credits}',
                         style: const TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
@@ -165,7 +172,7 @@ class AccountScreen extends ConsumerWidget {
                       const Padding(
                         padding: EdgeInsets.only(bottom: 4),
                         child: Text(
-                          'credits left',
+                          'credits available',
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.muted,
@@ -174,28 +181,11 @@ class AccountScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusPill),
-                    child: Stack(
-                      children: [
-                        Container(height: 10, color: AppColors.panel),
-                        FractionallySizedBox(
-                          widthFactor: state.usage?.fraction ?? 0,
-                          child: Container(
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              gradient: AppColors.gradient,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 10),
                   Text(
-                    '${state.used} used this month · each successful video uses one credit — '
-                    'failed jobs and retries are free.',
+                    '≈ ${state.credits ~/ state.videoPrice(15, '720p')} videos at 15s Standard'
+                    '${state.isCreator ? ' · ≈ ${state.credits ~/ state.videoPrice(15, '1080p')} at 15s HD' : ''}'
+                    ' · only successful videos charge — failures are refunded.',
                     style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.5,
@@ -203,20 +193,19 @@ class AccountScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  GradButton(
+                    label: '⚡ Top up credits',
+                    height: 46,
+                    onPressed: () => showTopUpSheet(context),
+                  ),
+                  const SizedBox(height: 10),
                   if (!state.isCreator) ...[
-                    GradButton(
-                      label: r'Upgrade to Creator — $19/mo',
-                      height: 46,
-                      onPressed: () => showUpgradeSheet(
-                        context,
-                        reason: UpgradeReason.limit,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
                     GhostButton(
-                      label: 'Compare plans',
-                      height: 44,
-                      onPressed: () => context.go('/plans'),
+                      label:
+                          'Creator plan — 1080p, 30s, 500-char prompts, no watermark, 150 credits/mo',
+                      height: 54,
+                      fontSize: 13,
+                      onPressed: () => context.push('/plans'),
                     ),
                     // Somebody who reinstalls opens Account, not the paywall,
                     // and wonders where their plan went.
@@ -233,17 +222,13 @@ class AccountScreen extends ConsumerWidget {
                       // A store subscription can only be cancelled in the
                       // store — we are not allowed to do it for them, and
                       // pretending otherwise leaves people billed. Deep-link
-                      // straight to the right settings screen.
+                      // straight to the right settings screen; a web
+                      // (Stripe) subscription is managed on the website.
                       GhostButton(
                         label: 'Manage subscription ↗',
                         color: AppColors.muted,
                         height: 46,
-                        onPressed: () async {
-                          final url = await ref
-                              .read(apiClientProvider)
-                              .billingPortal();
-                          if (url != null) await _open(url);
-                        },
+                        onPressed: () => _manageSubscription(ref),
                       ),
                   ],
                 ],
@@ -256,21 +241,13 @@ class AccountScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             const InstagramConnectCard(),
             const SizedBox(height: 8),
-            const _ChannelCard(
-              name: 'TikTok',
-              detail: 'Publish vertical clips to TikTok',
-              icon: Icons.music_note_rounded,
-            ),
+            const SocialConnectCard(platform: 'tiktok'),
             const SizedBox(height: 8),
-            const _ChannelCard(
-              name: 'YouTube',
-              detail: 'Publish directly as YouTube Shorts',
-              icon: Icons.play_circle_fill_rounded,
-            ),
+            const SocialConnectCard(platform: 'youtube'),
             const SizedBox(height: 8),
             const _ChannelCard(
               name: 'X',
-              detail: 'Share clips with your X audience',
+              detail: 'Video post with caption · coming soon',
               icon: Icons.alternate_email_rounded,
             ),
             const SizedBox(height: 20),
@@ -357,7 +334,7 @@ class AccountScreen extends ConsumerWidget {
                   ),
                   _LinkRow(
                     label: 'Report a clip or a problem',
-                    onTap: () => _open('${Env.webUrl}/terms'),
+                    onTap: () => context.go('/feedback'),
                   ),
                   _LinkRow(
                     label: 'Download my data',
@@ -410,6 +387,27 @@ class AccountScreen extends ConsumerWidget {
 
   static Future<void> _open(String url) =>
       launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+  /// Where this Creator subscription is managed. A store subscription lives
+  /// in the store's own settings; a website one in Stripe's portal, which
+  /// the server hands us a URL for. Try the portal first: it 503s for
+  /// anyone without a Stripe customer, which is exactly the store case.
+  static Future<void> _manageSubscription(WidgetRef ref) async {
+    try {
+      final url = await ref.read(apiClientProvider).billingPortal();
+      if (url != null && url.isNotEmpty) {
+        await _open(url);
+        return;
+      }
+    } on ApiException {
+      // No Stripe billing for this account — fall through to the store.
+    }
+    await _open(
+      Platform.isIOS
+          ? 'https://apps.apple.com/account/subscriptions'
+          : 'https://play.google.com/store/account/subscriptions',
+    );
+  }
 }
 
 class _LinkRow extends StatelessWidget {
@@ -483,11 +481,17 @@ class _ChannelCard extends StatelessWidget {
             ],
           ),
         ),
-        OutlinedButton(
-          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$name connection is coming next.')),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.chipOff,
+            borderRadius: BorderRadius.circular(AppTheme.radiusPill),
+            border: Border.all(color: AppColors.border),
           ),
-          child: const Text('Connect'),
+          child: const Text(
+            'Coming soon',
+            style: TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
         ),
       ],
     ),

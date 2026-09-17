@@ -24,6 +24,9 @@ class ApiException implements Exception {
   bool get needsUpgrade =>
       code == ApiCode.limitReached || code == ApiCode.upgradeRequired;
 
+  /// Out of credits — open the top-up sheet, not the paywall.
+  bool get needsCredits => code == ApiCode.insufficientCredits;
+
   /// The session is gone. The router bounces to sign-in on this.
   bool get isUnauthorized => status == 401;
 
@@ -97,6 +100,10 @@ class ApiCode {
 
   /// 403 — Creator-only: download, 1080p, or a clip over 15 seconds.
   static const upgradeRequired = 'upgrade_required';
+
+  /// 402 — the wallet cannot cover the quoted price. The only answer is a
+  /// top-up, never an upgrade (PRICING.md rule 2).
+  static const insufficientCredits = 'insufficient_credits';
 
   /// 503 — the Meta app isn't configured, so fall back to the mock connector.
   static const oauthNotConfigured = 'oauth_not_configured';

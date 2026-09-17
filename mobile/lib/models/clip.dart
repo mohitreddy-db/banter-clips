@@ -90,6 +90,12 @@ class Clip {
     this.isSimulated = false,
     this.script,
     this.scriptApproved = false,
+    this.sports = const [],
+    this.subjects = const [],
+    this.direction = '',
+    this.referenceUrl,
+    this.creditsCharged = 0,
+    this.creditsEdits = 0,
   });
 
   final String id;
@@ -125,15 +131,37 @@ class Clip {
   final Script? script;
   final bool scriptApproved;
 
+  /// Everything the take was tagged with. `sport` above is the first of
+  /// these (or what the server inferred) and is kept for older clips.
+  final List<String> sports;
+  final List<String> subjects;
+  final String direction;
+
+  /// The reference photo or video the user attached, if any.
+  final String? referenceUrl;
+
+  /// The receipt: what this clip cost once it completed (only successful
+  /// videos charge), plus any paid scene edits on top.
+  final int creditsCharged;
+  final int creditsEdits;
+
   bool get isReady => status == 'ready';
   bool get hasFailed => status == 'failed';
+
+  /// Waiting on the user (a scene edit is pending review). Not rendering, so
+  /// there is nothing to poll — but not failed either.
+  bool get isPaused => status == 'paused';
+
+  /// The sport line for a card: every sport picked, or the single one.
+  String get sportLabel => sports.isEmpty ? sport : sports.join(' · ');
 
   /// The script is written and generation is *paused* until the user
   /// approves it. Nothing has been spent yet — this is the money gate.
   bool get awaitingScript => status == 'script_ready' && script != null;
 
   /// Rendering, in any of its stages.
-  bool get inFlight => !isReady && !hasFailed && !awaitingScript;
+  bool get inFlight =>
+      !isReady && !hasFailed && !awaitingScript && !isPaused;
 
   /// Ready, but the video URL has not landed (a storage hiccup). Not a
   /// failure — the UI must not call it one.
@@ -160,6 +188,7 @@ class Clip {
   String get statusLabel {
     if (status == 'queued') return 'Queued…';
     if (status == 'script_ready') return '📝 Script ready — tap to review';
+    if (status == 'paused') return 'Paused — open to continue';
     for (final stage in ClipStage.values) {
       if (stage.key == status) return '${stage.label}…';
     }
@@ -209,5 +238,14 @@ class Clip {
         ? Script.fromJson(Map<String, dynamic>.from(json['script'] as Map))
         : null,
     scriptApproved: json['script_approved'] as bool? ?? false,
+    sports: _strings(json['sports']),
+    subjects: _strings(json['subjects']),
+    direction: json['direction']?.toString() ?? '',
+    referenceUrl: json['reference_url'] as String?,
+    creditsCharged: (json['credits_charged'] as num?)?.toInt() ?? 0,
+    creditsEdits: (json['credits_edits'] as num?)?.toInt() ?? 0,
   );
 }
+
+List<String> _strings(dynamic value) =>
+    value is List ? value.map((e) => e.toString()).toList() : const [];

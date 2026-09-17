@@ -7,7 +7,7 @@ import '../../widgets/surfaces.dart';
 import 'purchases.dart';
 
 /// Why an action is locked. Wording changes; the offer does not.
-enum UpgradeReason { limit, download, quality, duration }
+enum UpgradeReason { limit, download, quality, duration, takeLength }
 
 /// The Creator paywall — the port of `UpgradeModal` in
 /// `frontend/src/components/Modals.jsx`, selling through the store rather
@@ -42,6 +42,7 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
     'Publish without the watermark',
     'Full HD 1080p quality',
     'Videos up to 30 seconds',
+    'Prompts up to 500 characters',
     '150 credits added every month',
     'Priority render queue',
   ];
@@ -61,6 +62,7 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
     UpgradeReason.download => 'Downloading is a Creator feature',
     UpgradeReason.quality => '1080p is a Creator feature',
     UpgradeReason.duration => 'Longer videos are a Creator feature',
+    UpgradeReason.takeLength => 'Longer prompts are a Creator feature',
   };
 
   @override
@@ -138,11 +140,21 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
                   ? 'Retry secure payment'
                   : purchase.phase == PurchasePhase.verifying
                   ? 'Activating…'
-                  : 'Upgrade to Creator — ${purchase.priceLabel}/mo',
+                  : 'Upgrade to Creator — $creatorPriceLabel/mo',
               height: 54,
               loading: purchase.busy,
               onPressed: controller.buy,
             ),
+            if (purchase.storePrice != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                // The store bills in local currency at the price set in its
+                // console. Say so, so nobody is surprised by the receipt.
+                'Billed by Google Play as ${purchase.storePrice}/month',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+            ],
 
             const SizedBox(height: 12),
 

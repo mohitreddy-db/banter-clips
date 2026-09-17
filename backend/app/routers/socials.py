@@ -44,6 +44,12 @@ REFRESH_WINDOW = timedelta(days=15)
 # the website. See mobile/README.md.
 MOBILE_RETURN = "banterclips://oauth/instagram"
 
+# One per platform the app can connect: the scheme is registered in the app
+# under the host "oauth", so `banterclips://oauth/<platform>` all land in it.
+MOBILE_RETURNS = frozenset(
+    {MOBILE_RETURN, "banterclips://oauth/tiktok", "banterclips://oauth/youtube"}
+)
+
 
 def _safe_next(next: str) -> str:
     """Where the browser is allowed to be sent after consent.
@@ -59,7 +65,7 @@ def _safe_next(next: str) -> str:
     the moment anything uses this without that prefix, and this function is
     named as though it guarantees otherwise.
     """
-    if next == MOBILE_RETURN:
+    if next in MOBILE_RETURNS:
         return next
     if next.startswith("/") and not next.startswith("//"):
         return next
@@ -170,7 +176,7 @@ def instagram_callback(
         # a path on the website. Prefixing FRONTEND_URL onto the former would
         # produce https://www.banterclips.combanterclips://… — a dead link that
         # strands the user in a browser with no way back.
-        base = "" if next_path == MOBILE_RETURN else settings.FRONTEND_URL
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
         return RedirectResponse(f"{base}{next_path}?{urlencode(params)}")
 
     try:

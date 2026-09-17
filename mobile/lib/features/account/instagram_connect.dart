@@ -1,106 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-
 import '../../api/errors.dart';
 import '../../app/env.dart';
 import '../../state/app_state.dart';
 import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/surfaces.dart';
+import '../clips/publish_sheet.dart' show PlatformBadge;
 
-/// The one Instagram connect/disconnect control in the app. Used by both
-/// Account and the last step of onboarding.
-///
-/// The mobile OAuth flow differs from the web's in one way that matters: a
-/// phone has no browser tab to return to. So instead of a full-page redirect,
-/// Meta's consent screen opens in a system browser sheet
-/// (ASWebAuthenticationSession on iOS, Custom Tabs on Android) and control
-/// comes back through a redirect the app owns — `banterclips://oauth/instagram`.
-///
-/// That requires two things outside this file:
-///   1. the scheme registered in AndroidManifest.xml and Info.plist (done), and
-///   2. the backend allow-listing it in the `next` parameter of
-///      `GET /socials/instagram/oauth-url` — see mobile/README.md, which
-///      carries the exact patch. Until that lands, the backend falls back to
-///      `/account` on the website and this flow ends in the browser rather
-///      than back in the app; the account still connects, and pulling to
-///      refresh Account picks it up.
-class InstagramConnectCard extends ConsumerStatefulWidget {
+class InstagramConnectCard extends StatelessWidget {
   const InstagramConnectCard({super.key});
-
   @override
-  ConsumerState<InstagramConnectCard> createState() =>
-      _InstagramConnectCardState();
+  Widget build(BuildContext context) =>
+      const SocialConnectCard(platform: 'instagram');
 }
 
-class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
-  bool _busy = false;
-  String _error = '';
+class SocialConnectCard extends ConsumerStatefulWidget {
+  const SocialConnectCard({required this.platform, super.key});
+  final String platform;
+  @override
+  ConsumerState<SocialConnectCard> createState() => _SocialConnectCardState();
+}
+
+class _SocialConnectCardState extends ConsumerState<SocialConnectCard> {
+  bool busy = false;
+  String error = '';
+  String get name => switch (widget.platform) {
+    'instagram' => 'Instagram',
+    'tiktok' => 'TikTok',
+    'youtube' => 'YouTube',
+    _ => widget.platform,
+  };
+  String get destination => switch (widget.platform) {
+    'instagram' => 'clips publish as Reels · explicit per-clip publishing only',
+    'tiktok' => 'clips post to your TikTok · explicit per-clip publishing only',
+    'youtube' => 'clips upload as Shorts · explicit per-clip publishing only',
+    _ => 'connected',
+  };
 
   Future<void> connect() async {
     setState(() {
-      _busy = true;
-      _error = '';
+      busy = true;
+      error = '';
     });
     final api = ref.read(apiClientProvider);
-    final notifier = ref.read(appStateProvider.notifier);
     try {
       String? url;
       try {
-        url = await api.instagramOauthUrl(next: Env.igRedirect);
+        url = await api.socialOauthUrl(
+          widget.platform,
+          next: '${Env.oauthScheme}://oauth/${widget.platform}',
+        );
       } on ApiException catch (e) {
-        // 503 means the Meta app isn't configured on this backend — fall
-        // through to the mock connector, exactly as the web does.
         if (e.status != 503 && e.code != ApiCode.oauthNotConfigured) rethrow;
       }
-
       if (url != null && url.isNotEmpty) {
         await FlutterWebAuth2.authenticate(
           url: url,
           callbackUrlScheme: Env.oauthScheme,
         );
       } else {
-        await api.connectSocial('instagram');
+        await api.connectSocial(widget.platform);
       }
-      await notifier.refreshSocials();
+      await ref.read(appStateProvider.notifier).refreshSocials();
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => error = e.message);
     } catch (e) {
-      // The user dismissed the browser sheet — that is a choice, not a fault.
-      final cancelled = e.toString().toLowerCase().contains('cancel');
-      if (mounted && !cancelled) {
-        setState(
-          () => _error = 'Instagram connect did not complete. Try again.',
-        );
+      if (mounted && !e.toString().toLowerCase().contains('cancel')) {
+        setState(() => error = '$name connection did not complete. Try again.');
       }
-      // Connect may still have succeeded server-side before the sheet closed.
-      await notifier.refreshSocials();
+      await ref.read(appStateProvider.notifier).refreshSocials();
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => busy = false);
     }
   }
 
   Future<void> disconnect() async {
     setState(() {
-      _busy = true;
-      _error = '';
+      busy = true;
+      error = '';
     });
     try {
-      await ref.read(appStateProvider.notifier).disconnectInstagram();
+      await ref
+          .read(appStateProvider.notifier)
+          .disconnectSocial(widget.platform);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => error = e.message);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(appStateProvider);
-    final account = state.instagram;
-    final connected = state.instagramConnected;
-
+    final account = ref.watch(appStateProvider).social(widget.platform);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -110,40 +104,26 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
             children: [
               Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.instagram,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_outlined,
-                      size: 20,
-                      color: Colors.white,
-                    ),
-                  ),
+                  PlatformBadge(platform: widget.platform, size: 40),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          connected
-                              ? 'Instagram · ${account!.handle}'
-                              : 'Instagram',
+                          account == null ? name : '$name · ${account.handle}',
                           style: Theme.of(context).textTheme.titleSmall,
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          connected
-                              ? '● Connected — clips publish as Reels'
-                              : 'Not connected',
+                          account == null
+                              ? 'Not connected'
+                              : '● Connected — $destination',
                           style: TextStyle(
                             fontSize: 12,
-                            color: connected
-                                ? AppColors.green
-                                : AppColors.muted,
+                            color: account == null
+                                ? AppColors.muted
+                                : AppColors.green,
                           ),
                         ),
                       ],
@@ -152,27 +132,39 @@ class _InstagramConnectCardState extends ConsumerState<InstagramConnectCard> {
                 ],
               ),
               const SizedBox(height: 16),
-              if (connected)
+              if (account == null)
+                GradButton(
+                  label: 'Connect $name',
+                  loading: busy,
+                  height: 46,
+                  onPressed: connect,
+                )
+              else
                 GhostButton(
                   label: 'Disconnect',
-                  loading: _busy,
+                  loading: busy,
                   color: AppColors.muted,
                   height: 44,
                   onPressed: disconnect,
-                )
-              else
-                GradButton(
-                  label: 'Connect Instagram',
-                  loading: _busy,
-                  height: 46,
-                  onPressed: connect,
+                ),
+              if (widget.platform == 'youtube')
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Uses YouTube API Services · YouTube Terms of Service · Google Privacy Policy',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.45,
+                      color: AppColors.muted2,
+                    ),
+                  ),
                 ),
             ],
           ),
         ),
-        if (_error.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Notice.error(_error),
+        if (error.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Notice.error(error),
         ],
       ],
     );

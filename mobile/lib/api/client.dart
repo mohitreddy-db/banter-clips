@@ -48,11 +48,12 @@ class ApiClient {
         },
         onError: (e, handler) async {
           final error = ApiException.fromDio(e);
-          // A dead session is dead everywhere. Clearing it here means the
-          // router's redirect sees a signed-out app on the very next frame,
-          // rather than every screen discovering it separately.
-          if (error.isUnauthorized) {
-            await _tokens.clear();
+          // A 401 from a normal API route means our BanterClips session has
+          // expired. A 401 from /auth/* means the *new Supabase credential*
+          // was rejected; invalidating the existing BanterClips session in
+          // that case used to log people out during an automatic refresh.
+          if (error.isUnauthorized &&
+              !e.requestOptions.path.startsWith('/auth/')) {
             onUnauthorized?.call();
           }
           handler.reject(
@@ -70,8 +71,8 @@ class ApiClient {
   final Dio _dio;
   final TokenStore _tokens;
 
-  /// Called when any request comes back 401, after the token is cleared.
-  /// Wired to the auth notifier so the app returns to sign-in by itself.
+  /// Called when an authenticated API request comes back 401. The notifier
+  /// first tries to renew it from Supabase before deciding to sign out.
   void Function()? onUnauthorized;
 
   // ------------------------------------------------------------------ core
@@ -194,13 +195,21 @@ class ApiClient {
   Future<Clip> getClip(String id) async =>
       Clip.fromJson(await _map('GET', '/clips/$id'));
 
-  /// Starts a render. Throws [ApiException] with `limit_reached` when the
-  /// allowance is spent and `upgrade_required` for 30s or 1080p on Free —
-  /// both server-enforced, so the client gates are courtesy, not security.
+  /// Starts a render. Throws [ApiException] with `insufficient_credits` when
+  /// the wallet cannot cover the quoted price and `upgrade_required` for 30s
+  /// or 1080p on Free — both server-enforced, so the client gates are
+  /// courtesy, not security.
+  ///
+  /// The body is exactly what `api.createClip` sends on the web: several
+  /// sports (the server works one out from the take when none are given),
+  /// the people in it, an optional direction and an uploaded reference key.
   Future<Clip> createClip({
     required String take,
-    required String sport,
     required String tone,
+    List<String> sports = const [],
+    List<String> subjects = const [],
+    String direction = '',
+    String? referenceKey,
     int duration = 15,
     String resolution = '720p',
   }) async {
@@ -209,13 +218,51 @@ class ApiClient {
       '/clips',
       body: {
         'take': take,
-        'sport': sport,
+        'sports': sports,
+        'subjects': subjects,
         'tone': tone,
         'duration': duration,
         'resolution': resolution,
+        'direction': direction,
+        'reference_key': referenceKey,
       },
     );
     return Clip.fromJson(json);
+  }
+
+  /// Uploads a reference photo (JPEG) or video (MP4) and returns the storage
+  /// key to pass to [createClip]. The web posts the raw file body with its
+  /// content type — not multipart — so this does the same.
+  Future<String> uploadReference(
+    File file, {
+    required String contentType,
+  }) async {
+    try {
+      final length = await file.length();
+      final res = await _dio.post<dynamic>(
+        '/clips/reference',
+        data: file.openRead(),
+        options: Options(
+          contentType: contentType,
+          headers: {Headers.contentLengthHeader: length},
+          sendTimeout: const Duration(minutes: 3),
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
+      final data = res.data;
+      final key = data is Map ? data['key']?.toString() ?? '' : '';
+      if (key.isEmpty) {
+        throw const ApiException(
+          502,
+          null,
+          'The reference could not be stored.',
+        );
+      }
+      return key;
+    } on DioException catch (e) {
+      final error = e.error;
+      throw error is ApiException ? error : ApiException.fromDio(e);
+    }
   }
 
   /// Two fresh, sharper wordings of a take. Repeatable — [round] only widens
@@ -247,10 +294,17 @@ class ApiClient {
   }
 
   /// Today's stories for a sport. Cheap — a shared 20-minute server cache
-  /// per sport — so calling it on every screen open is fine.
-  Future<TrendingFeed> trending(String sport) async => TrendingFeed.fromJson(
-    await _map('GET', '/clips/trending', query: {'sport': sport}),
-  );
+  /// per sport — so calling it on every screen open is fine. [refresh] asks
+  /// the server to rebuild the feed from today's internet, which it only
+  /// honours once its own cooldown has passed.
+  Future<TrendingFeed> trending(String sport, {bool refresh = false}) async =>
+      TrendingFeed.fromJson(
+        await _map(
+          'GET',
+          '/clips/trending',
+          query: {'sport': sport, if (refresh) 'refresh': '1'},
+        ),
+      );
 
   /// Three caption options to pick between when publishing. [avoid] carries
   /// what has already been shown so a "new suggestions" press produces
@@ -319,18 +373,56 @@ class ApiClient {
 
   /// Fire-and-forget: the upload runs server-side and the clips library
   /// shows live status. BR-13 — publishing is always an explicit per-clip act.
+  ///
+  /// [tiktok] and [youtube] carry the per-platform options those APIs
+  /// require (privacy level and interaction flags; title, description and
+  /// visibility). Instagram needs only the caption.
   Future<Publish> publishClip({
     required String clipId,
     required String socialAccountId,
     required String caption,
+    Map<String, dynamic>? tiktok,
+    Map<String, dynamic>? youtube,
   }) async {
     final json = await _map(
       'POST',
       '/clips/$clipId/publish',
-      body: {'social_account_id': socialAccountId, 'caption': caption},
+      body: {
+        'social_account_id': socialAccountId,
+        'caption': caption,
+        if (tiktok != null) 'tiktok': tiktok,
+        if (youtube != null) 'youtube': youtube,
+      },
     );
     return Publish.fromJson(json);
   }
+
+  /// What TikTok will let this account post right now. Fetched every time
+  /// the publish sheet opens on TikTok — the privacy options and disabled
+  /// interactions are TikTok's to decide, per post.
+  Future<TikTokCreatorInfo> tiktokCreatorInfo() async =>
+      TikTokCreatorInfo.fromJson(
+        await _map('GET', '/socials/tiktok/creator-info'),
+      );
+
+  // -------------------------------------------------------------- feedback
+
+  /// The feedback form. [page] records where in the app it was sent from.
+  Future<void> sendFeedback({
+    required String message,
+    String category = 'other',
+    int? rating,
+    String page = '',
+  }) async => _send(
+    'POST',
+    '/feedback',
+    body: {
+      'message': message,
+      'category': category,
+      'rating': rating,
+      'page': page,
+    },
+  );
 
   Future<Publish> getPublish(String clipId, String publishId) async =>
       Publish.fromJson(
@@ -348,14 +440,20 @@ class ApiClient {
   ///
   /// Throws `oauth_not_configured` (503) when the Meta app isn't set up, and
   /// the caller falls back to [connectSocial]'s mock connector.
-  Future<String?> instagramOauthUrl({String next = Env.igRedirect}) async {
+  Future<String?> socialOauthUrl(
+    String platform, {
+    String next = Env.igRedirect,
+  }) async {
     final json = await _map(
       'GET',
-      '/socials/instagram/oauth-url',
+      '/socials/$platform/oauth-url',
       query: {'next': next},
     );
     return json['url'] as String?;
   }
+
+  Future<String?> instagramOauthUrl({String next = Env.igRedirect}) =>
+      socialOauthUrl('instagram', next: next);
 
   /// The mock connector — immediately returns a connected account. Real
   /// OAuth goes through [instagramOauthUrl] first.
@@ -375,12 +473,15 @@ class ApiClient {
   /// Called after every completed or restored purchase. Safe to repeat: the
   /// endpoint is idempotent, keyed on the store's own purchase token, so a
   /// retry after a dropped connection converges rather than double-granting.
-  Future<void> verifyStorePurchase({
+  ///
+  /// The same endpoint verifies a credit-pack purchase: the server tells the
+  /// two apart by product id, grants the credits, and consumes the purchase.
+  Future<Map<String, dynamic>> verifyStorePurchase({
     required String platform,
     required String productId,
     required String purchaseToken,
     String? transactionId,
-  }) async => _send(
+  }) => _map(
     'POST',
     '/billing/mobile/verify',
     body: {
@@ -413,6 +514,21 @@ class ApiClient {
 
   Future<void> cancelPlan() async => _send('POST', '/billing/cancel');
 
+  /// The credit packs on sale. On a phone these are bought through the
+  /// store (see `top_up_sheet.dart`); the Stripe URL from [topUpCredits] is
+  /// the website's path and must not be used to sell credits in-app.
+  Future<CreditPacks> creditPacks() async =>
+      CreditPacks.fromJson(await _map('GET', '/billing/packs'));
+
+  Future<String> topUpCredits(String pack) async {
+    final json = await _map('POST', '/billing/topup', body: {'pack': pack});
+    final url = json['url']?.toString() ?? '';
+    if (url.isEmpty) {
+      throw const ApiException(502, null, 'Payment checkout is unavailable.');
+    }
+    return url;
+  }
+
   /// Read-only admin console data. Server-side authorization remains the
   /// source of truth and deliberately returns 404 to non-admin accounts.
   Future<Map<String, dynamic>> adminGet(
@@ -431,6 +547,57 @@ class ApiClient {
       body: {'name': name, 'props': props},
     ).catchError((_) => null);
   }
+}
+
+class CreditPack {
+  const CreditPack({
+    required this.key,
+    required this.credits,
+    required this.usd,
+    this.popular = false,
+    this.name = '',
+    String? androidProductId,
+  }) : _androidProductId = androidProductId;
+  final String key;
+  final String name;
+  final int credits;
+  final double usd;
+  final bool popular;
+  final String? _androidProductId;
+
+  /// The Play Console product for this pack. The server may name it; when
+  /// it does not, the convention `credits_<pack>` applies, and the server
+  /// side of `/billing/mobile/verify` maps it back the same way.
+  String get androidProductId => (_androidProductId?.isNotEmpty ?? false)
+      ? _androidProductId!
+      : 'credits_$key';
+
+  String get label =>
+      name.isNotEmpty ? name : key[0].toUpperCase() + key.substring(1);
+
+  factory CreditPack.fromJson(Map<String, dynamic> json) => CreditPack(
+    key: json['key']?.toString() ?? '',
+    name: json['name']?.toString() ?? '',
+    credits: (json['credits'] as num?)?.toInt() ?? 0,
+    usd: (json['usd'] as num?)?.toDouble() ?? 0,
+    popular: json['popular'] as bool? ?? false,
+    androidProductId: json['android_product_id']?.toString(),
+  );
+}
+
+class CreditPacks {
+  const CreditPacks({required this.available, required this.packs});
+  final bool available;
+  final List<CreditPack> packs;
+
+  factory CreditPacks.fromJson(Map<String, dynamic> json) => CreditPacks(
+    available: json['available'] as bool? ?? false,
+    packs: (json['packs'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => CreditPack.fromJson(Map<String, dynamic>.from(item)))
+        .where((item) => item.key.isNotEmpty)
+        .toList(),
+  );
 }
 
 /// `SessionResponse` — the backend session token plus the user it belongs to.

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../api/errors.dart';
+import '../../models/catalog.dart' as catalog;
 import '../../models/social.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_theme.dart';
@@ -12,17 +16,22 @@ import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/states.dart';
 import '../../widgets/surfaces.dart';
+import '../account/top_up_sheet.dart';
 import '../account/upgrade_sheet.dart';
 import 'trending_section.dart';
 
 /// The create screen — part one of the Studio flow in
-/// `frontend/src/pages/Studio.jsx`: write a take, sharpen it, choose sport,
-/// tone, length and quality, then generate.
+/// `frontend/src/pages/Studio.jsx`, section for section: the take, what
+/// happens, a reference, enhance, trending, sports, who is in it, style,
+/// length, quality, the price line, then generate.
 ///
 /// Once a clip exists the flow moves to its own route (`/clip/:id`), which
 /// carries script review, live progress and the finished player. On the web
 /// those are phases of one page; on a phone they are a screen you push, so
 /// the back gesture means what the user expects at every point.
+///
+/// Nothing here that the backend does not consume: `ClipCreate` is the
+/// contract, and every control on this screen maps to one of its fields.
 class StudioScreen extends ConsumerStatefulWidget {
   const StudioScreen({super.key});
 
@@ -31,47 +40,32 @@ class StudioScreen extends ConsumerStatefulWidget {
 }
 
 class _StudioScreenState extends ConsumerState<StudioScreen> {
-  static const _sports = [
-    'NBA',
-    'NFL',
-    'Soccer',
-    'MLB',
-    'F1',
-    'Tennis',
-    'College Sports',
-    'Combat Sports',
-  ];
-  static const _tones = [
-    ('Funny', '😄', 'Playful roast'),
-    ('Savage', '🔪', 'No mercy'),
-    ('Hype', '📣', 'Full energy'),
-    ('Bold', '💪', 'Fearless claim'),
-  ];
   static const _durations = [10, 15, 30];
   static const _resolutions = [('720p', 'HD'), ('1080p', 'Full HD')];
 
-  /// Free tops out at 15 seconds and 720p. Both are enforced server-side too
-  /// — these gates exist to explain the limit, not to impose it.
+  /// Free tops out at 15 seconds, 720p and 280 characters. All enforced
+  /// server-side too — these gates exist to explain the limit, not to
+  /// impose it.
   static const _freeMaxDuration = 15;
-  static const _maxTakeLength = 280;
+  static const _freeMaxTake = 280;
+  static const _creatorMaxTake = 500;
   static const _minTakeLength = 10;
+  static const _maxDirection = 400;
+  static const _maxSports = 4;
+  static const _maxSubjects = 8;
+  static const _maxReferenceBytes = 15 * 1024 * 1024;
 
   final _takeController = TextEditingController();
-  final _happensController = TextEditingController();
-  final _castController = TextEditingController();
+  final _directionController = TextEditingController();
+  final _subjectController = TextEditingController();
   final _picker = ImagePicker();
 
-  String _sport = 'NBA';
+  List<String> _sports = const [];
+  List<String> _subjects = const [];
   String _tone = 'Funny';
-  String _contentType = 'Hot Take';
-  String _voice = 'Commentator';
-  String _visualStyle = 'Cinematic';
   int _duration = 15;
   String _resolution = '720p';
-  bool _brandKit = true;
-  bool _priority = false;
-  bool _endCard = false;
-  XFile? _referenceMedia;
+  XFile? _reference;
   bool _referenceIsVideo = false;
   String _lastImportedPrompt = '';
 
@@ -84,30 +78,26 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
 
   bool _enhancing = false;
   bool _generating = false;
+  bool _uploading = false;
   String _error = '';
 
   @override
   void initState() {
     super.initState();
-    // Open on a sport the user actually follows.
-    final sports =
-        ref.read(appStateProvider).user?.preferences.sports ?? const [];
-    for (final sport in sports) {
-      if (_sports.contains(sport)) {
-        _sport = sport;
-        break;
-      }
-    }
     _takeController.addListener(() => setState(() {}));
+    _subjectController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _takeController.dispose();
-    _happensController.dispose();
-    _castController.dispose();
+    _directionController.dispose();
+    _subjectController.dispose();
     super.dispose();
   }
+
+  bool get _isCreator => ref.read(appStateProvider).isCreator;
+  int get _maxTakeLength => _isCreator ? _creatorMaxTake : _freeMaxTake;
 
   String get _typedTake => _takeController.text.trim();
 
@@ -121,16 +111,16 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
       ? _variations[_chosen].take
       : _typedTake;
 
-  String get _generationBrief {
-    final parts = <String>[_activeTake];
-    if (_happensController.text.trim().isNotEmpty) {
-      parts.add('What happens: ${_happensController.text.trim()}');
+  /// The sport the trending feed and enhance are keyed on: the first one
+  /// picked, else the first the user follows, else Soccer — as on the web.
+  String get _leadSport {
+    if (_sports.isNotEmpty) return _sports.first;
+    final followed =
+        ref.read(appStateProvider).user?.preferences.sports ?? const [];
+    for (final sport in followed) {
+      if (catalog.isKnownSport(sport)) return sport;
     }
-    if (_castController.text.trim().isNotEmpty) {
-      parts.add("Who's in it: ${_castController.text.trim()}");
-    }
-    final brief = parts.join('. ');
-    return brief.length <= 280 ? brief : brief.substring(0, 280);
+    return 'Soccer';
   }
 
   Future<void> _enhance() async {
@@ -144,7 +134,7 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
           .read(apiClientProvider)
           .enhanceTake(
             take: _typedTake,
-            sport: _sport,
+            sport: _leadSport,
             tone: _tone,
             round: _round,
           );
@@ -159,7 +149,10 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
         }
       });
     } on ApiException catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      if (e.needsCredits) {
+        showTopUpSheet(context, needed: _enhanceCost);
+      } else {
         setState(
           () => _error =
               'Enhance is unavailable right now (${e.message}). Your take still works.',
@@ -167,55 +160,91 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
       }
     } finally {
       if (mounted) setState(() => _enhancing = false);
+      // Enhance is a paid action; the balance moved.
+      ref.read(appStateProvider.notifier).refreshUsage();
     }
   }
 
+  int get _enhanceCost => ref.read(appStateProvider).prices.enhanceTake;
+
   Future<void> _generate() async {
     if (!_valid || _generating) return;
+    final state = ref.read(appStateProvider);
+    final price = state.videoPrice(_duration, _resolution);
+    // The server says no too, but a sheet before the round-trip is the
+    // honest experience: the price was on screen the whole time.
+    if (state.credits < price) {
+      showTopUpSheet(context, needed: price);
+      return;
+    }
     setState(() {
       _generating = true;
       _error = '';
     });
     try {
-      final clip = await ref
-          .read(apiClientProvider)
-          .createClip(
-            take: _generationBrief,
-            sport: _sport,
-            tone: _tone,
-            duration: _duration,
-            resolution: _resolution,
-          );
+      final api = ref.read(apiClientProvider);
+      String? referenceKey;
+      final reference = _reference;
+      if (reference != null) {
+        setState(() => _uploading = true);
+        referenceKey = await api.uploadReference(
+          File(reference.path),
+          contentType: _referenceIsVideo ? 'video/mp4' : 'image/jpeg',
+        );
+        if (mounted) setState(() => _uploading = false);
+      }
+      final clip = await api.createClip(
+        take: _activeTake,
+        sports: _sports,
+        subjects: _subjects,
+        tone: _tone,
+        duration: _duration,
+        resolution: _resolution,
+        direction: _directionController.text.trim(),
+        referenceKey: referenceKey,
+      );
       // The in-flight clip appears in the library immediately, exactly as it
-      // does on the web.
+      // does on the web — and the reservation moved the balance.
       ref.read(appStateProvider.notifier).mergeClip(clip);
+      ref.read(appStateProvider.notifier).refreshUsage();
       if (!mounted) return;
       _reset();
       context.push('/clip/${clip.id}');
     } on ApiException catch (e) {
       if (!mounted) return;
-      if (e.needsUpgrade) {
+      if (e.needsCredits) {
+        showTopUpSheet(context, needed: price);
+      } else if (e.needsUpgrade) {
         showUpgradeSheet(
           context,
-          reason: e.code == ApiCode.limitReached
-              ? UpgradeReason.limit
+          reason: _duration > _freeMaxDuration
+              ? UpgradeReason.duration
               : UpgradeReason.quality,
         );
       } else {
         setState(() => _error = e.message);
       }
     } finally {
-      if (mounted) setState(() => _generating = false);
+      if (mounted) {
+        setState(() {
+          _generating = false;
+          _uploading = false;
+        });
+      }
     }
   }
 
   void _reset() {
     _takeController.clear();
+    _directionController.clear();
+    _subjectController.clear();
     setState(() {
       _variations = const [];
       _chosen = -1;
       _round = 0;
       _error = '';
+      _subjects = const [];
+      _reference = null;
     });
   }
 
@@ -227,42 +256,103 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
     setState(() {
       _variations = const [];
       _chosen = -1;
-      _tone = _tones.any((t) => t.$1 == prompt.tone) ? prompt.tone : _tone;
+      if (catalog.isKnownTone(prompt.tone)) _tone = prompt.tone;
       if (_durations.contains(prompt.seconds) &&
           (prompt.seconds <= _freeMaxDuration || isCreator)) {
         _duration = prompt.seconds;
       }
     });
     ref.read(apiClientProvider).track('trending_take_used', {
-      'sport': _sport,
+      'sport': _leadSport,
       'tone': prompt.tone,
       'seconds': prompt.seconds,
     });
     FocusScope.of(context).unfocus();
   }
 
+  /// Opened from the Viral screen (or a share link) as
+  /// `/studio?prompt=…&tone=…&seconds=…&sport=…`.
+  void _importFromQuery(Uri uri, {required bool isCreator}) {
+    final imported = uri.queryParameters['prompt'] ?? '';
+    if (imported.isEmpty || imported == _lastImportedPrompt) return;
+    _lastImportedPrompt = imported;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _takeController.text = imported.length > _maxTakeLength
+          ? imported.substring(0, _maxTakeLength)
+          : imported;
+      final sport = uri.queryParameters['sport'];
+      final tone = uri.queryParameters['tone'];
+      final seconds = int.tryParse(uri.queryParameters['seconds'] ?? '');
+      setState(() {
+        _variations = const [];
+        _chosen = -1;
+        if (catalog.isKnownSport(sport)) _sports = [sport!];
+        if (catalog.isKnownTone(tone)) _tone = tone!;
+        if (seconds != null &&
+            _durations.contains(seconds) &&
+            (seconds <= _freeMaxDuration || isCreator)) {
+          _duration = seconds;
+        }
+      });
+    });
+  }
+
+  void _toggleSport(String sport) => setState(() {
+    if (_sports.contains(sport)) {
+      _sports = _sports.where((s) => s != sport).toList();
+    } else if (_sports.length < _maxSports) {
+      _sports = [..._sports, sport];
+    }
+  });
+
+  void _addSubject(String raw) {
+    final value = raw.trim().replaceAll(RegExp(r',$'), '').trim();
+    _subjectController.clear();
+    if (value.isEmpty || _subjects.contains(value)) return;
+    if (_subjects.length >= _maxSubjects) return;
+    setState(() => _subjects = [..._subjects, value]);
+  }
+
+  Future<void> _pickReference(bool video) async {
+    final file = video
+        ? await _picker.pickVideo(source: ImageSource.gallery)
+        : await _picker.pickImage(source: ImageSource.gallery, imageQuality: 92);
+    if (file == null || !mounted) return;
+    final size = await file.length();
+    if (!mounted) return;
+    if (size > _maxReferenceBytes) {
+      setState(() => _error = 'Reference must be 15 MB or smaller.');
+      return;
+    }
+    setState(() {
+      _reference = file;
+      _referenceIsVideo = video;
+      _error = '';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appStateProvider);
     final isCreator = state.isCreator;
+    final maxTake = isCreator ? _creatorMaxTake : _freeMaxTake;
     final length = _takeController.text.length;
-    final uri = GoRouterState.of(context).uri;
-    final imported = uri.queryParameters['prompt'] ?? '';
-    if (imported.isNotEmpty && imported != _lastImportedPrompt) {
-      _lastImportedPrompt = imported;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _takeController.text = imported;
-        final sport = uri.queryParameters['sport'];
-        final tone = uri.queryParameters['tone'];
-        setState(() {
-          if (sport != null && _sports.contains(sport)) _sport = sport;
-          if (tone != null && _tones.any((item) => item.$1 == tone)) {
-            _tone = tone;
-          }
-        });
-      });
-    }
+    final overLimit = length > maxTake;
+    final price = state.videoPrice(_duration, _resolution);
+    final short = state.credits < price;
+    _importFromQuery(GoRouterState.of(context).uri, isCreator: isCreator);
+
+    final suggestions = catalog
+        .subjectSuggestions(
+          _sports.isNotEmpty
+              ? _sports
+              : (state.user?.preferences.sports ?? const []),
+          players: true,
+          limit: 6,
+        )
+        .where((s) => !_subjects.contains(s))
+        .toList();
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -274,19 +364,21 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
           children: [
             const ScreenHeader(
               badge: '⚡ NEW CLIP',
-              title: "What's your sports take?",
+              title: 'Build your banter',
               subtitle:
-                  "One sentence. We'll do the hook, voice, captions and video.",
+                  'Simple choices in. A production-ready video prompt out.',
             ),
             const SizedBox(height: 22),
 
             // ---- the take -------------------------------------------------
+            const SectionLabel('WHAT DO YOU WANT TO SAY?'),
+            const SizedBox(height: 10),
             TextField(
               controller: _takeController,
               maxLines: 4,
               minLines: 3,
-              maxLength: _maxTakeLength,
-              // maxLength alone would silently block the 281st character;
+              maxLength: maxTake,
+              // maxLength alone would silently block the next character;
               // this lets it through so the counter can turn red and say why.
               maxLengthEnforcement: MaxLengthEnforcement.none,
               textCapitalization: TextCapitalization.sentences,
@@ -296,9 +388,9 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                 fontWeight: FontWeight.w500,
                 color: AppColors.text,
               ),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Messi is still the GOAT.',
-                contentPadding: const EdgeInsets.all(18),
+                contentPadding: EdgeInsets.all(18),
                 counterText: '',
               ),
             ),
@@ -307,19 +399,94 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Text(
-                    '$length / $_maxTakeLength',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: length > _maxTakeLength
-                          ? AppColors.error
-                          : AppColors.muted2,
+                  InkWell(
+                    onTap: !isCreator && overLimit
+                        ? () => showUpgradeSheet(
+                            context,
+                            reason: UpgradeReason.takeLength,
+                          )
+                        : null,
+                    child: Text(
+                      '$length / $maxTake'
+                      '${!isCreator && overLimit ? ' · up to $_creatorMaxTake on Creator →' : ''}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: overLimit ? AppColors.error : AppColors.muted2,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 18),
+
+            // ---- what happens ---------------------------------------------
+            const _LabelWithHint(
+              'WHAT HAPPENS?',
+              'optional · describe the setting or action',
+            ),
             const SizedBox(height: 10),
+            TextField(
+              controller: _directionController,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: _maxDirection,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                hintText:
+                    'Press room after the derby. The manager stays calm while the mascot celebrates behind him.',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ---- reference -----------------------------------------------
+            const _LabelWithHint(
+              'REFERENCE PHOTO OR VIDEO',
+              'optional · JPEG or MP4 · up to 15 MB',
+            ),
+            const SizedBox(height: 10),
+            AppPanel(
+              onTap: () => _pickReference(false),
+              child: Row(
+                children: [
+                  Icon(
+                    _reference == null
+                        ? Icons.add_photo_alternate_outlined
+                        : Icons.check_circle_rounded,
+                    color: _reference == null ? AppColors.cyan : AppColors.green,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _reference == null
+                          ? '+ Choose a reference'
+                          : '${_referenceIsVideo ? 'Video' : 'Photo'} · ${_reference!.name}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _reference == null
+                            ? AppColors.muted
+                            : AppColors.text,
+                      ),
+                    ),
+                  ),
+                  if (_reference == null)
+                    IconButton(
+                      tooltip: 'Choose a video',
+                      onPressed: () => _pickReference(true),
+                      icon: const Icon(Icons.video_library_outlined),
+                    )
+                  else
+                    IconButton(
+                      tooltip: 'Remove reference',
+                      onPressed: () => setState(() => _reference = null),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // ---- enhance --------------------------------------------------
             Align(
@@ -328,6 +495,7 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                 enabled: _valid && !_enhancing,
                 busy: _enhancing,
                 hasVariations: _variations.isNotEmpty,
+                cost: state.prices.enhanceTake,
                 onPressed: _enhance,
               ),
             ),
@@ -361,78 +529,107 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
             ],
             const SizedBox(height: 24),
 
-            const SectionLabel('WHAT HAPPENS?'),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _happensController,
-              minLines: 2,
-              maxLines: 4,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Describe the action, setting or punchline…',
-              ),
-            ),
-            const SizedBox(height: 20),
-            const SectionLabel("WHO'S IN IT?"),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _castController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                hintText: 'Players, teams, presenters or characters…',
-                prefixIcon: Icon(Icons.groups_2_outlined),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            const SectionLabel('CONTENT TYPE'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final value in const [
-                  'Hot Take',
-                  'Debate',
-                  'Prediction',
-                  'Reaction',
-                  'Roast',
-                ])
-                  AppChip(
-                    label: value,
-                    selected: _contentType == value,
-                    onTap: () => setState(() => _contentType = value),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
             // ---- trending -------------------------------------------------
             TrendingSection(
-              sport: _sport,
+              sport: _leadSport,
               onUse: (prompt) => _useTrending(prompt, isCreator: isCreator),
             ),
             const SizedBox(height: 24),
 
-            // ---- sport ----------------------------------------------------
-            const SectionLabel('SPORT'),
+            // ---- sport (multi) --------------------------------------------
+            _LabelWithHint(
+              'SPORT',
+              _sports.isEmpty
+                  ? "optional · we'll work it out from your take"
+                  : 'optional · pick more than one to cross them over',
+              trailing: _sports.isEmpty
+                  ? null
+                  : TextAction(
+                      label: 'Clear',
+                      fontSize: 12,
+                      color: AppColors.muted,
+                      onPressed: () => setState(() => _sports = const []),
+                    ),
+            ),
             const SizedBox(height: 10),
             Wrap(
-              spacing: 10,
-              runSpacing: 10,
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                for (final sport in _sports)
+                for (final sport in catalog.sports)
                   AppChip(
-                    label: sport,
-                    selected: _sport == sport,
-                    onTap: () => setState(() => _sport = sport),
+                    label: '${sport.emoji} ${sport.key}',
+                    selected: _sports.contains(sport.key),
+                    onTap: () => _toggleSport(sport.key),
                   ),
               ],
             ),
             const SizedBox(height: 24),
 
-            // ---- tone -----------------------------------------------------
-            const SectionLabel('TONE'),
+            // ---- who is in it ---------------------------------------------
+            const _LabelWithHint(
+              'WHO IS IN IT?',
+              'optional · anyone you add will be in the video',
+            ),
+            const SizedBox(height: 10),
+            if (_subjects.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final subject in _subjects)
+                    AppChip(
+                      label: '$subject  ×',
+                      selected: true,
+                      onTap: () => setState(
+                        () => _subjects = _subjects
+                            .where((s) => s != subject)
+                            .toList(),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+            TextField(
+              controller: _subjectController,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.done,
+              onSubmitted: _addSubject,
+              onEditingComplete: () => _addSubject(_subjectController.text),
+              decoration: InputDecoration(
+                hintText: 'Add a team or player — Arsenal, Mbappé, LeBron…',
+                prefixIcon: const Icon(Icons.groups_2_outlined),
+                suffixIcon: _subjectController.text.trim().isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(
+                          Icons.add_rounded,
+                          color: AppColors.cyan,
+                        ),
+                        onPressed: () => _addSubject(_subjectController.text),
+                      ),
+              ),
+            ),
+            if (suggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 7,
+                runSpacing: 7,
+                children: [
+                  for (final suggestion in suggestions)
+                    AppChip(
+                      label: '+ $suggestion',
+                      dashed: true,
+                      onTap: () => _addSubject(suggestion),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            // ---- style (tone) ---------------------------------------------
+            const SectionLabel('STYLE'),
             const SizedBox(height: 10),
             GridView.count(
               crossAxisCount: 2,
@@ -440,92 +637,17 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.75,
+              childAspectRatio: 1.6,
               children: [
-                for (final (name, emoji, _) in _tones)
+                for (final tone in catalog.tones)
                   _ToneCard(
-                    name: name,
-                    emoji: emoji,
-                    selected: _tone == name,
-                    onTap: () => setState(() => _tone = name),
+                    name: tone.key,
+                    emoji: tone.emoji,
+                    sub: tone.sub,
+                    selected: _tone == tone.key,
+                    onTap: () => setState(() => _tone = tone.key),
                   ),
               ],
-            ),
-            const SizedBox(height: 24),
-
-            const SectionLabel('VOICE'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final value in const [
-                  'Commentator',
-                  'Hype Man',
-                  'Analyst',
-                  'Storyteller',
-                ])
-                  AppChip(
-                    label: value,
-                    selected: _voice == value,
-                    onTap: () => setState(() => _voice = value),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            const SectionLabel('VISUAL STYLE'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final value in const [
-                  'Cinematic',
-                  'Broadcast',
-                  'Gritty',
-                  'Viral Social',
-                ])
-                  AppChip(
-                    label: value,
-                    selected: _visualStyle == value,
-                    onTap: () => setState(() => _visualStyle = value),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            const SectionLabel('REFERENCE PHOTO OR VIDEO'),
-            const SizedBox(height: 10),
-            AppPanel(
-              onTap: () => _pickReference(false),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.add_photo_alternate_outlined,
-                    color: AppColors.cyan,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _referenceMedia == null
-                          ? 'Choose a reference from your gallery'
-                          : '${_referenceIsVideo ? 'Video' : 'Photo'} · ${_referenceMedia!.name}',
-                      style: const TextStyle(color: AppColors.muted),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Choose video',
-                    onPressed: () => _pickReference(true),
-                    icon: const Icon(Icons.video_library_outlined),
-                  ),
-                  if (_referenceMedia != null)
-                    IconButton(
-                      onPressed: () => setState(() => _referenceMedia = null),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                ],
-              ),
             ),
             const SizedBox(height: 24),
 
@@ -587,63 +709,70 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
             ),
             const SizedBox(height: 20),
 
-            _StudioToggle(
-              icon: Icons.branding_watermark_outlined,
-              title: 'Brand Kit',
-              subtitle: 'Apply your logo, colours and creator handle',
-              value: _brandKit,
-              onChanged: (v) => setState(() => _brandKit = v),
-            ),
-            const SizedBox(height: 10),
-            _StudioToggle(
-              icon: Icons.bolt_rounded,
-              title: 'Priority render',
-              subtitle: '+2 credits · jump the standard queue',
-              value: _priority,
-              onChanged: (v) => setState(() => _priority = v),
-            ),
-            const SizedBox(height: 10),
-            _StudioToggle(
-              icon: Icons.video_label_outlined,
-              title: 'End card',
-              subtitle: 'Add a follow CTA to the final seconds',
-              value: _endCard,
-              onChanged: (v) => setState(() => _endCard = v),
-            ),
-            const SizedBox(height: 20),
-
-            // ---- allowance ------------------------------------------------
+            // ---- price line -----------------------------------------------
             AppPanel(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.bolt_rounded,
-                    size: 17,
-                    color: AppColors.cyan,
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.muted,
-                          height: 1.4,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 1),
+                        child: Icon(
+                          Icons.bolt_rounded,
+                          size: 17,
+                          color: AppColors.cyan,
                         ),
-                        children: [
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text.rich(
                           TextSpan(
-                            text: '${state.left}',
                             style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.text,
+                              fontSize: 13,
+                              color: AppColors.muted,
+                              height: 1.45,
                             ),
+                            children: [
+                              const TextSpan(text: 'This video: '),
+                              TextSpan(
+                                text: '$price credits',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.text,
+                                ),
+                              ),
+                              const TextSpan(text: ' · you have '),
+                              TextSpan(
+                                text: '${state.credits}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: short
+                                      ? AppColors.error
+                                      : AppColors.text,
+                                ),
+                              ),
+                              const TextSpan(
+                                text:
+                                    ' · charged only when your video completes',
+                              ),
+                            ],
                           ),
-                          TextSpan(
-                            text: ' of ${state.limit} monthly credits left',
-                          ),
-                          const TextSpan(text: ' · failures are free'),
-                        ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextAction(
+                      label: '+ Top up credits',
+                      fontSize: 13,
+                      onPressed: () => showTopUpSheet(
+                        context,
+                        needed: short ? price : 0,
                       ),
                     ),
                   ),
@@ -658,7 +787,7 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
             const SizedBox(height: 18),
 
             GradButton(
-              label: '🪄  Generate BanterClip',
+              label: '🪄  Build My Banter',
               height: 56,
               fontSize: 17,
               loading: _generating,
@@ -666,9 +795,14 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Hot Take format · cinematic scenes · ${_duration}s vertical MP4 · $_resolution',
+              _generating
+                  ? (_uploading ? 'Uploading reference…' : 'Starting…')
+                  : 'Hot Take format · cinematic scenes · ${_duration}s vertical MP4 · $_resolution',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted2),
+              style: TextStyle(
+                fontSize: 12,
+                color: _generating ? AppColors.cyan : AppColors.muted2,
+              ),
             ),
 
             // ---- recent ---------------------------------------------------
@@ -683,19 +817,41 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              for (final clip in state.clips.take(3))
+              for (final clip in state.clips.take(4))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: AppPanel(
                     onTap: () => context.push('/clip/${clip.id}'),
                     child: Row(
                       children: [
-                        Container(
-                          width: 30,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            gradient: AppColors.thumbFor(clip.id),
-                            borderRadius: BorderRadius.circular(7),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: SizedBox(
+                            width: 34,
+                            height: 58,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // A real frame from the clip. The gradient
+                                // stays as the fallback for clips made
+                                // before posters were stored.
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.thumbFor(clip.id),
+                                  ),
+                                ),
+                                if ((clip.posterUrl ?? '').isNotEmpty)
+                                  CachedNetworkImage(
+                                    imageUrl: clip.posterUrl!,
+                                    fit: BoxFit.cover,
+                                    fadeInDuration: const Duration(
+                                      milliseconds: 180,
+                                    ),
+                                    errorWidget: (_, __, ___) =>
+                                        const SizedBox.shrink(),
+                                  ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -715,8 +871,10 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                '${clip.sport} · ${clip.tone}'
+                                '${clip.sportLabel} · ${clip.tone}'
                                 '${clip.isReady ? (clip.isPublished ? ' · published' : '') : ' · ${clip.status}'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: clip.hasFailed
@@ -742,21 +900,37 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
       ),
     );
   }
+}
 
-  Future<void> _pickReference(bool video) async {
-    final file = video
-        ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(
-            source: ImageSource.gallery,
-            imageQuality: 92,
-          );
-    if (file != null && mounted) {
-      setState(() {
-        _referenceMedia = file;
-        _referenceIsVideo = video;
-      });
-    }
-  }
+/// A section label with the web's small grey hint beside it.
+class _LabelWithHint extends StatelessWidget {
+  const _LabelWithHint(this.label, this.hint, {this.trailing});
+
+  final String label;
+  final String hint;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Expanded(
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 8,
+          runSpacing: 2,
+          children: [
+            SectionLabel(label),
+            Text(
+              hint,
+              style: const TextStyle(fontSize: 11.5, color: AppColors.muted2),
+            ),
+          ],
+        ),
+      ),
+      if (trailing != null) trailing!,
+    ],
+  );
 }
 
 /// The ✨ button. Offered, never imposed — pressing it adds options below the
@@ -766,12 +940,14 @@ class _EnhanceButton extends StatelessWidget {
     required this.enabled,
     required this.busy,
     required this.hasVariations,
+    required this.cost,
     required this.onPressed,
   });
 
   final bool enabled;
   final bool busy;
   final bool hasVariations;
+  final int cost;
   final VoidCallback onPressed;
 
   @override
@@ -803,8 +979,8 @@ class _EnhanceButton extends StatelessWidget {
               busy
                   ? 'Finding sharper angles…'
                   : hasVariations
-                  ? 'Enhance again'
-                  : 'Enhance take',
+                  ? 'Enhance again · $cost credit${cost == 1 ? '' : 's'}'
+                  : 'Enhance take · $cost credit${cost == 1 ? '' : 's'}',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -896,12 +1072,14 @@ class _ToneCard extends StatelessWidget {
   const _ToneCard({
     required this.name,
     required this.emoji,
+    required this.sub,
     required this.selected,
     required this.onTap,
   });
 
   final String name;
   final String emoji;
+  final String sub;
   final bool selected;
   final VoidCallback onTap;
 
@@ -910,12 +1088,12 @@ class _ToneCard extends StatelessWidget {
     onTap: onTap,
     color: selected ? AppColors.cyanWash(0.08) : AppColors.surface,
     borderColor: selected ? AppColors.cyan : AppColors.border,
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(emoji, style: const TextStyle(fontSize: 22)),
-        const SizedBox(height: 5),
+        const SizedBox(height: 4),
         Text(
           name,
           style: TextStyle(
@@ -924,44 +1102,11 @@ class _ToneCard extends StatelessWidget {
             color: selected ? AppColors.cyan : AppColors.text,
           ),
         ),
-      ],
-    ),
-  );
-}
-
-class _StudioToggle extends StatelessWidget {
-  const _StudioToggle({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-  final IconData icon;
-  final String title, subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => AppPanel(
-    child: Row(
-      children: [
-        Icon(icon, color: AppColors.cyan),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 11.5, color: AppColors.muted2),
-              ),
-            ],
-          ),
+        const SizedBox(height: 2),
+        Text(
+          sub,
+          style: const TextStyle(fontSize: 11, color: AppColors.muted),
         ),
-        Switch(value: value, onChanged: onChanged),
       ],
     ),
   );

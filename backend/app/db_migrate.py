@@ -35,6 +35,7 @@ ADDITIONS: tuple[tuple[str, str, str], ...] = (
     ("clips", "script", "jsonb"),
     ("clips", "script_approved", "boolean NOT NULL DEFAULT false"),
     ("clips", "script_history", "jsonb"),
+    ("users", "credits", "integer NOT NULL DEFAULT 0"),
 )
 
 # Idempotent statements beyond ADD COLUMN. The production schema (applied
@@ -48,6 +49,12 @@ def _statements() -> tuple[str, ...]:
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_status_check",
         f"ALTER TABLE clips ADD CONSTRAINT clips_status_check "
         f"CHECK (status IN {CLIP_STATUSES!r})",
+        # Creator prompts go to 500 characters; the original DDL capped the
+        # column at 280, so a paid user's longer take failed at the database
+        # even though the API accepted it.
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_len",
+        "ALTER TABLE clips ADD CONSTRAINT clips_take_len "
+        "CHECK (char_length(take) BETWEEN 10 AND 500)",
     )
 
 

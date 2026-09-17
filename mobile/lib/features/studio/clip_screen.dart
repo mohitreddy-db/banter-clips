@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../api/errors.dart';
 import '../../models/clip.dart';
@@ -14,6 +13,7 @@ import '../../widgets/states.dart';
 import '../../widgets/surfaces.dart';
 import '../account/upgrade_sheet.dart';
 import '../clips/clip_player.dart';
+import '../clips/download.dart';
 import '../clips/publish_sheet.dart';
 import 'script_view.dart';
 
@@ -217,39 +217,15 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
     return api.approveScript(widget.clipId);
   });
 
-  Future<void> _share() async {
+  Future<void> _download() async {
     final clip = _clip;
     if (clip == null) return;
     setState(() {
-      _busy = 'share';
+      _busy = 'download';
       _error = '';
     });
     try {
-      final file = await ref.read(apiClientProvider).downloadClip(clip);
-      if (!mounted) return;
-      // The native share sheet — save to camera roll, send to WhatsApp, post
-      // anywhere. This is the one moment the app is plainly better than the
-      // website, which can only drop a file in the Downloads folder.
-      // iPad presents the share sheet as a popover and throws if it is given no
-      // anchor to point at. The app supports iPad, so the rect is not optional.
-      final box = context.findRenderObject() as RenderBox?;
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: clip.take,
-        sharePositionOrigin: box != null
-            ? box.localToGlobal(Offset.zero) & box.size
-            : null,
-      );
-      ref.read(apiClientProvider).track('video_downloaded', {
-        'clip_id': clip.id,
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      if (e.needsUpgrade || e.status == 403) {
-        showUpgradeSheet(context, reason: UpgradeReason.download);
-      } else {
-        setState(() => _error = e.message);
-      }
+      await downloadClipToGallery(context, ref, clip);
     } finally {
       if (mounted) setState(() => _busy = '');
     }
@@ -261,7 +237,11 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(clip == null ? 'Clip' : '${clip.sport} · ${clip.tone}'),
+        title: Text(
+          clip == null ? 'Clip' : '${clip.sportLabel} · ${clip.tone}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (clip?.script != null && clip!.isReady)
             IconButton(
@@ -295,6 +275,8 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
                       ..._failedPhase(clip)
                     else if (clip.isReady)
                       ..._readyPhase(clip)
+                    else if (clip.isPaused)
+                      ..._pausedPhase(clip)
                     else
                       ..._generatingPhase(clip),
                   ],
@@ -447,6 +429,43 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
     ];
   }
 
+  /// A scene edit is waiting for review on the website. The app does not
+  /// carry the per-scene editor yet; say so rather than spinning.
+  List<Widget> _pausedPhase(Clip clip) => [
+    const Notice(
+      text:
+          'This clip is paused with an edit pending. Finish reviewing it on '
+          'banterclips.com, or retry the render for free.',
+      icon: Icons.pause_circle_outline_rounded,
+    ),
+    const SizedBox(height: 16),
+    AppPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Text(
+        '“${clip.take}”',
+        style: const TextStyle(
+          fontSize: 14.5,
+          height: 1.5,
+          fontWeight: FontWeight.w600,
+          color: AppColors.text,
+        ),
+      ),
+    ),
+    if (_error.isNotEmpty) ...[
+      const SizedBox(height: 14),
+      Notice.error(_error),
+    ],
+    const SizedBox(height: 18),
+    GhostButton(
+      label: '↻  Retry the render (free)',
+      loading: _busy == 'retry',
+      onPressed: () => _act(
+        'retry',
+        () => ref.read(apiClientProvider).retryClip(widget.clipId),
+      ),
+    ),
+  ];
+
   List<Widget> _failedPhase(Clip clip) => [
     AppCard(
       child: Column(
@@ -551,24 +570,25 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
       ),
       const SizedBox(height: 20),
       GradButton(
-        label: 'Publish to Instagram',
+        label: 'Publish${clip.watermarked ? ' · free' : ''}',
+        icon: Icons.send_rounded,
         height: 54,
         onPressed: clip.isPreparing
             ? null
             : () => showPublishSheet(context, clip),
       ),
       const SizedBox(height: 10),
+      // Download is a Creator feature (BR-08). The server enforces it; this
+      // only decides which button to draw.
       if (state.canDownload)
         GhostButton(
-          label: 'Share · save without watermark',
-          icon: Icons.ios_share_rounded,
-          loading: _busy == 'share',
-          onPressed: clip.isPreparing ? null : _share,
+          label: '⬇  Download MP4 · no watermark',
+          loading: _busy == 'download',
+          onPressed: clip.isPreparing ? null : _download,
         )
       else
         GhostButton(
-          label: 'Share in HD',
-          icon: Icons.lock_outline_rounded,
+          label: '🔒  Download HD — Creator feature',
           dashed: true,
           color: AppColors.muted2,
           trailing: const CreatorPill(),
@@ -600,6 +620,13 @@ class _ClipScreenState extends ConsumerState<ClipScreen>
                 'Watermark',
                 clip.watermarked ? 'BanterClips (Free plan)' : 'None (Creator)',
               ),
+              // The receipt (PRICING.md rule 4): what this video cost.
+              if (clip.creditsCharged > 0)
+                (
+                  'Credits used',
+                  '${clip.creditsCharged + clip.creditsEdits}'
+                      '${clip.creditsEdits > 0 ? ' (video ${clip.creditsCharged} · edits ${clip.creditsEdits})' : ''}',
+                ),
             ])
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),

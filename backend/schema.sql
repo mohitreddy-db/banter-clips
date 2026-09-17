@@ -132,3 +132,40 @@ CREATE TABLE events (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX events_name_time ON events (name, created_at);
+
+
+-- ---------------------------------------------------------------------------
+-- Credit wallet + store credit packs (mobile top-ups). The ledger mirrors what
+-- production already carries; store_purchases is new.
+-- ---------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS credits integer NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS credit_entries (
+    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    delta         integer NOT NULL,
+    balance_after integer NOT NULL,
+    kind          text NOT NULL CHECK (kind IN (
+                    'grant_signup','grant_monthly','grant_admin','topup',
+                    'video_charge','video_refund','enhance_charge','edit_charge')),
+    clip_id       uuid REFERENCES clips(id) ON DELETE SET NULL,
+    note          text,
+    created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS credit_entries_user_idx ON credit_entries(user_id);
+
+CREATE TABLE IF NOT EXISTS store_purchases (
+    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform       text NOT NULL CHECK (platform IN ('ios','android')),
+    product_id     text NOT NULL,
+    purchase_token text NOT NULL UNIQUE,
+    pack           text NOT NULL,
+    credits        integer NOT NULL,
+    granted_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS store_purchases_user_idx ON store_purchases(user_id);
+
+-- Creator prompts are up to 500 characters.
+ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_len;
+ALTER TABLE clips ADD CONSTRAINT clips_take_len CHECK (char_length(take) BETWEEN 10 AND 500);

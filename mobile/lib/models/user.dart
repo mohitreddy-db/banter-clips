@@ -122,11 +122,16 @@ class Usage {
     required this.left,
     required this.canDownload,
     required this.watermarked,
+    this.credits = 0,
+    this.prices = const CreditPrices(),
   });
 
   final String plan;
   final int used;
-  final int limit;
+
+  /// Null on the credits model — there is no monthly video cap any more, the
+  /// wallet is the limit. Kept for older "X of Y" responses.
+  final int? limit;
   final int left;
 
   /// BR-08: Free is publish-only. Download is a Creator feature.
@@ -135,17 +140,32 @@ class Usage {
   /// Frozen per-clip at creation time server-side; this is the current
   /// account-level answer, used to word the UI before a clip exists.
   final bool watermarked;
+  final int credits;
+  final CreditPrices prices;
 
   bool get isCreator => plan == 'creator';
-  double get fraction => limit <= 0 ? 0 : (used / limit).clamp(0, 1).toDouble();
+  double get fraction {
+    final cap = limit;
+    if (cap == null || cap <= 0) return 0;
+    return (used / cap).clamp(0, 1).toDouble();
+  }
 
   factory Usage.fromJson(Map<String, dynamic> json) => Usage(
     plan: json['plan'] as String? ?? 'free',
     used: (json['used'] as num?)?.toInt() ?? 0,
-    limit: (json['limit'] as num?)?.toInt() ?? 60,
+    limit: (json['limit'] as num?)?.toInt(),
     left: (json['left'] as num?)?.toInt() ?? 0,
     canDownload: json['can_download'] as bool? ?? false,
     watermarked: json['watermarked'] as bool? ?? true,
+    credits:
+        (json['credits'] as num?)?.toInt() ??
+        (json['left'] as num?)?.toInt() ??
+        0,
+    prices: json['prices'] is Map
+        ? CreditPrices.fromJson(
+            Map<String, dynamic>.from(json['prices'] as Map),
+          )
+        : const CreditPrices(),
   );
 
   /// What the app assumes before `/me/usage` has answered. Deliberately the
@@ -157,7 +177,33 @@ class Usage {
     left: 60,
     canDownload: false,
     watermarked: true,
+    credits: 60,
   );
+}
+
+class CreditPrices {
+  const CreditPrices({
+    this.perSecond720 = 4,
+    this.perSecond1080 = 7,
+    this.enhanceTake = 1,
+  });
+  final int perSecond720;
+  final int perSecond1080;
+  final int enhanceTake;
+
+  int video(int seconds, String resolution) =>
+      seconds * (resolution == '1080p' ? perSecond1080 : perSecond720);
+
+  factory CreditPrices.fromJson(Map<String, dynamic> json) {
+    final perSecond = json['per_second'] is Map
+        ? Map<String, dynamic>.from(json['per_second'] as Map)
+        : const <String, dynamic>{};
+    return CreditPrices(
+      perSecond720: (perSecond['720p'] as num?)?.toInt() ?? 4,
+      perSecond1080: (perSecond['1080p'] as num?)?.toInt() ?? 7,
+      enhanceTake: (json['enhance_take'] as num?)?.toInt() ?? 1,
+    );
+  }
 }
 
 List<String> _strings(dynamic value) =>

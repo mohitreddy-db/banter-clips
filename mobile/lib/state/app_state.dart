@@ -69,9 +69,17 @@ class AppState {
 
   String get plan => usage?.plan ?? user?.plan ?? 'free';
   bool get isCreator => plan == 'creator';
-  int get limit => usage?.limit ?? (isCreator ? 150 : 60);
+  /// The monthly cap, where the server still reports one. Null on the
+  /// credits model — the wallet is the only limit.
+  int? get limit => usage?.limit;
   int get used => usage?.used ?? 0;
-  int get left => usage?.left ?? (limit - used).clamp(0, limit);
+  int get left => usage?.left ?? 0;
+
+  /// The wallet. The one number every gate and every price line reads.
+  int get credits => usage?.credits ?? 0;
+  CreditPrices get prices => usage?.prices ?? const CreditPrices();
+  int videoPrice(int seconds, String resolution) =>
+      prices.video(seconds, resolution);
 
   /// BR-08 / client non-negotiable #1: Free is publish-only.
   bool get canDownload => usage?.canDownload ?? isCreator;
@@ -80,13 +88,19 @@ class AppState {
   bool get onboarded => user?.preferences.onboardingCompleted ?? false;
 
   SocialAccount? get instagram {
+    return social('instagram');
+  }
+
+  SocialAccount? social(String platform) {
     for (final account in socials) {
-      if (account.platform == 'instagram') return account;
+      if (account.platform == platform && account.isConnected) return account;
     }
     return null;
   }
 
   bool get instagramConnected => instagram?.isConnected ?? false;
+  SocialAccount? get tiktok => social('tiktok');
+  SocialAccount? get youtube => social('youtube');
 
   /// True while any clip is rendering or any publish is in flight — the
   /// clips library uses this to decide whether to keep polling.
@@ -117,6 +131,7 @@ class AppState {
 class AppStateNotifier extends Notifier<AppState> {
   StreamSubscription<sb.AuthState>? _authSubscription;
   bool _authExchangeInFlight = false;
+  bool _sessionRecoveryInFlight = false;
   String? _lastExchangedSupabaseToken;
 
   @override
@@ -146,13 +161,37 @@ class AppStateNotifier extends Notifier<AppState> {
       state = state.copyWith(booted: true, apiDown: false);
     } on ApiException catch (e) {
       if (e.isUnauthorized) {
-        await _tokens.clear();
-        state = const AppState(booted: true);
+        // The API JWT may have expired while Supabase still has a renewable
+        // login. Recover from that login before showing sign-in again.
+        final recovered = await _restoreFromSupabase();
+        if (!recovered) {
+          await _tokens.clear();
+          state = const AppState(booted: true);
+        } else {
+          state = state.copyWith(booted: true, apiDown: false);
+        }
       } else {
         // Offline or the API is down: keep the token (the session may still
         // be valid) and say so rather than pretending to be signed out.
         state = state.copyWith(booted: true, apiDown: e.isOffline);
       }
+    }
+  }
+
+  Future<bool> _restoreFromSupabase() async {
+    final supabase = _supabase;
+    if (supabase == null || supabase.auth.currentSession == null) return false;
+    try {
+      // Refresh first so the exchange never races an access token that is
+      // seconds from expiry.
+      final response = await supabase.auth.refreshSession();
+      final session = response.session ?? supabase.auth.currentSession;
+      if (session == null) return false;
+      await _exchange(session.accessToken);
+      _lastExchangedSupabaseToken = session.accessToken;
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -217,7 +256,11 @@ class AppStateNotifier extends Notifier<AppState> {
     );
     final session = res.session;
     if (session == null) {
-      throw const ApiException(401, null, 'Sign-in failed — please try again.');
+      throw const ApiException(
+        401,
+        null,
+        "That email and password don't match. Try again, or reset your password.",
+      );
     }
     await _exchange(session.accessToken);
   }
@@ -308,9 +351,16 @@ class AppStateNotifier extends Notifier<AppState> {
   }
 
   /// Called by the API client when anything returns 401.
-  void handleSessionExpired() {
-    if (!state.signedIn) return;
-    state = state.copyWith(clearUser: true, booted: true);
+  Future<void> handleSessionExpired() async {
+    if (!state.signedIn || _sessionRecoveryInFlight) return;
+    _sessionRecoveryInFlight = true;
+    try {
+      if (await _restoreFromSupabase()) return;
+      await _tokens.clear();
+      state = state.copyWith(clearUser: true, booted: true);
+    } finally {
+      _sessionRecoveryInFlight = false;
+    }
   }
 
   Future<void> signOut() async {
@@ -399,7 +449,11 @@ class AppStateNotifier extends Notifier<AppState> {
   // -------------------------------------------------------------- socials
 
   Future<void> disconnectInstagram() async {
-    await _api.disconnectSocial('instagram');
+    await disconnectSocial('instagram');
+  }
+
+  Future<void> disconnectSocial(String platform) async {
+    await _api.disconnectSocial(platform);
     await refreshSocials();
   }
 
