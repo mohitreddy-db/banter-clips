@@ -1,7 +1,7 @@
 name: banterclips
 description: "BanterClips — turn any sports take into a cinematic vertical video."
 publish_to: 'none'
-version: 0.3.0+6
+version: 0.4.0+7
 
 environment:
   sdk: ^3.8.0
@@ -57,3 +57,16 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+
+# Keep the operating-system launch screen visually identical to the Flutter
+# boot screen. This is drawn before the Dart runtime starts, so it removes the
+# white flash that would otherwise appear on a cold launch.
+flutter_native_splash:
+  color: "#0B0F1C"
+  image: assets/images/banterclips-logo.png
+  android: true
+  ios: true
+  fullscreen: true
+  android_12:
+    color: "#0B0F1C"
+    image: assets/images/banterclips-logo.png

@@ -142,22 +142,76 @@ class ErrorState extends StatelessWidget {
   );
 }
 
-/// The boot splash, shown while the stored session is checked. Deliberately
-/// quiet — it is on screen for a few hundred milliseconds.
+/// The branded boot splash shown while the stored session is checked.
+///
+/// It mirrors the native Android/iOS launch screen so the hand-off into
+/// Flutter feels like one continuous screen rather than a white flash followed
+/// by an unrelated loading indicator.
 class BootSplash extends StatelessWidget {
   const BootSplash({super.key});
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.bg,
-    body: Center(
-      child: SizedBox(
-        width: 30,
-        height: 30,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.6,
-          color: AppColors.cyan,
-        ),
+    body: SafeArea(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: Semantics(
+              label: 'BanterClips is loading',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/images/banterclips-logo.png',
+                    width: 168,
+                    height: 168,
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Turn takes into clips.',
+                    style: TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 36,
+            child: Center(child: _SplashProgress()),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SplashProgress extends StatelessWidget {
+  const _SplashProgress();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading',
+    child: Container(
+      width: 72,
+      height: 3,
+      decoration: BoxDecoration(
+        gradient: AppColors.gradient,
+        borderRadius: BorderRadius.circular(99),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.cyan.withValues(alpha: 0.18),
+            blurRadius: 8,
+          ),
+        ],
       ),
     ),
   );
