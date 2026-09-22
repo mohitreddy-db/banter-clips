@@ -28,6 +28,13 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  // Bring the status bar back after the launch screen. The native splash is
+  // configured `fullscreen: true`, which writes UIStatusBarHidden into the
+  // iOS Info.plist — and that key hides the bar for the whole app, not just
+  // the splash. Edge-to-edge restores it here without changing how the
+  // launch screen looks.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
   // Draw behind the status and navigation bars; the theme paints the dark
   // background under them.
   SystemChrome.setSystemUIOverlayStyle(
