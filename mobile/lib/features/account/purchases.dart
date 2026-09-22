@@ -18,6 +18,14 @@ const creatorProductId = 'creator_monthly';
 /// its console; that figure is shown alongside so the customer sees both.
 const creatorPriceLabel = r'$19';
 
+/// The store that actually takes the money on this platform, for copy shown
+/// to the customer. iOS reviewers reject a paywall that names Google Play.
+String get storeName => Platform.isIOS ? 'the App Store' : 'Google Play';
+
+/// Where an existing subscription is managed, in the customer's words.
+String get storeSubscriptionsName =>
+    Platform.isIOS ? 'App Store subscriptions' : 'Play Store subscriptions';
+
 enum PurchasePhase {
   idle,
   loading,
@@ -102,7 +110,7 @@ class PurchaseController extends Notifier<PurchaseState> {
   final Set<String> _knownPackIds = {};
 
   String get _platform => Platform.isIOS ? 'ios' : 'android';
-  String get _storeName => Platform.isIOS ? 'the App Store' : 'Google Play';
+  String get _storeName => storeName;
 
   @override
   PurchaseState build() {

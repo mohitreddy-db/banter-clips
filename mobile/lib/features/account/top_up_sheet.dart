@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,13 +24,75 @@ import 'purchases.dart';
 ///
 /// Out of credits → top up, never upgrade (PRICING.md rule 2). This sheet is
 /// the only thing an empty wallet ever opens.
+///
+/// Except on iOS, where it explains itself instead of selling. The server
+/// cannot yet verify an App Store consumable receipt
+/// (`store_billing.verify_product` raises for iOS), so a pack bought here
+/// would be paid for and never granted. Selling something we cannot deliver
+/// is both a bad experience and an automatic App Review rejection, so the
+/// packs stay hidden on iOS until the verification path ships. Gating lives
+/// here, at the one chokepoint every caller goes through, rather than at the
+/// five call sites.
 Future<void> showTopUpSheet(BuildContext context, {int needed = 0}) =>
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
-      builder: (_) => _TopUpSheet(needed: needed),
+      builder: (_) =>
+          Platform.isIOS ? const _PacksUnavailable() : _TopUpSheet(needed: needed),
     );
+
+/// What iOS sees in place of the pack grid.
+///
+/// Deliberately says nothing about buying credits anywhere else. Pointing an
+/// iOS customer at a website to buy digital goods is exactly what guideline
+/// 3.1.1 forbids, and this app has no reason to go near that line.
+class _PacksUnavailable extends ConsumerWidget {
+  const _PacksUnavailable();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(appStateProvider);
+    final credits = state.credits;
+    final isCreator = state.isCreator;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '⚡ Credits',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'You have $credits credits. Credit top-ups are coming to iOS '
+              'soon.',
+              style: const TextStyle(color: AppColors.muted, height: 1.5),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              isCreator
+                  ? 'Your Creator plan adds 150 credits every month, and only '
+                        'successful videos charge — failures are refunded.'
+                  : 'Creator adds 150 credits every month on top of 1080p, '
+                        '30-second videos and no watermark.',
+              style: const TextStyle(color: AppColors.muted, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            GhostButton(
+              label: 'Close',
+              height: 46,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _TopUpSheet extends ConsumerStatefulWidget {
   const _TopUpSheet({required this.needed});
@@ -143,7 +207,7 @@ class _TopUpSheetState extends ConsumerState<_TopUpSheet> {
             ],
             const SizedBox(height: 16),
             Text(
-              'Secure payment by ${purchase.packProducts.isEmpty ? 'the store' : 'Google Play'}. '
+              'Secure payment by ${purchase.packProducts.isEmpty ? 'the store' : storeName}. '
               'Credits land in your wallet as soon as the purchase is confirmed. '
               'Only successful videos charge — failures are refunded.',
               textAlign: TextAlign.center,

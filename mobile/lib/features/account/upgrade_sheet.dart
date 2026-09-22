@@ -150,7 +150,7 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
               Text(
                 // The store bills in local currency at the price set in its
                 // console. Say so, so nobody is surprised by the receipt.
-                'Billed by Google Play as ${purchase.storePrice}/month',
+                'Billed by $storeName as ${purchase.storePrice}/month',
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
               ),
@@ -166,11 +166,11 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
             ),
 
             const SizedBox(height: 6),
-            const Text(
-              'Secure payment by Google Play. Renews monthly until cancelled; '
-              'manage or cancel it from your Play Store subscriptions.',
+            Text(
+              'Secure payment by $storeName. Renews monthly until cancelled; '
+              'manage or cancel it from your $storeSubscriptionsName.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 11,
                 height: 1.5,
                 color: AppColors.muted2,
