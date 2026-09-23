@@ -23,13 +23,15 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
 
     # Stripe (BR-15 Creator plan). When unset, /billing/upgrade acts as the
-    # dev mock. STRIPE_PRICE_CREATOR is the recurring $19/mo price id.
+    # dev mock. STRIPE_PRICE_CREATOR is the recurring monthly price id ($19 since 2026-08-26; earlier subs grandfathered at $9.99).
     STRIPE_SECRET_KEY: str = ""
-    # Publishable (pk_test_ / pk_live_) key returned to native clients. This
-    # is intentionally public; the secret key never leaves the API.
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_PRICE_CREATOR: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    # Stripe requires the mobile SDK's API version when minting an ephemeral
+    # customer key. Keep this configurable so an SDK upgrade does not require
+    # a backend release.
+    STRIPE_MOBILE_API_VERSION: str = "2025-06-30.basil"
 
     # Meta / Instagram Business Login (BR-13 real publishing). When unset,
     # /socials/connect falls back to the mock connector.
@@ -39,6 +41,50 @@ class Settings(BaseSettings):
     IG_REDIRECT_URI: str = ""
     # Where the OAuth callback sends the browser afterwards.
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # TikTok Login Kit + Content Posting API (BR-13). When unset,
+    # /socials/connect falls back to the mock connector, same as Instagram.
+    TIKTOK_CLIENT_KEY: str = ""
+    TIKTOK_CLIENT_SECRET: str = ""
+    # Must exactly match a redirect URI registered in the TikTok app
+    # (https only — use a tunnel for local dev, like IG_REDIRECT_URI).
+    TIKTOK_REDIRECT_URI: str = ""
+    # Scopes requested at authorize time. Every scope listed here must be
+    # enabled on the TikTok app or the consent screen errors out, so trim
+    # via env rather than code if the portal config differs.
+    #
+    # Exactly what we use, and no more: TikTok's audit treats a scope the
+    # integration cannot be seen exercising as a reason to reject. video.publish
+    # covers Direct Post (/post/publish/video/init/), which is our only publish
+    # path; video.upload is the draft-to-inbox scope, and we never post drafts.
+    # Add it back the day we offer "send to your TikTok drafts".
+    TIKTOK_SCOPES: str = "user.info.basic,video.publish"
+    # Optional HTTP forward proxy for ALL TikTok API traffic (authorize URL
+    # excluded — that's the user's browser). TikTok is ISP-blocked in India
+    # and geo-sensitive about request origin, so TikTok calls can ride a US
+    # box (tinyproxy on the NYC droplet) regardless of where this backend
+    # runs: http://user:pass@146.190.213.29:8899. Empty = direct.
+    TIKTOK_PROXY_URL: str = ""
+    # Whether our TikTok client has yet to pass the content audit. Unaudited
+    # (and every sandbox) client may only post privately, and only to a
+    # private account — TikTok enforces that itself, rejecting anything else.
+    #
+    # This flag does NOT override the creator's choice: the composer always
+    # sends the audience they picked, because an app that silently substitutes
+    # one is what TikTok's audit is looking for. All it does is warn them in
+    # the dialog about what TikTok will accept today.
+    #
+    # Set to false once the audit clears — and remember the audit attaches to
+    # a specific client key, so a sandbox key (sb...) stays restricted no
+    # matter what this says.
+    TIKTOK_UNAUDITED: bool = True
+
+    # YouTube Data API OAuth + videos.insert. Visibility is deliberately not a
+    # server setting: every upload carries the creator's public/private/unlisted
+    # choice from the publish composer.
+    YOUTUBE_CLIENT_ID: str = ""
+    YOUTUBE_CLIENT_SECRET: str = ""
+    YOUTUBE_REDIRECT_URI: str = ""
 
     MEDIA_DIR: Path = BASE_DIR / "data" / "media"
 
@@ -100,7 +146,13 @@ class Settings(BaseSettings):
     # Optional web research for off-catalog cast members ("off" | "openai").
     # With "openai", an unknown name triggers one web-search call to write a
     # real look description before any image spend. Never fatal.
+    # "openai" keeps the OpenAI web_search fallback available; "off" disables
+    # every research feature. Firecrawl (below) is used first when its key is set.
     WEB_RESEARCH: str = "openai"
+    # Firecrawl web search — trending feed, Storyline Pack, cast research and
+    # the catalog verifier all search through it (app/video/websearch.py).
+    FIRECRAWL_API_KEY: str = ""
+    FIRECRAWL_URL: str = "https://api.firecrawl.dev"
     OPENAI_RESEARCH_MODEL: str = "gpt-4.1-mini"
 
     # Images and video (OpenRouter). Both default to offline stubs so the
@@ -108,8 +160,22 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     IMAGE_PROVIDER: str = "stub"        # "stub" | "openrouter"
     IMAGE_MODEL: str = "x-ai/grok-imagine-image-quality"
+    # Keyframes for scenes casting the user's reference photo. Grok ignores
+    # attached faces (drew a different person, verified 2026-09-03); Gemini
+    # reproduces them. Empty string disables the identity route entirely.
+    IMAGE_IDENTITY_MODEL: str = "google/gemini-2.5-flash-image"
     VIDEO_PROVIDER: str = "stub"        # "stub" | "openrouter"
     VIDEO_MODEL: str = "x-ai/grok-imagine-video-1.5"
+    # OpenRouter model per output tier. JSON in env; VIDEO_MODEL remains the
+    # fallback and lets any other OpenRouter video generator work unchanged.
+    # Both tiers stay on Grok: Seedance rejects any input frame containing a
+    # photoreal person (InputImageSensitiveContentDetected, 2026-09-01), and
+    # every BanterClips scene stars one — its cheap rates are unreachable for
+    # this product. Route back only if that filter ever changes.
+    VIDEO_MODEL_ROUTES: dict[str, str] = {
+        "720p": "x-ai/grok-imagine-video-1.5",
+        "1080p": "x-ai/grok-imagine-video-1.5",
+    }
     VIDEO_RESOLUTION: str = "720p"      # 480p | 720p | 1080p
 
     # Script approval: generation pauses after the script is written
@@ -138,11 +204,17 @@ class Settings(BaseSettings):
     VIDEO_DISCLOSURE: str = ""
 
     # Hard ceiling per job. Cost scales with duration AND resolution, so a
-    # runaway plan is expensive; the pipeline degrades to stills rather than
-    # exceeding this. Sized for the dearest legitimate job — 30s at 1080p
+    # runaway plan is expensive; a job that would exceed this stops rather
+    # than overspending. Sized for the dearest legitimate job — 30s at 1080p
     # (~2x the measured $0.147/s at 720p) — so the cap only catches runaways,
     # never a job a Creator was allowed to ask for.
     MAX_JOB_COST_USD: float = 14.0
+    # Render preflight floor. 0 by request: run the balance all the way down —
+    # a scene that 402s mid-render pauses with its checkpoint and resumes free,
+    # so the floor only guards the pointless case (balance already ≤ 0, where
+    # every submit is doomed). Raise via env if pre-auth flakiness ever needs
+    # headroom again (2026-08: refusals seen with as much as $9.65 left).
+    PROVIDER_MIN_BALANCE_USD: float = 0.0
     # Ceiling across ALL jobs in a rolling 24 hours. The per-job limit stops
     # one runaway clip; this stops a normal day from emptying the account,
     # which at ~$2.40 a clip takes very few users. Past it, generation is
@@ -150,38 +222,29 @@ class Settings(BaseSettings):
     # leaving half-paid-for clips. 0 disables the check.
     MAX_DAILY_SPEND_USD: float = 25.0
 
-    # ── Store billing (BR-15, mobile) ──────────────────────────────────────
-    # Creator bought inside the app has to go through Apple's and Google's
-    # billing, so the receipt is verified against them rather than Stripe.
-    # Empty → /billing/mobile/verify answers 503 and the app falls back to
-    # sending the user to the website, exactly as the Stripe path does.
+    # Plan matrix (BR-15). Only successful videos count (BR-09).
+    PLAN_LIMITS: dict = {"free": 5, "creator": 30}
+    CREATOR_PRICE: str = "$19/mo"
 
-    # Google Play: the full service-account JSON key, as one line. The account
-    # needs "View financial data" on the Play Console app.
-    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
-    ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
-
-    # Apple App Store Server API: an in-app-purchase key from App Store
-    # Connect (Users and Access → Integrations → In-App Purchase).
-    # APPLE_PRIVATE_KEY is the .p8 contents; newlines may be escaped as \n.
+    # Apple App Store / Google Play Creator subscriptions. Store credentials
+    # stay server-side; mobile clients submit only transaction identifiers or
+    # purchase tokens for verification.
     APPLE_KEY_ID: str = ""
     APPLE_ISSUER_ID: str = ""
     APPLE_PRIVATE_KEY: str = ""
-    APPLE_BUNDLE_ID: str = "com.banterclips.app"
-
-    # The subscription product id, identical in both stores so the server
-    # never has to care which one a receipt came from.
+    APPLE_BUNDLE_ID: str = ""
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
+    ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
     STORE_PRODUCT_CREATOR: str = "creator_monthly"
-
-    # Credit packs sold in the stores are one-time (consumable) products
-    # named `<prefix><pack key>` — `credits_starter`, `credits_pro`, … — the
-    # same key `/billing/packs` and the Stripe top-up use. Create them in the
-    # Play Console / App Store Connect under exactly these ids.
+    # Credit packs are sold as `<prefix><pack key>` — credits_starter,
+    # credits_pro — in both consoles, so a new pack needs no code change.
     STORE_CREDIT_PACK_PREFIX: str = "credits_"
-
-    # Plan matrix (BR-15). Only successful videos count (BR-09).
-    PLAN_LIMITS: dict = {"free": 60, "creator": 150}
-    CREATOR_PRICE: str = "$19/mo"
+    # Re-check active store subscriptions periodically while users are active.
+    # Expiry is always checked immediately even when this window has not elapsed.
+    STORE_REVERIFY_HOURS: int = 24
+    # If a store is unreachable exactly at renewal, preserve the last known
+    # entitlement briefly, then fail closed while continuing verification.
+    STORE_OUTAGE_GRACE_HOURS: int = 24
 
     @property
     def admin_emails(self) -> set[str]:

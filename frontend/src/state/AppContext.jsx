@@ -227,19 +227,21 @@ export function AppProvider({ children }) {
   }, []);
 
   const connectSocial = useCallback(
-    async (platform) => {
-      if (platform === "instagram") {
-        // Real Instagram Business Login when the Meta app is configured —
-        // the whole tab goes to Meta's consent screen and comes back.
+    async (platform, returnTo = "") => {
+      if (["instagram", "tiktok", "youtube"].includes(platform)) {
+        // Real OAuth when the platform app is configured — the whole tab
+        // goes to the platform's consent screen and comes back.
         try {
-          const { url } = await api.igOauthUrl(window.location.pathname);
+          const current = `${window.location.pathname}${window.location.search}`;
+          const { url } = await api.oauthUrl(platform, returnTo || current);
           if (url) {
             window.location.href = url;
             return null;
           }
         } catch (e) {
           if (e.status !== 503) throw e;
-          // 503 → OAuth not configured; fall through to the mock connector.
+          // 503 → fall through only for local DEV_MODE. Production rejects
+          // the mock endpoint too, surfacing a real configuration error.
         }
       }
       const acc = await api.connectSocial(platform);
@@ -266,9 +268,17 @@ export function AppProvider({ children }) {
   const left = usage?.left ?? Math.max(0, limit - used);
   const canDownload = usage?.can_download ?? plan === "creator";
   const watermarked = usage?.watermarked ?? plan !== "creator";
+  // The credit wallet (PRICING.md): the only usage unit shown anywhere.
+  const credits = usage?.credits ?? 0;
+  const prices = usage?.prices ?? { per_second: { "720p": 4, "1080p": 7 }, enhance_take: 1 };
+  // Exact menu price — quoted before generating, charged on success.
+  const videoPrice = (duration, resolution) =>
+    (prices.per_second?.[resolution] ?? 4) * duration;
 
   const onboarded = !!user?.preferences?.onboarding_completed;
   const instagram = socials.find((s) => s.platform === "instagram") || null;
+  const tiktok = socials.find((s) => s.platform === "tiktok") || null;
+  const youtube = socials.find((s) => s.platform === "youtube") || null;
 
   const value = {
     booted,
@@ -288,6 +298,9 @@ export function AppProvider({ children }) {
     used,
     limit,
     left,
+    credits,
+    prices,
+    videoPrice,
     canDownload,
     watermarked,
     onboarded,
@@ -303,6 +316,8 @@ export function AppProvider({ children }) {
     refreshUsage,
     socials,
     instagram,
+    tiktok,
+    youtube,
     connected: !!instagram,
     connectSocial,
     disconnectSocial,

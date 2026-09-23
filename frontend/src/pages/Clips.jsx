@@ -1,20 +1,22 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
-import { api, downloadClip } from "../lib/api.js";
+import { api } from "../lib/api.js";
 import { UpgradeModal, PublishModal } from "../components/Modals.jsx";
+import DownloadButton from "../components/DownloadButton.jsx";
+import { PublishedTo, SocialIcon } from "../components/SocialIcon.jsx";
 
 import { useSeo } from "../lib/seo.js";
 const STATUS_LABEL = {
   queued: "Queued…",
   planning_story: "Planning story…",
-  creating_voice: "Creating voice…",
   designing_characters: "Designing characters…",
   generating_scenes: "Generating scenes…",
   animating_scenes: "Animating scenes…",
   assembling_video: "Assembling video…",
   validating: "Validating…",
   script_ready: "📝 Script ready — tap to review",
+  paused: "⏸ Paused — progress saved",
 };
 
 export default function Clips() {
@@ -41,7 +43,7 @@ export default function Clips() {
   // Keep in-flight generations AND in-flight publishes live while this page
   // is open (publishing is async — the modal doesn't wait for it).
   const generating = clips.some(
-    (c) => !["ready", "failed", "script_ready"].includes(c.status)
+    (c) => !["ready", "failed", "paused", "script_ready"].includes(c.status)
   );
   const publishing = clips.some((c) =>
     ["queued", "uploading"].includes(c.publishes?.[0]?.status)
@@ -51,15 +53,6 @@ export default function Clips() {
     const t = setInterval(refreshClips, 1500);
     return () => clearInterval(t);
   }, [generating, publishing, refreshClips]);
-
-  const download = async (clip) => {
-    try {
-      await downloadClip(clip);
-    } catch (e) {
-      if (e.status === 403) setUpgradeOpen(true);
-      else setError(e.message);
-    }
-  };
 
   const retry = async (clip) => {
     try {
@@ -101,10 +94,9 @@ export default function Clips() {
         {clips.map((c) => {
           const latestPub = c.publishes?.[0];
           const published = c.publishes?.some((p) => p.status === "published");
-          const publishedPub = c.publishes?.find((p) => p.status === "published");
           const pubInFlight = ["queued", "uploading"].includes(latestPub?.status);
           const pubFailed = latestPub?.status === "failed";
-          const inFlight = c.status !== "ready" && c.status !== "failed";
+          const inFlight = !["ready", "failed", "paused"].includes(c.status);
           return (
             <div key={c.id} className="card" style={{ overflow: "hidden", borderRadius: 16, display: "flex", flexDirection: "column" }}>
               {/* media frame: video covers the whole box, no gaps */}
@@ -149,6 +141,13 @@ export default function Clips() {
                         <div style={{ fontSize: 12.5, fontWeight: 700 }}>🎬 Video is being prepared</div>
                         <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.8 }}>Check back in a minute</div>
                       </div>
+                    ) : c.status === "paused" ? (
+                      <div style={{ textAlign: "center", color: "#fff", padding: "0 14px" }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>⏸ Paused — provider credits low</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, marginTop: 6, opacity: 0.8 }}>
+                          Progress saved · not charged · tap to resume
+                        </div>
+                      </div>
                     ) : (
                       <div style={{ textAlign: "center", color: "#fff", fontSize: 12.5, fontWeight: 700 }}>⚠️ Failed</div>
                     )}
@@ -162,6 +161,17 @@ export default function Clips() {
                 <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(0,0,0,.55)", color: "#fff", fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 6, pointerEvents: "none" }}>
                   {c.sport} · {c.tone?.toUpperCase()}
                 </div>
+                {/* The uploaded reference, so it's always visible which photo
+                    a clip was anchored to. Images only — a video ref gets its
+                    full preview when the clip is opened. */}
+                {c.reference_url && !c.reference_url.includes(".mp4") && (
+                  <img
+                    src={c.reference_url}
+                    alt=""
+                    title="Generated with a reference photo"
+                    style={{ position: "absolute", top: 10, right: 10, width: 30, height: 30, borderRadius: "50%", objectFit: "cover", border: "2px solid rgba(255,255,255,.85)", pointerEvents: "none" }}
+                  />
+                )}
               </div>
               <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
                 {/* Fixed two-line title box so action rows align across cards.
@@ -184,22 +194,21 @@ export default function Clips() {
                       ? `${c.duration_seconds || 14}s`
                       : c.status === "failed"
                         ? "failed · retry is free"
-                        : STATUS_LABEL[c.status]}
+                        : c.edit_pending
+                          ? "✂️ re-rendering scenes…"
+                          : STATUS_LABEL[c.status]}
                   </span>
                   {c.status === "ready" && pubInFlight && (
                     <span style={{ color: "var(--app-cyan)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 10, height: 10, borderRadius: "50%", border: "2px solid #12303d", borderTopColor: "var(--app-cyan)", animation: "spin 1s linear infinite", display: "inline-block" }} />
-                      publishing to Instagram…
+                      publishing to
+                      <SocialIcon platform={latestPub?.platform} size={24} />…
                     </span>
                   )}
+                  {/* Where it landed, as the platforms' own logos — each one
+                      links straight to the live post. */}
                   {c.status === "ready" && !pubInFlight && published && (
-                    publishedPub?.external_url ? (
-                      <a href={publishedPub.external_url} target="_blank" rel="noreferrer" style={{ color: "var(--app-green)", fontWeight: 600, textDecoration: "none" }}>
-                        · published — view post ↗
-                      </a>
-                    ) : (
-                      <span style={{ color: "var(--app-green)" }}>· published</span>
-                    )
+                    <PublishedTo publishes={c.publishes} size={24} />
                   )}
                   {c.status === "ready" && !pubInFlight && !published && !pubFailed && <span>· not published yet</span>}
                   {c.status === "ready" && pubFailed && (
@@ -217,9 +226,14 @@ export default function Clips() {
                       {pubInFlight ? "Publishing…" : pubFailed ? "Retry publish" : "Publish"}
                     </button>
                     {canDownload ? (
-                      <button className="ghost-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }} onClick={() => download(c)}>
-                        ⬇ Download
-                      </button>
+                      <DownloadButton
+                        clip={c}
+                        className="ghost-btn"
+                        compact
+                        label="⬇ Download"
+                        style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9, whiteSpace: "nowrap", color: "var(--app-text)" }}
+                        onError={(e) => (e.status === 403 ? setUpgradeOpen(true) : setError(e.message))}
+                      />
                     ) : (
                       // BR-08: visible-but-locked download is the upgrade prompt.
                       <button
@@ -240,10 +254,10 @@ export default function Clips() {
                     )}
                   </div>
                 )}
-                {c.status === "failed" && (
+                {(c.status === "failed" || c.status === "paused") && (
                   <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
                     <button className="grad-btn" style={{ flex: 1, height: 38, padding: 0, fontSize: 13, borderRadius: 9 }} onClick={() => retry(c)}>
-                      ↻ Retry free
+                      {c.status === "paused" ? "▶ Resume" : "↻ Retry free"}
                     </button>
                     <button className="ghost-btn" style={{ height: 38, padding: "0 14px", fontSize: 13, borderRadius: 9, color: "var(--app-muted)" }} onClick={() => remove(c)}>
                       🗑

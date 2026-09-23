@@ -20,17 +20,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
 
-SPORTS = (
-    "NBA", "NFL", "Soccer", "MLB", "F1", "Tennis",
-    "College Sports", "Combat Sports",
-)
-TONES = ("Funny", "Savage", "Hype", "Bold")
+# Soccer leads: it is what the app is actually used for. "Other" is a real
+# option rather than a gap — a take about darts should still make a video, and
+# the pipeline degrades to a generic venue rather than refusing.
+SPORTS = ("Soccer", "NBA", "NFL", "MLB", "NHL", "Tennis", "F1",
+          "Cricket", "Golf", "Boxing", "MMA", "Esports", "Other")
+TONES = ("Funny", "Savage", "Roast", "Hype", "Bold")
 PLATFORMS = ("instagram", "tiktok", "youtube", "x", "linkedin")
 
 # Honest generation stages (BR-07), in order. Index into this list = stage_index.
+# "creating_voice" is gone: it was a display-only stage — voices are performed
+# by the video model inside animation, and a fake step is a lie in a progress
+# bar. Old rows carrying it are migrated by db_migrate.
 GENERATION_STAGES = (
     "planning_story",
-    "creating_voice",
     "designing_characters",
     "generating_scenes",
     "animating_scenes",
@@ -39,7 +42,10 @@ GENERATION_STAGES = (
 )
 # "script_ready" = the script is written and awaiting the user's approval
 # before any generation money is spent (script approval flow).
-CLIP_STATUSES = ("queued", *GENERATION_STAGES, "script_ready", "ready", "failed")
+# "paused" = generation stopped through no fault of the take (provider out of
+# credits). Progress is checkpointed on disk; the user resumes for free and
+# is only ever charged when the finished video lands.
+CLIP_STATUSES = ("queued", *GENERATION_STAGES, "script_ready", "paused", "ready", "failed")
 
 
 def _uuid() -> uuid.UUID:
@@ -59,14 +65,25 @@ class User(Base):
     cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, unique=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(Text)
+    # Stripe state is kept separately from the combined plan fields above.
+    # This prevents a Stripe webhook from downgrading an account that still has
+    # an active Apple/Google entitlement (and vice versa).
+    stripe_subscription_status: Mapped[str | None] = mapped_column(Text)
+    stripe_current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stripe_cancel_at_period_end: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    # Serializes native PaymentSheet starts so concurrent requests cannot create
+    # two payable incomplete subscriptions.
+    stripe_mobile_pending_subscription_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Blocklist. A blocked account is never told it is blocked: sign-in
     # returns the same generic 401 as a bad token, and existing sessions die
     # the same way — from the outside it looks like a login that won't stick.
     is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    # The wallet (PRICING.md). Every change goes through `services/credits.py`,
-    # which also writes the `credit_entries` row that explains it.
+    # One wallet (PRICING.md rule 1) — cached balance; every change also
+    # writes a CreditEntry, which is the source of truth for audits.
     credits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     @property
@@ -172,7 +189,17 @@ class Clip(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     take: Mapped[str] = mapped_column(Text, nullable=False)
+    # The world this video is built in — always exactly one, because venue,
+    # roster and trending all key off it. `sports` keeps the user's full
+    # multi-select (a take can straddle two), and `subjects` the teams or
+    # players they asked for; both are planner context, not pipeline keys.
     sport: Mapped[str] = mapped_column(Text, nullable=False)
+    sports: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    subjects: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
+    # Optional guided-builder context. Kept separate so captions and library
+    # cards still show the creator's actual take, not production directions.
+    direction: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    reference_key: Mapped[str | None] = mapped_column(Text)
     tone: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     stage_index: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -205,6 +232,19 @@ class Clip(Base):
     cost_usd: Mapped[float | None] = mapped_column(Numeric(7, 3))
     provenance: Mapped[dict | None] = mapped_column(JSONB)
 
+    # The credit receipt (PRICING.md rule 4). `credits_quoted` is the exact
+    # menu price shown at create; `credits_charged` becomes that number in
+    # the single charge taken when the finished video lands. Until then the
+    # wallet is untouched — a paused or failed clip costs nothing.
+    credits_quoted: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    credits_charged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Scene edits — re-rendering chosen scenes of a FINISHED video. The
+    # pending request ({scenes, credits}) rides the row through the queue;
+    # credits_edits is the running total those edits have charged, kept
+    # apart from the video's own charge so the receipt itemises them.
+    edit_pending: Mapped[dict | None] = mapped_column(JSONB)
+    credits_edits: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
     # Simulated clips ([mock] in the take, or dummy mode) never reach a real
     # audience: publishing is refused and no allowance is consumed.
     is_simulated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
@@ -223,7 +263,6 @@ class Clip(Base):
     )
 
     __table_args__ = (
-        # 500 is the Creator limit; Free is capped at 280 by the API, not here.
         CheckConstraint("char_length(take) BETWEEN 10 AND 500", name="clips_take_len"),
         CheckConstraint(f"sport IN {SPORTS!r}", name="clips_sport_check"),
         CheckConstraint(f"tone IN {TONES!r}", name="clips_tone_check"),
@@ -242,7 +281,9 @@ class SocialAccount(Base):
     handle: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="connected")
     access_token: Mapped[str | None] = mapped_column(Text)
-    # The platform-side user id (Instagram professional account id).
+    # TikTok and YouTube refresh tokens; Instagram refreshes its access token.
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    # The platform-side user id (IG professional account id / TikTok open_id).
     platform_user_id: Mapped[str | None] = mapped_column(Text)
     # When the long-lived token expires; refreshed automatically near expiry.
     token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -263,6 +304,12 @@ class Publish(Base):
         UUID(as_uuid=True), ForeignKey("social_accounts.id", ondelete="CASCADE"), nullable=False
     )
     caption: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    # Per-platform choices the user made in the composer, exactly as sent to
+    # the platform. TikTok needs this: its audit requires every post to carry
+    # the privacy level, interaction permissions and commercial-content
+    # disclosure the creator selected, and the publish runs in a background
+    # thread that only has this row to work from.
+    options: Mapped[dict | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="queued")
     error: Mapped[str | None] = mapped_column(Text)
     external_url: Mapped[str | None] = mapped_column(Text)
@@ -289,82 +336,41 @@ class StripeEvent(Base):
 
 
 class StoreSubscription(Base):
-    """A Creator subscription bought through Apple or Google (BR-15, mobile).
+    """Verified Apple App Store or Google Play Creator subscription.
 
-    Same principle as the Stripe path: **the store is the ledger.** This table
-    holds only what we need to converge `users.plan` and to re-check with the
-    store later — never a copy of the transaction history.
-
-    `purchase_token` is unique across the whole table on purpose. It is the
-    store's own identifier for the subscription (Google's purchase token,
-    Apple's original transaction id), and the uniqueness is what stops one
-    paid receipt from entitling several accounts: replaying a friend's receipt
-    against a second account hits the constraint instead of granting Creator.
+    Store state is persisted independently from Stripe and then folded into
+    ``users.plan`` by the shared entitlement reconciler.
     """
 
     __tablename__ = "store_subscriptions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    platform: Mapped[str] = mapped_column(Text, nullable=False)  # "ios" | "android"
+    platform: Mapped[str] = mapped_column(Text, nullable=False)
     product_id: Mapped[str] = mapped_column(Text, nullable=False)
-    purchase_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    # "active" | "expired" | "cancelled" — cancelled still means entitled
-    # until expires_at, exactly like cancel_at_period_end on the Stripe path.
+    # Google purchase token or Apple's originalTransactionId.
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
-    # The store's own expiry. This is what makes the entitlement self-healing:
-    # once it passes, the next check downgrades even if we never heard from
-    # the store that the subscription lapsed.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     auto_renewing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_verified_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # Throttles normal rechecks and retries after a temporary store outage.
+    next_verification_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
         CheckConstraint("platform IN ('ios','android')", name="store_sub_platform_check"),
-    )
-
-
-CREDIT_ENTRY_KINDS = (
-    "grant_signup",
-    "grant_monthly",
-    "grant_admin",
-    "topup",
-    "video_charge",
-    "video_refund",
-    "enhance_charge",
-    "edit_charge",
-)
-
-
-class CreditEntry(Base):
-    """One line of the credit ledger: what changed the wallet, and by how much.
-
-    `balance_after` is stored so the history reads like a bank statement
-    without replaying every row. Append-only.
-    """
-
-    __tablename__ = "credit_entries"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    delta: Mapped[int] = mapped_column(Integer, nullable=False)
-    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
-    clip_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("clips.id", ondelete="SET NULL")
-    )
-    note: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    __table_args__ = (
-        CheckConstraint(f"kind IN {CREDIT_ENTRY_KINDS!r}", name="credit_entries_kind_check"),
+        CheckConstraint(
+            "status IN ('active','cancelled','expired')", name="store_sub_status_check"
+        ),
+        UniqueConstraint("platform", "purchase_token", name="store_sub_provider_token"),
+        Index("store_subscriptions_user", "user_id", "expires_at"),
     )
 
 
@@ -522,6 +528,46 @@ class StorylinePack(Base):
     __table_args__ = (UniqueConstraint("topic_key", "day", name="storyline_topic_day"),)
 
 
+CREDIT_KINDS = (
+    "grant_signup",    # one-time 60 on account creation
+    "grant_monthly",   # Creator's monthly credits
+    "grant_admin",     # manual grant/deduction from the admin console
+    "topup",           # purchased pack (Stripe one-time payment)
+    "video_charge",    # reservation when a generation starts
+    "video_refund",    # release when it fails or is abandoned
+    "enhance_charge",  # per press of "Enhance take"
+    "edit_charge",     # scene edits of a finished video, charged on completion
+)
+
+
+class CreditEntry(Base):
+    """The credit ledger — one row per wallet movement, append-only.
+
+    `users.credits` is a cached sum for cheap reads; this table is the truth.
+    `balance_after` makes any point-in-time balance reconstructible without
+    summing the whole history."""
+
+    __tablename__ = "credit_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    clip_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clips.id", ondelete="SET NULL")
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(f"kind IN {CREDIT_KINDS!r}", name="credit_entries_kind_check"),
+        Index("credit_entries_user", "user_id", "created_at"),
+    )
+
+
 class TrendingPack(Base):
     """Cached create-page trending feed (see app/video/trending.py) — one
     row per sport, shared by all users, refreshed when older than the TTL."""
@@ -532,3 +578,41 @@ class TrendingPack(Base):
     sport: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     pack: Mapped[dict] = mapped_column(JSONB, nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------- feedback
+
+FEEDBACK_CATEGORIES = ("bug", "idea", "praise", "other")
+FEEDBACK_STATUSES = ("new", "seen", "resolved")
+
+
+class Feedback(Base):
+    """A note from anyone — signed in or not — left on the public Feedback
+    page and read in the admin console. The text stays exactly as typed;
+    admins annotate it with a status and a private note."""
+
+    __tablename__ = "feedback"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    email: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str | None] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(Text, nullable=False, server_default="other")
+    rating: Mapped[int | None] = mapped_column(Integer)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    # Where in the product it was written, and from what — context for bugs.
+    page: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    user_agent: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="new")
+    admin_note: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(f"category IN {FEEDBACK_CATEGORIES!r}", name="feedback_category_check"),
+        CheckConstraint(f"status IN {FEEDBACK_STATUSES!r}", name="feedback_status_check"),
+        CheckConstraint("char_length(message) BETWEEN 5 AND 2000", name="feedback_message_len"),
+        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="feedback_rating_range"),
+        Index("feedback_created", "created_at"),
+    )

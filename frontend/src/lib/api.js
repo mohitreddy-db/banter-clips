@@ -47,6 +47,16 @@ async function request(path, { method = "GET", body } = {}) {
   return data;
 }
 
+async function upload(path, file) {
+  const headers = { "content-type": file.type };
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data?.detail?.code, data?.detail?.message || data?.detail || `Upload failed (${res.status})`);
+  return data;
+}
+
 // Build a querystring, dropping empty/undefined values.
 const qs = (params = {}) => {
   const pairs = Object.entries(params).filter(
@@ -82,9 +92,16 @@ export const api = {
     request("/clips/enhance-take", { method: "POST", body: { take, sport, tone, round } }),
   // Trending feed for the create page. Cheap: served from a shared
   // 20-minute server cache per sport.
-  trending: (sport) => request(`/clips/trending?sport=${encodeURIComponent(sport)}`),
-  createClip: (take, sport, tone, duration = 15, resolution = "720p") =>
-    request("/clips", { method: "POST", body: { take, sport, tone, duration, resolution } }),
+  trending: (sport, refresh = false) =>
+    request(`/clips/trending?sport=${encodeURIComponent(sport)}${refresh ? "&refresh=1" : ""}`),
+  // `sports` and `subjects` are optional hints — the server infers the sport
+  // from the take when nothing is picked.
+  uploadReference: (file) => upload("/clips/reference", file),
+  createClip: (take, sports = [], tone, duration = 15, resolution = "720p", subjects = [], direction = "", reference_key = null) =>
+    request("/clips", {
+      method: "POST",
+      body: { take, sports, subjects, tone, duration, resolution, direction, reference_key },
+    }),
   getClip: (id) => request(`/clips/${id}`),
   // Three written caption options to pick between when publishing.
   captionSuggestions: (id, avoid = []) =>
@@ -94,23 +111,53 @@ export const api = {
   approveScript: (id) => request(`/clips/${id}/script/approve`, { method: "POST" }),
   // Edit dialogue/actions before approving; lines are fitted server-side.
   updateScript: (id, body) => request(`/clips/${id}/script`, { method: "PATCH", body }),
-  regenerateScript: (id, feedback = "") =>
-    request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback } }),
+  // `options` may carry {tone, duration, resolution} to rewrite the script
+  // for different settings (re-quoted server-side, still free to rewrite).
+  regenerateScript: (id, feedback = "", options = {}) =>
+    request(`/clips/${id}/script/regenerate`, { method: "POST", body: { feedback, ...options } }),
   deleteClip: (id) => request(`/clips/${id}`, { method: "DELETE" }),
+  // Re-render chosen scenes of a finished video (optionally edited first).
+  // Quoted per scene server-side; charged only when the new cut lands.
+  rerenderScenes: (id, scenes) =>
+    request(`/clips/${id}/scenes/rerender`, { method: "POST", body: { scenes } }),
+  // Public feedback — works signed out too (the session header is optional).
+  sendFeedback: (body) => request("/feedback", { method: "POST", body }),
 
   // publishing
-  publishClip: (clipId, social_account_id, caption) =>
-    request(`/clips/${clipId}/publish`, { method: "POST", body: { social_account_id, caption } }),
+  // Destination-specific objects carry the exact creator-approved controls.
+  // YouTube requires title, description, and public/private/unlisted for every
+  // upload; TikTok requires audience, interactions, and disclosure choices.
+  publishClip: (clipId, social_account_id, caption, tiktok = null, youtube = null) =>
+    request(`/clips/${clipId}/publish`, {
+      method: "POST",
+      body: {
+        social_account_id,
+        caption,
+        ...(tiktok ? { tiktok } : {}),
+        ...(youtube ? { youtube } : {}),
+      },
+    }),
   getPublish: (clipId, publishId) => request(`/clips/${clipId}/publishes/${publishId}`),
 
   // socials
   listSocials: () => request("/socials"),
-  igOauthUrl: (next) => request(`/socials/instagram/oauth-url?next=${encodeURIComponent(next || "/account")}`),
+  // Real OAuth consent URL for a platform; 503 when
+  // that platform's app isn't configured server-side.
+  oauthUrl: (platform, next) => request(`/socials/${platform}/oauth-url?next=${encodeURIComponent(next || "/account")}`),
   connectSocial: (platform) => request("/socials/connect", { method: "POST", body: { platform } }),
   disconnectSocial: (platform) => request(`/socials/${platform}`, { method: "DELETE" }),
+  // What the TikTok composer must be built from — the connected creator, the
+  // audiences their account currently allows, and which interactions they
+  // permit. TikTok requires this immediately before every post, so it is
+  // fetched fresh each time the publish dialog opens on TikTok.
+  tiktokCreatorInfo: () => request("/socials/tiktok/creator-info"),
 
   // billing — Stripe Checkout when configured, mock upgrade as dev fallback
+  // Credit top-ups: pack list + one-time Checkout (credits granted by webhook).
+  packs: () => request("/billing/packs"),
+  topup: (pack) => request("/billing/topup", { method: "POST", body: { pack } }),
   checkout: () => request("/billing/checkout", { method: "POST" }),
+  billingStatus: () => request("/billing/status"),
   billingPortal: () => request("/billing/portal", { method: "POST" }),
   upgrade: () => request("/billing/upgrade", { method: "POST" }),
   cancelPlan: () => request("/billing/cancel", { method: "POST" }),
@@ -160,7 +207,13 @@ export const api = {
     request("/admin/admins/add", { method: "POST", body: { email, reason } }),
   adminRemoveAdmin: (email, reason) =>
     request("/admin/admins/remove", { method: "POST", body: { email, reason } }),
+  adminFeedback: (params = {}) => request(`/admin/feedback${qs(params)}`),
+  adminFeedbackUpdate: (id, body) => request(`/admin/feedback/${id}`, { method: "PATCH", body }),
   adminCredits: () => request("/admin/credits"),
+  adminGrantCredits: (email, delta, reason) =>
+    request("/admin/credits/grant", { method: "POST", body: { email, delta, reason } }),
+  adminSaveCreditSettings: (body) =>
+    request("/admin/settings/credits", { method: "PUT", body }),
 
   // analytics (fire-and-forget)
   track: (name, props = {}) =>
@@ -168,7 +221,13 @@ export const api = {
 };
 
 // Downloads need the Authorization header, so fetch as a blob.
-export async function downloadClip(clip) {
+export async function downloadClip(clip, onProgress) {
+  // A clip is 5-20 MB, so on a phone the gap between tapping Download and the
+  // browser's own download prompt is long enough to read as a dead button.
+  // The body is streamed rather than awaited as one blob so `onProgress` can
+  // report real bytes ({received, total, pct}); pct is null when the server
+  // sent no content-length, and callers show an indeterminate bar.
+  onProgress?.({ received: 0, total: 0, pct: 0 });
   const res = await fetch(`${BASE}/clips/${clip.id}/download`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   });
@@ -181,7 +240,28 @@ export async function downloadClip(clip) {
       (typeof detail === "object" ? detail?.message : detail) || "Download failed"
     );
   }
-  const blob = await res.blob();
+  const total = Number(res.headers.get("content-length")) || 0;
+  let blob;
+  if (res.body?.getReader) {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress?.({
+        received,
+        total,
+        pct: total ? Math.min(99, Math.round((received / total) * 100)) : null,
+      });
+    }
+    blob = new Blob(chunks, { type: res.headers.get("content-type") || "video/mp4" });
+  } else {
+    blob = await res.blob();   // no streaming support: still downloads fine
+  }
+  onProgress?.({ received: blob.size, total: blob.size, pct: 100 });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -2,25 +2,25 @@ import { useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
+import { SPORTS, suggestionsFor } from "../lib/sports.js";
 
 import { useSeo } from "../lib/seo.js";
-const SPORTS = [
-  ["NBA", "🏀"], ["NFL", "🏈"], ["Soccer", "⚽"], ["MLB", "⚾"],
-  ["F1", "🏎"], ["Tennis", "🎾"], ["College Sports", "🎓"], ["Combat Sports", "🥊"],
-];
-const MVP_SPORTS = ["NBA", "NFL", "Soccer", "MLB"];
+import { SocialIcon } from "../components/SocialIcon.jsx";
+import { YouTubeTerms } from "../components/YouTubeTerms.jsx";
+// One vocabulary with the create page and the backend (lib/sports.js).
+// Nothing is locked any more: every sport here generates.
 const ROLES = [
   ["Sports Fan", "🙌"], ["Creator", "🎬"], ["Podcaster", "🎙"], ["Media Company", "📺"], ["Fantasy Creator", "📊"],
 ];
 const PLATFORMS = [
   { name: "Instagram", key: "instagram", sub: "Publishes as Reels · beta launch platform", connectable: true, tile: "linear-gradient(140deg,#7b2ff7,#f0546c)", glyph: "ig" },
-  { name: "TikTok", key: "tiktok", sub: "Direct post", connectable: false, tile: "#0f1524", glyph: "note" },
-  { name: "YouTube", key: "youtube", sub: "Shorts", connectable: false, tile: "#1a1114", glyph: "yt" },
+  { name: "TikTok", key: "tiktok", sub: "Direct post · beta", connectable: true, tile: "linear-gradient(140deg,#25f4ee,#0b0b0f 55%,#fe2c55)", glyph: "note" },
+  { name: "YouTube", key: "youtube", sub: "Upload directly as Shorts · beta", connectable: true, tile: "#1a1114", glyph: "yt" },
   { name: "X", key: "x", sub: "Video post with caption", connectable: false, tile: "#0f1524", glyph: "x" },
 ];
 
-const FREE_FEATURES = ["60 welcome credits", "One-click publish to Instagram & TikTok", "Funny · Savage · Hype tones", "Watermark on every clip"];
-const CREATOR_FEATURES = ["150 video credits a month", "Full HD 1080p quality", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
+const FREE_FEATURES = ["Welcome credits — your first video on us", "One-click publish to Instagram, TikTok & YouTube", "All five tones, Funny to Roast", "Watermark on every clip"];
+const CREATOR_FEATURES = ["150 credits every month", "Full HD 1080p quality", "30-second videos", "500-character prompts", "Download in HD — no watermark", "Publish without the watermark", "Priority render queue"];
 
 function Glyph({ kind }) {
   const common = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none" };
@@ -37,13 +37,6 @@ function Glyph({ kind }) {
       <svg {...common} stroke="#fff" strokeWidth="2" strokeLinecap="round">
         <path d="M14 4v9.5a3.5 3.5 0 1 1-3.5-3.5" />
         <path d="M14 4c.5 2.5 2 4 4.5 4.4" />
-      </svg>
-    );
-  if (kind === "yt")
-    return (
-      <svg {...common}>
-        <rect x="3" y="6" width="18" height="12" rx="3" fill="#e0281e" />
-        <path d="M10 9.5L15 12l-5 2.5z" fill="#fff" />
       </svg>
     );
   return (
@@ -80,15 +73,19 @@ export default function Onboarding() {
 
 function OnboardingFlow() {
   const nav = useNavigate();
-  const { profile, savePreferences, connected, connectSocial, plan, upgrade, startCheckout } = useApp();
+  const { profile, savePreferences, instagram, tiktok, youtube, connectSocial, plan, upgrade, startCheckout } = useApp();
+  const accounts = { instagram, tiktok, youtube };
   // Returning from the Instagram OAuth redirect (?ig=connected|denied|error):
   // resume at the connect step instead of restarting the flow.
   const [searchParams] = useSearchParams();
   const igReturn = searchParams.get("ig");
-  const [step, setStep] = useState(igReturn ? 4 : 1);
+  const ttReturn = searchParams.get("tt");
+  const ytReturn = searchParams.get("yt");
+  const oauthReturn = igReturn || ttReturn || ytReturn;
+  const [step, setStep] = useState(oauthReturn ? 4 : 1);
   const [igNotice] = useState(
-    igReturn && igReturn !== "connected"
-      ? `Instagram connect ${igReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
+    oauthReturn && oauthReturn !== "connected"
+      ? `${igReturn ? "Instagram" : ttReturn ? "TikTok" : "YouTube"} connect ${oauthReturn === "denied" ? "was cancelled" : "failed"} — you can try again or skip.`
       : ""
   );
   const [sports, setSports] = useState(profile.sports || []);
@@ -156,10 +153,10 @@ function OnboardingFlow() {
     setInput("");
   };
 
-  const doConnect = async () => {
-    setConnecting(true);
+  const doConnect = async (platform) => {
+    setConnecting(platform);
     try {
-      await connectSocial("instagram");
+      await connectSocial(platform, "/onboarding");
     } catch {
       /* surfaced by the button returning to Connect state */
     }
@@ -198,30 +195,23 @@ function OnboardingFlow() {
 
         {step === 1 && (
           <div className="ob-sports" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-            {SPORTS.map(([s, emoji]) => {
+            {SPORTS.map(({ key: s, icon }) => {
               const on = sports.includes(s);
-              const locked = !MVP_SPORTS.includes(s);
               return (
                 <button
                   key={s}
-                  onClick={() => !locked && toggleSport(s)}
+                  onClick={() => toggleSport(s)}
                   style={{
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-                    padding: "18px 8px 16px", borderRadius: 14, cursor: locked ? "default" : "pointer",
+                    padding: "18px 8px 16px", borderRadius: 14, cursor: "pointer",
                     background: on ? "#12303d" : "var(--app-surface)",
                     border: `1.5px solid ${on ? "var(--app-cyan)" : "var(--app-border)"}`,
-                    color: locked ? "var(--app-muted2)" : "var(--app-text)",
-                    fontWeight: 600, fontSize: 13, transition: "all .15s", position: "relative",
-                    opacity: locked ? 0.75 : 1,
+                    color: "var(--app-text)",
+                    fontWeight: 600, fontSize: 13, transition: "all .15s",
                   }}
                 >
-                  <span style={{ fontSize: 26, filter: locked ? "grayscale(.7)" : "none" }}>{emoji}</span>
+                  <span style={{ fontSize: 26 }}>{icon}</span>
                   {s}
-                  {locked && (
-                    <span style={{ position: "absolute", top: 8, right: 8, fontSize: 9, fontWeight: 700, letterSpacing: ".05em", color: "var(--app-muted)", background: "#161e30", borderRadius: 999, padding: "2px 7px" }}>
-                      SOON
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -230,8 +220,12 @@ function OnboardingFlow() {
 
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <TagField label="FAVORITE TEAMS" placeholder="Search teams — Lakers, Chiefs, Real Madrid…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))} />
-            <TagField label="FAVORITE PLAYERS" placeholder="Search players — LeBron, Mahomes, Messi…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))} />
+            <TagField label="FAVORITE TEAMS" placeholder="Search teams — Lakers, Chiefs, Real Madrid…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))}
+              suggestions={suggestionsFor(sports, "teams", 10).filter((t) => !teams.includes(t))}
+              onPick={(t) => setTeams([...teams, t])} />
+            <TagField label="FAVORITE PLAYERS" placeholder="Search players — LeBron, Mahomes, Messi…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))}
+              suggestions={suggestionsFor(sports, "players", 10).filter((p) => !players.includes(p))}
+              onPick={(p) => setPlayers([...players, p])} />
           </div>
         )}
 
@@ -267,20 +261,25 @@ function OnboardingFlow() {
               </div>
             )}
             {PLATFORMS.map((p) => (
-              <div key={p.name} className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 14 }}>
+              <div key={p.name} className="card" style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", borderRadius: 14, flexWrap: "wrap" }}>
                 <div style={{ width: 38, height: 38, borderRadius: 10, background: p.tile, display: "grid", placeItems: "center", border: p.glyph === "note" || p.glyph === "x" ? "1px solid var(--app-border)" : "none" }}>
-                  <Glyph kind={p.glyph} />
+                  {p.key === "youtube" ? (
+                    <a href="https://www.youtube.com/" target="_blank" rel="noreferrer" title="Open YouTube" style={{ display: "inline-flex" }}>
+                      <SocialIcon platform="youtube" size={30} />
+                    </a>
+                  ) : <Glyph kind={p.glyph} />}
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
                   <div style={{ fontWeight: 600, fontSize: 15, color: "var(--app-text)" }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{p.sub}</div>
+                  {p.key === "youtube" && <YouTubeTerms style={{ marginTop: 4 }} />}
                 </div>
                 {p.connectable ? (
-                  connected ? (
+                  accounts[p.key] ? (
                     <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-green)" }}>● Connected</span>
                   ) : (
-                    <button className="grad-btn" style={{ padding: "9px 20px", fontSize: 14, borderRadius: 10, opacity: connecting ? 0.7 : 1 }} disabled={connecting} onClick={doConnect}>
-                      {connecting ? "Connecting…" : "Connect"}
+                    <button className="grad-btn" style={{ padding: "9px 20px", fontSize: 14, borderRadius: 10, opacity: connecting ? 0.7 : 1 }} disabled={!!connecting} onClick={() => doConnect(p.key)}>
+                      {connecting === p.key ? "Connecting…" : "Connect"}
                     </button>
                   )
                 ) : (
@@ -361,7 +360,12 @@ function PlanTile({ name, price, features, popular, cta, onPick, busy }) {
   );
 }
 
-function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove }) {
+/**
+ * `suggestions` are drawn from the sports the user just picked, so this step
+ * opens with something to tap instead of an empty search box — a blank field
+ * is the question people skip. Typing still works for anything not listed.
+ */
+function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove, suggestions = [], onPick }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <label style={{ fontSize: 12, fontWeight: 600, letterSpacing: 1, color: "var(--app-muted)" }}>{label}</label>
@@ -382,6 +386,20 @@ function TagField({ label, placeholder, input, setInput, tags, onAdd, onRemove }
           </span>
         ))}
       </div>
+      {suggestions.length > 0 && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onPick?.(s)}
+              style={{ padding: "6px 12px", borderRadius: 999, background: "transparent", border: "1px dashed var(--app-border)", color: "var(--app-muted)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -92,7 +92,11 @@ export default function AdminDashboard() {
           />
         </Link>
         <Link to="/admin/credits" style={{ textDecoration: "none" }}>
-          <Kpi label="CREDITS" value="not live" note="PRICING.md — pending integration" />
+          <Kpi
+            label="CREDITS"
+            value={data.credits ? data.credits.outstanding.toLocaleString() : "—"}
+            note={data.credits ? `outstanding · ${data.credits.consumed_30d.toLocaleString()} consumed 30d` : "loading"}
+          />
         </Link>
       </div>
 

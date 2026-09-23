@@ -5,10 +5,9 @@ detail endpoint here. Everything is computed live from the tables we already
 have (users, clips, jobs, publishes, events, social_accounts, stripe_events)
 plus Stripe deep links and the OpenRouter credits API — no analytics product.
 
-Credits are deliberately NOT implemented: /admin/credits reports
-``enabled: false`` with the PRICING.md launch price list so the page (and any
-future ledger work) has one obvious place to land. Nothing else in this file
-assumes credits exist; costs are dollars from clips.cost_usd.
+Credits are live (services/credits.py): /admin/credits serves the KPIs,
+price config and ledger; /admin/credits/grant and /admin/settings/credits are
+the actions. Provider costs elsewhere stay dollars from clips.cost_usd.
 
 Every mutating endpoint writes an AdminAction row — the audit log is the read
 view of those rows, and rows are never edited or deleted from the app.
@@ -20,6 +19,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import distinct, func, or_, select, text
@@ -39,6 +39,7 @@ from ..models import (
     StripeEvent,
     User,
 )
+from ..models import FEEDBACK_STATUSES, Feedback
 from ..services import admin_allowlist
 from ..services import jobs as jobsvc
 from ..services import provider_balance, runtime_settings, spend, storage
@@ -49,20 +50,12 @@ log = logging.getLogger("banter.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin-console"])
 
+# $19 since 2026-08-26. Subs from before are grandfathered at $9.99, so MRR
+# slightly overstates until they churn; exact MRR lives in the Stripe
+# dashboard (linked from Revenue).
 CREATOR_PRICE_USD = 19.00
 PROCESSING_STATUSES = ("queued", *GENERATION_STAGES, "script_ready")
 PAGE_SIZE = 50
-
-# PRICING.md §4 launch price list — surfaced read-only by /admin/credits so
-# the constants live in exactly one backend place when the ledger ships.
-CREDIT_PRICE_LIST = {
-    "video": {"10s": {"720p": 250, "1080p": 425},
-              "15s": {"720p": 375, "1080p": 650},
-              "30s": {"720p": 700, "1080p": 1200}},
-    "extras": {"enhance_take": 2, "captions": 0, "publish": 0, "retry": 0},
-    "face_value_usd": 0.01,
-}
-
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -229,8 +222,24 @@ def overview(
         ],
         "top_takes": [{"take": t, "sport": s, "tone": tn, "publishes": p}
                       for t, s, tn, p in top_takes],
-        "credits_enabled": False,
+        "credits_enabled": True,
+        "credits": _credits_kpis(db),
     }
+
+
+def _credits_kpis(db: Session) -> dict:
+    """The dashboard's credits tile: outstanding balance + 30d consumption."""
+    from ..models import CreditEntry
+
+    month_ago = _now() - timedelta(days=30)
+    outstanding = int(db.scalar(select(func.coalesce(func.sum(User.credits), 0))) or 0)
+    consumed = -int(db.scalar(
+        select(func.coalesce(func.sum(CreditEntry.delta), 0)).where(
+            CreditEntry.kind.in_(("video_charge", "enhance_charge", "video_refund")),
+            CreditEntry.created_at >= month_ago,
+        )
+    ) or 0)
+    return {"outstanding": outstanding, "consumed_30d": consumed}
 
 
 # ------------------------------------------------------------------ users
@@ -318,6 +327,7 @@ def user_detail(user_id: uuid.UUID, admin: User = Depends(get_admin_user),
         "stripe_url": f"https://dashboard.stripe.com/customers/{u.stripe_customer_id}"
         if u.stripe_customer_id else None,
         "videos": videos, "cost_usd": round(cost, 2), "published": publish_count,
+        "credits": u.credits,
         "recent_clips": [
             {"id": str(c.id), "take": c.take, "status": c.status,
              "cost_usd": float(c.cost_usd) if c.cost_usd is not None else None,
@@ -359,9 +369,9 @@ def delete_user(user_id: uuid.UUID, body: DeleteUserBody,
                 admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     """Full erasure (the delete-user.py script as a button).
 
-    Typed-email confirmation is enforced server-side too. Stripe subscription
-    cancellation is best-effort; the Supabase Auth identity is NOT touched
-    (that stays a manual step, as in the script).
+    Typed-email confirmation is enforced server-side too. The same operation
+    revokes connected platform grants and removes the Supabase Auth identity so
+    support cannot accidentally leave Google authorization or a login behind.
     """
     u = db.get(User, user_id)
     if u is None:
@@ -380,6 +390,35 @@ def delete_user(user_id: uuid.UUID, body: DeleteUserBody,
             stripe.Subscription.cancel(u.stripe_subscription_id)
         except Exception:  # noqa: BLE001 — finish erasure; Stripe can be cleaned manually
             log.exception("could not cancel Stripe subscription for %s", u.email)
+
+    # End every platform-side grant before the cascading row deletion removes
+    # our only usable revocation token. This is mandatory for YouTube erasure.
+    from .socials import _revoke_with_platform
+
+    socials = db.scalars(select(SocialAccount).where(SocialAccount.user_id == u.id)).all()
+    for social in socials:
+        _revoke_with_platform(social)
+
+    # Delete the external authentication identity too. If Supabase is active,
+    # refusing a partial deletion is safer than reporting success while a login
+    # still exists. A 404 means it was already removed.
+    if u.supabase_uid and settings.SUPABASE_URL:
+        if not settings.SUPABASE_SERVICE_ROLE_KEY:
+            raise HTTPException(503, "Supabase identity deletion is not configured.")
+        try:
+            response = httpx.delete(
+                f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{u.supabase_uid}",
+                headers={
+                    "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
+                },
+                timeout=20,
+            )
+            if response.status_code != 404:
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            log.exception("could not delete Supabase identity for user %s", u.id)
+            raise HTTPException(502, "External auth deletion failed; retry the erasure request.") from exc
 
     # Delete stored media for every clip (row cascade will not touch bytes).
     clip_ids = db.execute(select(Clip.id).where(Clip.user_id == u.id)).scalars().all()
@@ -488,11 +527,23 @@ def list_videos(
         prov = c.provenance or {}
         return len(prov.get("warnings") or [])
 
+    def poster_url(c: Clip) -> str | None:
+        """The real first frame, so triage is visual rather than 24 identical
+        gradient rectangles. Pure string building (see storage.url), so it
+        costs nothing per row; a storage hiccup falls back to the gradient."""
+        if not c.poster_key:
+            return None
+        try:
+            return storage.get().url(c.poster_key)
+        except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
+            return None
+
     return {
         "total": total, "page": page, "page_size": 24,
         "videos": [
             {
                 "id": str(c.id), "take": c.take, "sport": c.sport, "tone": c.tone,
+                "poster_url": poster_url(c),
                 "status": c.status, "current_step": c.current_step,
                 "duration_target": c.duration_target,
                 "duration_seconds": float(c.duration_seconds) if c.duration_seconds else None,
@@ -895,7 +946,7 @@ def revenue(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)
                      for n, at, email in activity],
         "stripe_events": [{"id": e.id, "type": e.type,
                            "at": _iso(e.event_created_at)} for e in stripe_evts],
-        "credits_enabled": False,
+        "credits_enabled": True,
     }
 
 
@@ -961,6 +1012,10 @@ def retry_publish(publish_id: uuid.UUID, body: ReasonBody = Body(default=ReasonB
         raise HTTPException(404, "No such publish")
     if p.status != "failed":
         raise HTTPException(409, "Only failed publishes can be retried.")
+    if p.account and p.account.platform == "youtube":
+        # YouTube actions require the creator's final authority. An admin-side
+        # retry would upload again without a new explicit creator click.
+        raise HTTPException(409, "YouTube retries must be started by the creator from the clip.")
     p.status = "queued"
     p.error = None
     _audit(db, admin, "retry_publish", f"publish {str(p.id)[:8]}", body.reason)
@@ -996,6 +1051,63 @@ def audit_log(page: int = Query(1, ge=1), action: str = "", admin_email: str = "
             for a in rows
         ],
     }
+
+
+# ----------------------------------------------------------------- feedback
+
+
+@router.get("/feedback")
+def feedback_list(page: int = Query(1, ge=1), status: str = "", category: str = "",
+                  admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """Every note left on the public Feedback page, newest first, with the
+    status counts the inbox header needs."""
+    stmt = select(Feedback)
+    if status:
+        stmt = stmt.where(Feedback.status == status)
+    if category:
+        stmt = stmt.where(Feedback.category == category)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.execute(
+        stmt.order_by(Feedback.created_at.desc())
+        .limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)
+    ).scalars().all()
+    counts = dict(db.execute(select(Feedback.status, func.count()).group_by(Feedback.status)).all())
+    avg = db.scalar(select(func.avg(Feedback.rating)).where(Feedback.rating.isnot(None)))
+    return {
+        "total": total, "page": page, "page_size": PAGE_SIZE,
+        "counts": {s: int(counts.get(s, 0)) for s in FEEDBACK_STATUSES},
+        "avg_rating": round(float(avg), 2) if avg is not None else None,
+        "entries": [
+            {"id": str(f.id), "at": _iso(f.created_at), "category": f.category,
+             "rating": f.rating, "message": f.message, "email": f.email,
+             "name": f.name, "user_id": str(f.user_id) if f.user_id else None,
+             "page": f.page, "status": f.status, "admin_note": f.admin_note,
+             "user_agent": f.user_agent}
+            for f in rows
+        ],
+    }
+
+
+class FeedbackUpdate(BaseModel):
+    status: str | None = None
+    admin_note: str | None = None
+
+
+@router.patch("/feedback/{feedback_id}")
+def feedback_update(feedback_id: uuid.UUID, body: FeedbackUpdate,
+                    admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    row = db.get(Feedback, feedback_id)
+    if row is None:
+        raise HTTPException(404, "Feedback not found")
+    if body.status is not None:
+        if body.status not in FEEDBACK_STATUSES:
+            raise HTTPException(400, f"status must be one of {', '.join(FEEDBACK_STATUSES)}")
+        row.status = body.status
+    if body.admin_note is not None:
+        row.admin_note = body.admin_note.strip()[:1000]
+    db.commit()
+    _audit(db, admin, "feedback.update", target=str(row.id), reason=body.status or "note")
+    return {"ok": True, "status": row.status, "admin_note": row.admin_note}
 
 
 # ------------------------------------------------------------------- admins
@@ -1063,16 +1175,104 @@ def remove_admin(body: AdminEmailBody, admin: User = Depends(get_admin_user),
 
 
 @router.get("/credits")
-def credits_view(admin: User = Depends(get_admin_user)):
-    """Placeholder until the credit ledger ships (PRICING.md).
+def credits_view(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """The credit system, live: KPIs, price config, and the recent ledger."""
+    from ..models import CreditEntry
+    from ..services import credits as credit_svc
 
-    The frontend renders a "not live yet" state from ``enabled: false``.
-    When the ledger lands, this endpoint grows the issued/consumed KPIs and
-    ledger listing — nothing else in the console assumes credits exist.
-    """
+    month_ago = _now() - timedelta(days=30)
+    outstanding = int(db.scalar(select(func.coalesce(func.sum(User.credits), 0))) or 0)
+
+    def _sum(*kinds) -> int:
+        return int(db.scalar(
+            select(func.coalesce(func.sum(CreditEntry.delta), 0))
+            .where(CreditEntry.kind.in_(kinds), CreditEntry.created_at >= month_ago)
+        ) or 0)
+
+    entries = db.execute(
+        select(CreditEntry, User.email)
+        .join(User, User.id == CreditEntry.user_id)
+        .order_by(CreditEntry.created_at.desc())
+        .limit(60)
+    ).all()
     return {
-        "enabled": False,
-        "note": "Credit-based pricing is specified in PRICING.md but not yet "
-                "integrated. Costs elsewhere in the console are provider USD.",
-        "price_list": CREDIT_PRICE_LIST,
+        "enabled": True,
+        "outstanding": outstanding,
+        "last_30d": {
+            "granted": _sum("grant_signup", "grant_monthly", "grant_admin"),
+            "purchased": _sum("topup"),
+            # charges are negative deltas; report as positive consumption,
+            # net of refunds so a failed video counts zero
+            "consumed": -(_sum("video_charge", "enhance_charge") + _sum("video_refund")),
+        },
+        "prices": credit_svc.prices(db),
+        "ledger": [
+            {"id": str(e.id), "email": email, "delta": e.delta,
+             "balance_after": e.balance_after, "kind": e.kind,
+             "clip_id": str(e.clip_id) if e.clip_id else None,
+             "note": e.note, "created_at": _iso(e.created_at)}
+            for e, email in entries
+        ],
     }
+
+
+class GrantBody(BaseModel):
+    email: str
+    delta: int
+    reason: str
+
+
+@router.post("/credits/grant")
+def grant_credits(body: GrantBody, admin: User = Depends(get_admin_user),
+                  db: Session = Depends(get_db)):
+    """Manual grant (or deduction, with a negative delta). Reason required —
+    it lands in both the credit ledger and the audit log."""
+    from ..services import credits as credit_svc
+
+    if not body.reason.strip():
+        raise HTTPException(422, "A reason is required.")
+    if body.delta == 0 or abs(body.delta) > 100_000:
+        raise HTTPException(422, "Delta must be non-zero and sane.")
+    u = db.scalar(select(User).where(User.email == body.email.lower().strip()))
+    if u is None:
+        raise HTTPException(404, "No user with that email.")
+    try:
+        balance = credit_svc.apply(db, u, body.delta, "grant_admin",
+                                   note=f"{admin.email}: {body.reason.strip()}"[:300])
+    except ValueError:
+        raise HTTPException(409, f"That would take {u.email} below zero (balance {u.credits}).")
+    _audit(db, admin, "grant_credits", f"user {u.email} ({body.delta:+d})", body.reason)
+    db.commit()
+    return {"email": u.email, "balance": balance}
+
+
+class CreditSettingsBody(BaseModel):
+    per_second: dict
+    enhance_take: int
+    signup_grant: int
+    monthly_grant: int
+
+
+@router.put("/settings/credits")
+def put_credit_settings(body: CreditSettingsBody, admin: User = Depends(get_admin_user),
+                        db: Session = Depends(get_db)):
+    """Credit prices without a release (PRICING rule 5). Pack contents stay
+    code-side — they are Stripe-facing and rarely change."""
+    import json as json_mod
+
+    from ..services import credits as credit_svc, runtime_settings
+
+    rates = {k: int(v) for k, v in body.per_second.items() if k in ("720p", "1080p")}
+    if len(rates) != 2 or any(not 1 <= v <= 100 for v in rates.values()):
+        raise HTTPException(422, "per_second needs sane 720p and 1080p rates.")
+    for name, value in (("enhance_take", body.enhance_take),
+                        ("signup_grant", body.signup_grant),
+                        ("monthly_grant", body.monthly_grant)):
+        if not 0 <= value <= 10_000:
+            raise HTTPException(422, f"{name} out of range.")
+    saved = {"per_second": rates, "enhance_take": body.enhance_take,
+             "signup_grant": body.signup_grant, "monthly_grant": body.monthly_grant}
+    runtime_settings.set_value(db, credit_svc.SETTING_KEY, json_mod.dumps(saved), admin.email)
+    _audit(db, admin, "credit_settings", f"{saved}", "")
+    db.commit()
+    return {"prices": credit_svc.prices(db)}

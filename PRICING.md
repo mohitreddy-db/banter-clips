@@ -27,10 +27,10 @@ no pricing redesign needed.
    empty balance is "Top up credits". No screen, prompt, or email ever says
    "upgrade your plan to get more credits". A top-up never changes the
    monthly price. Plans are capability choices; credits are fuel.
-3. **You only pay for success.** Credits are reserved when a generation
-   starts and charged only when the video completes. A failed job releases
-   the full reservation. Retries charge like a normal run (so a video is
-   never charged twice).
+3. **You only pay for success.** The balance is checked up front, but the
+   single charge happens only when the finished video lands. Failures,
+   pauses (provider outage — progress saved, resume free) and abandoned
+   scripts never touch the wallet, and a video can never be charged twice.
 4. **Every video shows its receipt.** Each clip permanently displays how
    many credits it used and where they went, line by line (video + any
    paid extras used on it). The user can always answer "what did this
@@ -82,6 +82,7 @@ so future model tiers (Cinematic, Ultra) slot in without relabeling.
 | Caption suggestions + regenerate | **0** | helps publishing |
 | Publish to Instagram | **0** | it's the product's point |
 | Retry a failed video | **0 net** | rule 3 |
+| ✂️ Re-render a scene of a finished video | **length × rate, per scene** | 4/s Standard, 7/s HD, rounded up per scene (a 5s scene = 20 / 35); untouched scenes reused free; charged only when the new cut lands; available 7 days while the working files exist |
 | Download (Creator) | **0** | plan capability |
 
 ## 5. Plans (MVP: only these two)
@@ -101,8 +102,8 @@ so future model tiers (Cinematic, Ultra) slot in without relabeling.
 ### Creator — $19/month
 
 - **150 credits added every month.**
-- Capabilities: HD (1080p), 30-second videos, watermark-free publishing,
-  downloads, priority queue.
+- Capabilities: HD (1080p), 30-second videos, prompts up to 500 characters
+  (Free: 280), watermark-free publishing, downloads, priority queue.
 - **Rollover:** unused plan credits carry one extra month. Top-up credits
   never expire.
 - Cancelling stops future monthly credits; the remaining balance stays
@@ -145,16 +146,20 @@ unchanged.
 
 | Scenario | What happens |
 |---|---|
-| Generation starts | full video price **reserved** (balance drops immediately, marked "in progress") |
-| Video completes | reservation becomes a charge; receipt attached |
-| Job fails | reservation fully released; retry is a fresh reserve→charge/release |
-| User abandons at script stage (deletes clip / never approves) | reservation released; the few cents of script cost are ours |
+| Generation starts | balance checked against the exact quote; **nothing is charged** |
+| Video completes | the quoted price is charged, once; receipt attached |
+| Scene edit requested on a finished video | quoted per re-rendered scene; balance checked; **nothing charged**; the original video stays live while it renders |
+| Scene edit completes | the per-scene quote is charged once; receipt shows it as a separate line ("+ 20 scene edits") |
+| Scene edit fails | nothing charged; the original video is untouched and the reason is shown on it |
+| Job fails | nothing was charged; retry is free |
+| Provider runs out of credits mid-render | job **pauses** with the reason shown; finished scenes are checkpointed; resume is free and never re-bills them |
+| User abandons at script stage (deletes clip / never approves) | nothing was charged; the few cents of script cost are ours |
 | Script regenerated with feedback | free (cap 10); cost is ours, baked into video margin |
 | Balance too low to start | one message, one button: price shown + "Top up credits" — never "upgrade" |
 | Balance runs out mid-month (Creator) | same: top up; next month's 150 arrive on the billing date regardless |
 | Free user tops up | stays Free — 720p/15s/watermark limits unchanged |
 | Creator cancels | keeps balance, loses monthly drops + capabilities at period end |
-| Provider balance empty on our side | low-balance guard fails the job honestly ("temporarily unavailable"), reservation released — never a silently degraded video |
+| Provider balance empty on our side | preflight pauses the job before any scene renders — never a silently degraded video |
 | Chargeback / refund | credits from that payment are clawed back (floor 0); account flagged for review |
 | Blocked user | silent blocklist as built — no credit interaction |
 

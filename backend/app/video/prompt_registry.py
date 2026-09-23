@@ -185,7 +185,7 @@ REGISTRY: tuple[PromptSpec, ...] = (
         key="catalog_verify",
         kind="template",
         stage="catalog maintenance (offline, manual)",
-        model="OPENAI_RESEARCH_MODEL + web_search",
+        model="Firecrawl search → OPENAI_RESEARCH_MODEL (fallback: OpenAI web_search)",
         purpose=(
             "Checks a catalog entry against the web: current club, squad "
             "number, kit. Needed because wardrobes now assert specific facts "

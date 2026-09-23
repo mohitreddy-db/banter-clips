@@ -12,6 +12,7 @@ from ..models import (
     Clip,
     CreditEntry,
     Event,
+    Feedback,
     Job,
     LoginToken,
     Publish,
@@ -36,13 +37,6 @@ def me(user: User = Depends(get_current_user)):
 
 @router.get("/usage", response_model=UsageOut)
 def usage(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Every client reads this before it gates anything, which makes it the
-    # right place to notice that a store subscription has run out. It is a
-    # local date comparison unless one actually has — see the docstring on
-    # refresh_expired_store_plan.
-    from .billing import refresh_expired_store_plan
-
-    refresh_expired_store_plan(db, user)
     return usage_for(db, user)
 
 
@@ -74,17 +68,17 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
     App Store guideline 5.1.1(v) requires an app that lets people create an
     account to let them delete it from inside the app — a support email is
     not enough. The privacy policy already promises the same thing, so this
-    is the promise made good rather than a new one.
+    is that promise made good rather than a new one.
 
     What it is NOT: cancelling a subscription. Only Apple or Google can do
     that, and deleting the account here does not stop a renewal — the app
     says so on the confirmation screen and points at the store.
 
-    Rows are removed explicitly rather than left to `ON DELETE CASCADE`.
-    The cascades are declared, but SQLite only honours them with
+    Rows are removed explicitly rather than left to `ON DELETE CASCADE`. The
+    cascades are declared, but SQLite only honours them with
     `PRAGMA foreign_keys=ON`, and a deletion that silently half-happens on
-    one engine is exactly the bug nobody notices until a user asks why their
-    clips are still there.
+    one engine is the bug nobody notices until a user asks why their clips
+    are still there.
     """
     user_id = user.id
     supabase_uid = user.supabase_uid
@@ -116,26 +110,28 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
     db.execute(delete(LoginToken).where(LoginToken.user_id == user_id))
     db.execute(delete(UserPreferences).where(UserPreferences.user_id == user_id))
 
-    # Analytics keeps its shape without keeping the person: the event rows
-    # stay, detached from any account. `record_event` wrote one for this
-    # deletion a moment ago, and it is detached along with the rest.
+    # Analytics and the feedback inbox keep their shape without keeping the
+    # person: both columns are already ON DELETE SET NULL, and detaching them
+    # here makes that true on every engine. `record_event` writes one row for
+    # this deletion a moment before; it is detached with the rest.
     record_event(db, "account_deleted", user, plan=user.plan)
     db.execute(update(Event).where(Event.user_id == user_id).values(user_id=None))
+    db.execute(update(Feedback).where(Feedback.user_id == user_id).values(user_id=None))
 
     db.delete(user)
     db.commit()
 
-    # Last, because it is the one thing we cannot roll back and the one that
-    # can fail on its own: without it the same identity signs in again and a
-    # fresh, empty account is created, which is confusing but not a data
-    # leak. Their data is already gone by this point.
+    # Last, because it is the one step we cannot roll back and the one that
+    # can fail on its own: without it the same identity signs in again and
+    # gets a fresh, empty account — confusing, but not a data leak. Their
+    # data is already gone by this point.
     _delete_supabase_identity(supabase_uid)
 
 
 def _delete_supabase_identity(supabase_uid: str | None) -> None:
     """Remove the sign-in identity from Supabase Auth, best effort.
 
-    Needs the service-role key; when it is not configured (local dev, or a
+    Needs the service-role key; where it is not configured (local dev, or a
     deployment using its own auth) the account row is still gone and the
     identity is simply orphaned.
     """

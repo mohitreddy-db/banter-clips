@@ -1,10 +1,10 @@
 """Social account connections (BR-13).
 
-Instagram is the beta launch platform. The real platform OAuth app is still in
-review, so `connect` is a mock that immediately returns a connected account —
-but the resource model, revocation, and one-account-per-platform rule are the
-real ones. When OAuth approval lands, `connect` becomes a redirect to the
-platform's consent screen and a callback fills in the same row.
+Instagram and TikTok are connectable. Each platform has a real OAuth flow
+(`/{platform}/oauth-url` → consent screen → `/{platform}/callback`) used when
+its app credentials are configured; `connect` remains the mock fallback that
+immediately returns a connected account, so dev without creds still works.
+The resource model, revocation, and one-account-per-platform rule are shared.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -21,12 +21,13 @@ from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
 from ..models import SocialAccount, User
-from ..schemas import SocialAccountOut, SocialConnectRequest
+from ..schemas import SocialAccountOut, SocialConnectRequest, TikTokCreatorInfo
+from ..services import tiktok, youtube
 
 router = APIRouter(prefix="/socials", tags=["socials"])
 
-# One platform at MVP launch (BR-13); the rest are visible but locked.
-CONNECTABLE = {"instagram"}
+# Beta platforms (BR-13); the rest are visible but locked.
+CONNECTABLE = {"instagram", "tiktok", "youtube"}
 
 IG_AUTHORIZE = "https://www.instagram.com/oauth/authorize"
 IG_TOKEN = "https://api.instagram.com/oauth/access_token"
@@ -38,32 +39,32 @@ ig_oauth_configured = lambda: bool(settings.META_APP_ID and settings.META_APP_SE
 MOCK_TOKEN = "mock-oauth-token"
 REFRESH_WINDOW = timedelta(days=15)
 
-# Where the mobile app wants the consent flow to hand control back. A phone has
-# no browser tab to return to, so the redirect target is a scheme the app owns
+# Where the mobile app wants the consent flow to hand control back. A phone
+# has no browser tab to return to, so the target is a scheme the app owns
 # (registered in its AndroidManifest.xml and Info.plist) rather than a path on
-# the website. See mobile/README.md.
-MOBILE_RETURN = "banterclips://oauth/instagram"
-
-# One per platform the app can connect: the scheme is registered in the app
-# under the host "oauth", so `banterclips://oauth/<platform>` all land in it.
+# the website. The scheme is registered under the host "oauth", so
+# `banterclips://oauth/<platform>` all land in the app. See mobile/README.md.
 MOBILE_RETURNS = frozenset(
-    {MOBILE_RETURN, "banterclips://oauth/tiktok", "banterclips://oauth/youtube"}
+    {
+        "banterclips://oauth/instagram",
+        "banterclips://oauth/tiktok",
+        "banterclips://oauth/youtube",
+    }
 )
 
 
 def _safe_next(next: str) -> str:
     """Where the browser is allowed to be sent after consent.
 
-    Two shapes only: a path on our own site, or the ONE mobile URI above,
+    Two shapes only: a path on our own site, or one of the mobile URIs above,
     matched in full. Do not relax this to "any custom scheme" or to a prefix
     check — `next` is attacker-controllable, and a laxer rule here is an
     open-redirect hole with a valid-looking BanterClips URL in front of it.
 
-    "//host" is rejected as well as "http://host". It is harmless *today*,
-    because the only caller prepends FRONTEND_URL and so lands on our own
-    host — but a protocol-relative URL is a redirect to someone else's site
-    the moment anything uses this without that prefix, and this function is
-    named as though it guarantees otherwise.
+    "//host" is rejected as well as "http://host": a protocol-relative URL is
+    a redirect to someone else's site the moment a caller stops prefixing
+    FRONTEND_URL, and this function is named as though it guarantees
+    otherwise.
     """
     if next in MOBILE_RETURNS:
         return next
@@ -72,11 +73,53 @@ def _safe_next(next: str) -> str:
     return "/account"
 
 
+def _revoke_with_platform(account: SocialAccount) -> None:
+    """Tell the platform the grant is over before we forget the token.
+
+    Clearing our columns is not the same as the user revoking access: the
+    grant lives on in their Google or TikTok account until it expires. The
+    YouTube API Services Developer Policies make revoking it on disconnect a
+    requirement, and it is the honest behaviour everywhere else too — the
+    "Disconnect" button should mean what it says on both ends.
+
+    Instagram (Instagram Login) exposes no server-side revoke; those tokens are
+    ended from Instagram's own Apps and Websites settings, which the privacy
+    policy points to.
+    """
+    if not account.access_token or account.access_token == MOCK_TOKEN:
+        return
+    if account.platform == "youtube":
+        # Revoking the refresh token ends the whole grant; the access token
+        # alone would leave a refreshable grant behind.
+        youtube.revoke(account.refresh_token or account.access_token)
+    elif account.platform == "tiktok":
+        tiktok.revoke(account.access_token)
+
+
+def _clear_credentials(account: SocialAccount) -> None:
+    """Remove every credential and platform identifier on disconnect/mock."""
+    account.access_token = None
+    account.refresh_token = None
+    account.platform_user_id = None
+    account.token_expires_at = None
+
+
 def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
+    """Keep a connected account's token alive. Called on every /socials read
+    and before each real publish; dispatches per platform."""
+    if account.platform == "tiktok":
+        return tiktok.maybe_refresh_token(db, account)
+    if account.platform == "youtube":
+        return youtube.maybe_refresh_token(db, account)
+    if account.platform == "instagram":
+        return _maybe_refresh_instagram(db, account)
+
+
+def _maybe_refresh_instagram(db: Session, account: SocialAccount) -> None:
     """Instagram long-lived tokens last ~60 days and do NOT renew themselves.
     When one is inside its last 15 days, roll it via ig_refresh_token (allowed
-    once the token is >24h old). Called on every /socials read and before each
-    real publish, so any account used at least once in two months never lapses."""
+    once the token is >24h old), so any account used at least once in two
+    months never lapses."""
     if (
         account.status != "connected"
         or not account.access_token
@@ -107,17 +150,29 @@ def maybe_refresh_token(db: Session, account: SocialAccount) -> None:
         db.commit()
 
 
-def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_user_id: str | None, expires_in: int | None = None) -> SocialAccount:
+def _upsert_account(
+    db: Session,
+    user_id,
+    *,
+    platform: str,
+    handle: str,
+    token: str,
+    platform_user_id: str | None,
+    expires_in: int | None = None,
+    refresh_token: str | None = None,
+) -> SocialAccount:
     account = db.scalar(
         select(SocialAccount).where(
-            SocialAccount.user_id == user_id, SocialAccount.platform == "instagram"
+            SocialAccount.user_id == user_id, SocialAccount.platform == platform
         )
     )
     if account is None:
-        account = SocialAccount(user_id=user_id, platform="instagram", handle=handle)
+        account = SocialAccount(user_id=user_id, platform=platform, handle=handle)
         db.add(account)
     account.handle = handle
     account.access_token = token
+    if refresh_token is not None:
+        account.refresh_token = refresh_token
     account.platform_user_id = platform_user_id
     account.token_expires_at = (
         datetime.now(timezone.utc) + timedelta(seconds=expires_in) if expires_in else None
@@ -126,6 +181,20 @@ def _upsert_account(db: Session, user_id, *, handle: str, token: str, platform_u
     account.revoked_at = None
     db.commit()
     return account
+
+
+def _oauth_state(user: User, purpose: str, next: str) -> str:
+    """Signed round-trip state: who started the flow and where to land after."""
+    return pyjwt.encode(
+        {
+            "sub": str(user.id),
+            "purpose": purpose,
+            "next": _safe_next(next),
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+        },
+        settings.JWT_SECRET,
+        algorithm="HS256",
+    )
 
 
 @router.get("/instagram/oauth-url")
@@ -138,16 +207,7 @@ def instagram_oauth_url(
     mock connector."""
     if not ig_oauth_configured():
         raise HTTPException(503, detail={"code": "oauth_not_configured", "message": "Instagram OAuth is not configured."})
-    state = pyjwt.encode(
-        {
-            "sub": str(user.id),
-            "purpose": "ig_oauth",
-            "next": _safe_next(next),
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
-        },
-        settings.JWT_SECRET,
-        algorithm="HS256",
-    )
+    state = _oauth_state(user, "ig_oauth", next)
     query = urlencode(
         {
             "client_id": settings.META_APP_ID,
@@ -172,20 +232,18 @@ def instagram_callback(
     the real account, and bounces the browser back to the frontend."""
 
     def bounce(next_path: str, **params) -> RedirectResponse:
-        # The mobile return is an absolute URI the app owns; everything else is
-        # a path on the website. Prefixing FRONTEND_URL onto the former would
-        # produce https://www.banterclips.combanterclips://… — a dead link that
-        # strands the user in a browser with no way back.
+        separator = "&" if "?" in next_path else "?"
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
         base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
-        return RedirectResponse(f"{base}{next_path}?{urlencode(params)}")
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
         assert claims.get("purpose") == "ig_oauth"
         user_id = claims["sub"]
-        # Re-validated on the way out, not just on the way in: the state JWT is
-        # signed by us, but this is the only line that actually builds a
-        # redirect, so it is the one that must be safe.
         next_path = _safe_next(str(claims.get("next", "/account")))
     except Exception:
         return bounce("/account", ig="error", reason="invalid_state")
@@ -236,9 +294,224 @@ def instagram_callback(
     if user is None:
         return bounce(next_path, ig="error", reason="unknown_user")
 
-    _upsert_account(db, user.id, handle=f"@{username}", token=token, platform_user_id=ig_user_id, expires_in=expires_in)
+    _upsert_account(db, user.id, platform="instagram", handle=f"@{username}", token=token, platform_user_id=ig_user_id, expires_in=expires_in)
     record_event(db, "social_connected", user, platform="instagram", real=True)
     return bounce(next_path, ig="connected", handle=username)
+
+
+@router.get("/tiktok/oauth-url")
+def tiktok_oauth_url(
+    next: str = "/account",
+    user: User = Depends(get_current_user),
+):
+    """Real TikTok Login Kit (BR-13). Returns the consent URL; 503 when the
+    TikTok app isn't configured so the client falls back to the mock
+    connector. The consent page opens in the user's browser — from India
+    that needs the user's own VPN; only server-side API calls ride the
+    TIKTOK_PROXY_URL box."""
+    if not tiktok.configured():
+        raise HTTPException(503, detail={"code": "oauth_not_configured", "message": "TikTok OAuth is not configured."})
+    query = urlencode(
+        {
+            "client_key": settings.TIKTOK_CLIENT_KEY,
+            "scope": settings.TIKTOK_SCOPES,
+            "response_type": "code",
+            "redirect_uri": settings.TIKTOK_REDIRECT_URI,
+            "state": _oauth_state(user, "tt_oauth", next),
+        }
+    )
+    return {"url": f"{tiktok.AUTHORIZE}?{query}"}
+
+
+@router.get("/youtube/oauth-url")
+def youtube_oauth_url(
+    next: str = "/account",
+    user: User = Depends(get_current_user),
+):
+    if not youtube.configured():
+        raise HTTPException(503, detail={"code": "oauth_not_configured", "message": "YouTube OAuth is not configured."})
+    query = urlencode(
+        {
+            "client_id": settings.YOUTUBE_CLIENT_ID,
+            "redirect_uri": settings.YOUTUBE_REDIRECT_URI,
+            "response_type": "code",
+            "scope": youtube.SCOPE,
+            "access_type": "offline",
+            "prompt": "consent",
+            # Do not combine grants from earlier Google authorizations: this
+            # client uses and represents exactly youtube.upload.
+            "state": _oauth_state(user, "yt_oauth", next),
+        }
+    )
+    return {"url": f"{youtube.AUTHORIZE}?{query}"}
+
+
+@router.get("/tiktok/callback")
+def tiktok_callback(
+    code: str | None = None,
+    state: str = "",
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """OAuth redirect target. Exchanges the code for tokens, stores the real
+    account, and bounces the browser back to the frontend (?tt=...)."""
+
+    def bounce(next_path: str, **params) -> RedirectResponse:
+        separator = "&" if "?" in next_path else "?"
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
+
+    try:
+        claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        assert claims.get("purpose") == "tt_oauth"
+        user_id = claims["sub"]
+        next_path = _safe_next(str(claims.get("next", "/account")))
+    except Exception:
+        return bounce("/account", tt="error", reason="invalid_state")
+
+    if error or not code:
+        return bounce(next_path, tt="denied", reason=error_description or error or "cancelled")
+
+    try:
+        tok = tiktok.exchange_code(code)
+        token = tok["access_token"]
+        open_id = str(tok.get("open_id") or "")
+        # Basic scope has no @username; the display name is the label we show.
+        display_name = tiktok.fetch_user(token).get("display_name") or "connected"
+    except Exception:
+        return bounce(next_path, tt="error", reason="token_exchange_failed")
+
+    user = db.get(User, user_id)
+    if user is None:
+        return bounce(next_path, tt="error", reason="unknown_user")
+
+    _upsert_account(
+        db,
+        user.id,
+        platform="tiktok",
+        handle=display_name,
+        token=token,
+        platform_user_id=open_id,
+        expires_in=tok.get("expires_in", 86400),
+        refresh_token=tok.get("refresh_token"),
+    )
+    record_event(db, "social_connected", user, platform="tiktok", real=True)
+    return bounce(next_path, tt="connected", handle=display_name)
+
+
+@router.get("/youtube/callback")
+def youtube_callback(
+    code: str | None = None,
+    state: str = "",
+    error: str | None = None,
+    error_description: str | None = None,
+    db: Session = Depends(get_db),
+):
+    def bounce(next_path: str, **params) -> RedirectResponse:
+        separator = "&" if "?" in next_path else "?"
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
+
+    try:
+        claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
+        assert claims.get("purpose") == "yt_oauth"
+        user_id = claims["sub"]
+        next_path = _safe_next(str(claims.get("next", "/account")))
+    except Exception:
+        return bounce("/account", yt="error", reason="invalid_state")
+    if error or not code:
+        return bounce(next_path, yt="denied", reason=error_description or error or "cancelled")
+
+    try:
+        tok = youtube.exchange_code(code)
+        token = tok["access_token"]
+        granted = set((tok.get("scope") or youtube.SCOPE).split())
+        if granted != {youtube.SCOPE}:
+            youtube.revoke(tok.get("refresh_token") or token)
+            return bounce(next_path, yt="error", reason="unexpected_scope")
+    except Exception:
+        return bounce(next_path, yt="error", reason="token_exchange_failed")
+
+    user = db.get(User, user_id)
+    if user is None:
+        return bounce(next_path, yt="error", reason="unknown_user")
+    _upsert_account(
+        db,
+        user.id,
+        platform="youtube",
+        handle="YouTube channel",
+        token=token,
+        platform_user_id="me",
+        expires_in=tok.get("expires_in", 3600),
+        refresh_token=tok.get("refresh_token"),
+    )
+    record_event(db, "social_connected", user, platform="youtube", real=True)
+    return bounce(next_path, yt="connected", handle="YouTube channel")
+
+
+@router.get("/tiktok/creator-info", response_model=TikTokCreatorInfo)
+def tiktok_creator_info(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """What the TikTok composer must be built from.
+
+    TikTok's audit requires querying `creator_info` before every publish and
+    rendering the composer from the answer: only the privacy levels this
+    creator may currently use, and interaction toggles disabled where their
+    account settings forbid them. Fetching it fresh each time the dialog opens
+    is the point — these settings change on TikTok's side, not ours.
+    """
+    account = db.scalar(
+        select(SocialAccount).where(
+            SocialAccount.user_id == user.id,
+            SocialAccount.platform == "tiktok",
+            SocialAccount.status == "connected",
+        )
+    )
+    if account is None:
+        raise HTTPException(404, detail={"code": "not_connected", "message": "Connect TikTok first."})
+    maybe_refresh_token(db, account)
+    if account.status != "connected" or not account.access_token:
+        raise HTTPException(
+            401,
+            detail={"code": "reconnect", "message": "Your TikTok session expired — reconnect the account."},
+        )
+    # The mock connector has no real token, so there is nobody to ask. Answer
+    # with the full set of choices so the composer is still exercisable in dev.
+    if account.access_token == MOCK_TOKEN:
+        return TikTokCreatorInfo(
+            nickname=account.handle,
+            username=account.handle.lstrip("@"),
+            avatar_url="",
+            privacy_level_options=list(tiktok.PRIVACY_LEVELS),
+            comment_disabled=False,
+            duet_disabled=False,
+            stitch_disabled=False,
+            max_video_post_duration_sec=600,
+            unaudited=settings.TIKTOK_UNAUDITED,
+        )
+    try:
+        profile = tiktok.creator_profile(account.access_token)
+    except RuntimeError as exc:
+        # TikTok's own words are more useful than ours here — a creator whose
+        # account is under review or region-restricted gets told exactly that.
+        raise HTTPException(502, detail={"code": "tiktok_error", "message": str(exc)}) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            502,
+            detail={"code": "tiktok_unreachable", "message": "Could not reach TikTok. Try again in a moment."},
+        ) from exc
+    return TikTokCreatorInfo(**profile, unaudited=settings.TIKTOK_UNAUDITED)
 
 
 @router.get("", response_model=list[SocialAccountOut])
@@ -255,12 +528,19 @@ def list_accounts(user: User = Depends(get_current_user), db: Session = Depends(
 
 @router.post("/connect", response_model=SocialAccountOut, status_code=201)
 def connect(body: SocialConnectRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # A missing production OAuth configuration must be visible, never replaced
+    # by a connected-looking mock account that cannot actually publish.
+    if not settings.DEV_MODE:
+        raise HTTPException(
+            503,
+            detail={"code": "mock_disabled", "message": "Social OAuth is not configured on this server."},
+        )
     if body.platform not in CONNECTABLE:
         raise HTTPException(
             400,
             detail={
                 "code": "platform_locked",
-                "message": f"{body.platform} arrives after the beta — Instagram is the launch platform.",
+                "message": f"{body.platform} is not connectable yet.",
             },
         )
 
@@ -271,6 +551,7 @@ def connect(body: SocialConnectRequest, user: User = Depends(get_current_user), 
     )
     handle = "@" + (user.display_name or user.email.split("@")[0]).lower().replace(" ", "")
     if existing:
+        _clear_credentials(existing)
         existing.status = "connected"
         existing.revoked_at = None
         existing.handle = handle
@@ -298,9 +579,14 @@ def disconnect(platform: str, user: User = Depends(get_current_user), db: Sessio
     )
     if account is None:
         raise HTTPException(404, "No connected account for that platform")
+    _revoke_with_platform(account)
     account.status = "revoked"
     account.revoked_at = datetime.now(timezone.utc)
-    account.access_token = None
+    _clear_credentials(account)
+    if account.platform == "youtube":
+        # videos.insert returns a video id that we retain only in the external
+        # URL. Revocation deletes that API Data along with the credentials.
+        youtube.delete_stored_api_data(db, account.id)
     db.commit()
     record_event(db, "social_disconnected", user, platform=platform)
     return account

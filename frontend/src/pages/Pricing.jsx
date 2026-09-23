@@ -4,6 +4,7 @@ import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
 import { UpgradeModal } from "../components/Modals.jsx";
 import AppShell from "../components/AppShell.jsx";
+import Logo from "../components/BrandMark.jsx";
 import { useSeo } from "../lib/seo.js";
 
 /* The one app page that is deliberately PUBLIC. Pricing queries are the
@@ -15,16 +16,18 @@ import { useSeo } from "../lib/seo.js";
 
 const FREE = [
   [true, "60 welcome credits — your first video on us"],
-  [true, "One-click publish to Instagram"],
+  [true, "One-click publish to Instagram & TikTok"],
   [true, "Funny · Savage · Hype tones"],
   [true, "Free retries — failures never count"],
+  [true, "Prompts up to 280 characters"],
   [false, "720p HD only"],
   [false, "Publishes with BanterClips watermark"],
   [false, "No downloads"],
 ];
 const CREATOR = [
-  [true, "150 video credits / month"],
+  [true, "150 credits added every month"],
   [true, "Full HD 1080p quality"],
+  [true, "Prompts up to 500 characters"],
   [true, "Download in HD — no watermark"],
   [true, "Publish without the watermark"],
   [true, "Priority render queue"],
@@ -32,26 +35,11 @@ const CREATOR = [
   [true, "Everything in Free"],
 ];
 
-function Logo({ size = 26 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34">
-      <defs>
-        <linearGradient id="prlg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#34e27a" />
-        </linearGradient>
-      </defs>
-      <rect width="34" height="34" rx="9" fill="url(#prlg)" />
-      <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-    </svg>
-  );
-}
-
 export default function Pricing() {
   useSeo({
     title: "Pricing — BanterClips plans from $0",
     description:
-      "BanterClips pricing: Free includes 60 welcome credits, or Creator at $19/mo adds 150 credits with 1080p and watermark-free downloads. No credit card to start.",
+      "BanterClips pricing: Free plan with welcome credits to make your first AI sports video, or Creator at $19/mo with monthly credits, 1080p and watermark-free downloads. No credit card to start.",
     path: "/pricing",
   });
 
@@ -92,7 +80,7 @@ export default function Pricing() {
   const fineprint = (
     <div style={{ fontSize: 12.5, color: "var(--app-muted2)", textAlign: "center", lineHeight: 1.6 }}>
       Prices are introductory and may change after beta. The AI-parody disclosure stays on every video on every plan.
-      Only successful videos count toward your allowance. Cancel anytime — your videos are never deleted.
+      Only successful videos use credits — failures are refunded. Cancel anytime — your videos are never deleted.
     </div>
   );
 
@@ -140,7 +128,7 @@ export default function Pricing() {
           </h1>
           <div style={{ fontSize: 15.5, color: "var(--app-muted)", maxWidth: 560, margin: "0 auto", lineHeight: 1.55 }}>
             Turn a written sports take into a finished 9:16 AI video — voiceover, animated captions,
-            one-click publish to Instagram. Start free, no credit card.
+            one-click publish to Instagram & TikTok. Start free, no credit card.
           </div>
         </div>
         {cards}

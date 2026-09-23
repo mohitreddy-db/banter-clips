@@ -1,7 +1,8 @@
 import { Outlet, NavLink, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
+import BrandMark from "./BrandMark.jsx";
 
-const TITLES = { "/studio": "Create Studio", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing" };
+const TITLES = { "/studio": "Create Studio", "/prompts": "Prompt Library", "/clips": "My Clips", "/account": "Account", "/pricing": "Plans & Pricing", "/feedback": "Feedback", "/viral": "Viral right now" };
 
 function Icon({ d, size = 18, color = "currentColor" }) {
   return (
@@ -13,6 +14,9 @@ function Icon({ d, size = 18, color = "currentColor" }) {
 
 const icons = {
   create: <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
+  feedback: <><path d="M21 12a8 8 0 0 1-8 8H8l-5 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8Z" /><path d="M9 11h6" /><path d="M9 14h4" /></>,
+  viral: <path d="M12 2c.5 3.5 3 5 4.5 7.5A6.5 6.5 0 1 1 6 11c.3 1.6 1.2 2.6 2.3 3.2C8 10.5 9.5 8 12 2Z" />,
+  prompts: <><path d="M9 18h6" /><path d="M10 22h4" /><path d="M8.5 14.5A6 6 0 1 1 15.5 14.5c-.9.6-1.5 1.4-1.5 2.5h-4c0-1.1-.6-1.9-1.5-2.5Z" /></>,
   catalog: (
     <>
       <circle cx="9" cy="7" r="3" />
@@ -67,7 +71,7 @@ const icons = {
 export default function AppShell({ children }) {
   const nav = useNavigate();
   const loc = useLocation();
-  const { plan, left, limit, booted, signedIn, apiDown, user } = useApp();
+  const { plan, credits, videoPrice, booted, signedIn, apiDown, user } = useApp();
 
   // App pages require a session (BR-02). Wait for boot, then gate.
   if (!booted) {
@@ -92,16 +96,7 @@ export default function AppShell({ children }) {
       {/* sidebar */}
       <aside className="app-sidebar" style={{ background: "var(--app-sidebar)", borderRight: "1px solid var(--app-border)", padding: "24px 16px", display: "flex", flexDirection: "column", gap: 6, position: "sticky", top: 0, height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 16px", cursor: "pointer" }} onClick={() => nav("/")}>
-          <svg width="28" height="28" viewBox="0 0 34 34">
-            <defs>
-              <linearGradient id="sblg" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stopColor="#22d3ee" />
-                <stop offset="1" stopColor="#34e27a" />
-              </linearGradient>
-            </defs>
-            <rect width="34" height="34" rx="9" fill="url(#sblg)" />
-            <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-          </svg>
+          <BrandMark size={28} />
           <span style={{ fontWeight: 700, fontSize: 18, color: "var(--app-text)" }}>BanterClips</span>
         </div>
 
@@ -112,11 +107,20 @@ export default function AppShell({ children }) {
         <NavLink to="/studio" style={navItem}>
           <Icon d={icons.create} /> Create
         </NavLink>
+        <NavLink to="/viral" style={navItem}>
+          <Icon d={icons.viral} /> Viral
+        </NavLink>
+        <NavLink to="/prompts" style={navItem}>
+          <Icon d={icons.prompts} /> Prompts
+        </NavLink>
         <NavLink to="/clips" style={navItem}>
           <Icon d={icons.clips} /> My Clips
         </NavLink>
         <NavLink to="/pricing" style={navItem}>
           <Icon d={icons.pricing} /> Pricing
+        </NavLink>
+        <NavLink to="/feedback" style={navItem}>
+          <Icon d={icons.feedback} /> Feedback
         </NavLink>
         <NavLink to="/account" style={navItem}>
           <Icon d={icons.account} /> Account
@@ -141,14 +145,24 @@ export default function AppShell({ children }) {
           </div>
         ))}
 
-        <div style={{ marginTop: "auto", padding: "12px", borderRadius: 12, background: "var(--app-panel)", border: "1px solid var(--app-border)" }}>
+        <div style={{ marginTop: "auto", padding: "12px", borderRadius: 12, background: "var(--app-panel)", border: "1px solid var(--app-border)", cursor: "pointer" }}
+             onClick={() => nav("/account")}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--app-muted)", marginBottom: 6 }}>
             {plan === "creator" ? "CREATOR PLAN" : "FREE PLAN"}
           </div>
-          <div style={{ height: 6, borderRadius: 99, background: "#0b0f1c", overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ height: "100%", width: `${((limit - left) / limit) * 100}%`, background: "var(--app-grad)" }} />
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--app-text)" }}>
+            ⚡ {credits.toLocaleString()} <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--app-muted)" }}>credits</span>
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--app-muted)" }}>{left} of {limit} credits left</div>
+          <div style={{ fontSize: 11, color: "var(--app-muted2)", marginTop: 3 }}>
+            {credits > 0
+              ? `≈ ${Math.max(0, Math.floor(credits / videoPrice(15, "720p")))} videos at 15s`
+              : "Top up to keep creating"}
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, padding: "4px 4px 0", fontSize: 10.5 }}>
+          <a href="/privacy" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Privacy</a>
+          <a href="/terms" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Terms</a>
+          <a href="/data-deletion" style={{ color: "var(--app-muted2)", textDecoration: "none" }}>Data deletion</a>
         </div>
       </aside>
 
@@ -162,11 +176,12 @@ export default function AppShell({ children }) {
               Upgrade
             </button>
           )}
-          <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: left > 0 ? "var(--app-green)" : "var(--app-error)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--app-text)", whiteSpace: "nowrap" }}>
-              <span className="usage-long">{left} of {limit} credits left</span>
-              <span className="usage-short">{left}/{limit}</span>
+          <div className="usage-pill" style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 999, background: "var(--app-surface)", border: "1px solid var(--app-border)", flexShrink: 0, cursor: "pointer" }}
+               onClick={() => nav("/account")} title="Credits — tap to top up">
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: credits > 0 ? "var(--app-green)" : "var(--app-error)" }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text)", whiteSpace: "nowrap" }}>
+              <span className="usage-long">⚡ {credits.toLocaleString()} credits</span>
+              <span className="usage-short">⚡ {credits.toLocaleString()}</span>
             </span>
           </div>
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(140deg,#7b2ff7,#f0546c)", cursor: "pointer", flexShrink: 0 }} onClick={() => nav("/account")} />
@@ -180,9 +195,13 @@ export default function AppShell({ children }) {
           navigation must not disappear with it */}
       <nav className="app-bottomnav app-font">
         {[
+          // Pricing is reached from Account (and the credits pill) on phones —
+          // the bar holds the tabs people actually switch between.
           ["/studio", "Create", icons.create],
+          ["/viral", "Viral", icons.viral],
+          ["/prompts", "Prompts", icons.prompts],
           ["/clips", "My Clips", icons.clips],
-          ["/pricing", "Pricing", icons.pricing],
+          ["/feedback", "Feedback", icons.feedback],
           ["/account", "Account", icons.account],
           // Same conditional entry as the sidebar — without it, a phone has
           // no way into the console at all.

@@ -91,7 +91,6 @@ def run_mock_job(clip_id: uuid.UUID) -> None:
         say(f"Casting {cast}")
 
         # 2-3. voices and characters ------------------------------------
-        stage("creating_voice")
         say("Finding their voices")
         _sleep(REAL_TIMINGS["cast"])
 

@@ -152,7 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     # Additive column migrations, same as the API's startup. The worker can
     # win the race after a deploy and select model columns the API has not
-    # added yet; applying here (idempotent, never raises) closes that window.
+    # added yet; applying here (idempotent, required billing schema is strict)
+    # closes that window before the worker starts reading mapped User rows.
     # create_all covers brand-new tables (e.g. catalog_characters) the same way.
     from . import db_migrate
     from .db import Base, engine

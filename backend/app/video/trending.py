@@ -3,9 +3,9 @@ RIGHT NOW in a sport, turned into ready-to-shoot takes.
 
 Two stages, deliberately:
 
-1. SWEEP — one web-search call (the same OpenAI `web_search` tool the
-   Storyline Pack uses) ranks the last ~48 hours of that sport: results,
-   moments, transfers, memes, controversies. Facts only, source-backed.
+1. SWEEP — live web search (Firecrawl, with the OpenAI `web_search` tool as
+   the fallback — see websearch.py) ranks the last ~48 hours of that sport:
+   results, moments, transfers, memes, controversies. Facts only, source-backed.
 2. WRITE — a second, cheap text call turns each topic into two takes in the
    BanterClips voice (the TAKE_ENHANCER rules: front-loaded hook, named
    people, a filmable scene), each with a suggested tone and length. Search
@@ -25,16 +25,32 @@ import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 
-import httpx
-
 from ..config import settings
+from . import websearch
 
 log = logging.getLogger("banter.video.trending")
-
-RESPONSES_URL = "https://api.openai.com/v1/responses"
 TTL = timedelta(minutes=20)
+# A user-triggered refresh may rebuild a pack this soon after the last build;
+# inside the floor the cached pack is served with `refresh_after` set.
+REFRESH_FLOOR = timedelta(minutes=3)
 TOPICS = 5
 PROMPTS_PER_TOPIC = 2
+
+# The Viral tab's one-tap angles (Vikunja: "[MVP 1.5] Viral Presets tab").
+# Every topic gets one take per angle, written in the same call as the
+# free-form prompts; the label is built here so the client stays dumb.
+PRESETS = (
+    ("roast", "🔥", "Roast {target}",
+     "ROAST: mock {target}'s performance or decisions from this story — mercilessly, never cruelly"),
+    ("predict", "🔮", "Predict the season",
+     "PREDICTION: state how this story ends for the season as settled fact, absurdly confident"),
+    ("better", "⚖️", "Who is better?",
+     "COMPARISON: pick a winner between the two sides/people in this story and defend it outrageously"),
+    ("threat", "⚠️", "Biggest threat",
+     "THREAT: name the one thing (a rival, a habit, a player) that will wreck them next, and why"),
+    ("controversial", "🌶️", "Controversial take",
+     "CONTROVERSY: the take most fans will furiously disagree with — pick the unpopular side"),
+)
 
 SWEEP_PROMPT = """\
 Search the web for what {sport} fans are talking about RIGHT NOW.
@@ -80,46 +96,71 @@ Rules for every take:
   when the story genuinely has acts.
 - angle is a 2-4 word label for the angle taken.
 
+ALSO, for each topic, write one take per PRESET angle below — same rules,
+but the angle is fixed and the take must commit to it completely:
+{presets}
+
 Return ONLY JSON:
 {{"topics": [{{"index": <topic index>,
   "prompts": [{{"take": "...", "tone": "...", "seconds": 15,
-                "angle": "..."}}]}}]}}"""
+                "angle": "..."}}],
+  "presets": {{"roast": {{"take": "...", "tone": "...", "seconds": 15}},
+              "predict": {{...}}, "better": {{...}}, "threat": {{...}},
+              "controversial": {{...}}}}}}]}}"""
 
 
 def enabled() -> bool:
-    return (
-        getattr(settings, "WEB_RESEARCH", "off") == "openai"
-        and bool(getattr(settings, "OPENAI_API_KEY", ""))
-    )
+    return websearch.enabled()
 
 
-def get_feed(sport: str) -> dict:
-    """The trending feed for a sport: {"topics": [...], "fetched_at": iso}.
+def get_feed(sport: str, force: bool = False) -> dict:
+    """The trending feed for a sport: {"topics": [...], "fetched_at": iso,
+    "refresh_after": seconds}.
 
-    Served from the shared cache while fresh; refetched when stale. A failed
-    refetch falls back to the stale feed rather than an error — old trending
-    beats no trending."""
+    Served from the shared cache while fresh; refetched when stale. `force`
+    (the Viral tab's refresh button) rebuilds early, but never inside
+    REFRESH_FLOOR of the last build — that would let one impatient thumb
+    bill a search per tap. A failed refetch falls back to the stale feed
+    rather than an error — old trending beats no trending."""
     sport = (sport or "NBA").strip()[:24]
     if not enabled():
-        return {"topics": [], "fetched_at": None}
+        return {"topics": [], "fetched_at": None, "refresh_after": 0}
     row = _cache_get(sport)
     now = datetime.now(timezone.utc)
     if row is not None:
         fetched_at, pack = row
-        if now - fetched_at < TTL:
-            return {**pack, "fetched_at": fetched_at.isoformat()}
+        age = now - fetched_at
+        fresh = age < TTL and _has_presets(pack)
+        if fresh and not (force and refresh_allowed(fetched_at, now)):
+            return {**pack, "fetched_at": fetched_at.isoformat(),
+                    "refresh_after": _refresh_after(fetched_at, now)}
     try:
         pack = _build(sport)
     except Exception:  # noqa: BLE001 — trending is a bonus, never a blocker
         log.exception("trending build failed for %s", sport)
         pack = None
     if pack:
-        _cache_put(sport, pack)
-        return {**pack, "fetched_at": now.isoformat()}
+        # The build itself takes ~20s; stamp its END so the client's refresh
+        # countdown agrees with the server's floor.
+        built_at = datetime.now(timezone.utc)
+        _cache_put(sport, pack, built_at)
+        return {**pack, "fetched_at": built_at.isoformat(),
+                "refresh_after": int(REFRESH_FLOOR.total_seconds())}
     if row is not None:  # stale beats empty
         fetched_at, stale = row
-        return {**stale, "fetched_at": fetched_at.isoformat()}
-    return {"topics": [], "fetched_at": None}
+        return {**stale, "fetched_at": fetched_at.isoformat(),
+                "refresh_after": _refresh_after(fetched_at, now)}
+    return {"topics": [], "fetched_at": None, "refresh_after": 0}
+
+
+def refresh_allowed(fetched_at: datetime, now: datetime | None = None) -> bool:
+    now = now or datetime.now(timezone.utc)
+    return now - fetched_at >= REFRESH_FLOOR
+
+
+def _refresh_after(fetched_at: datetime, now: datetime) -> int:
+    """Seconds until a forced refresh would rebuild; 0 when it would now."""
+    return max(0, int((REFRESH_FLOOR - (now - fetched_at)).total_seconds()))
 
 
 # ------------------------------------------------------------------ pipeline
@@ -132,33 +173,30 @@ def _build(sport: str) -> dict | None:
     return {"topics": topics}
 
 
+def _has_presets(pack: dict) -> bool:
+    topics = pack.get("topics") or []
+    return bool(topics) and all(t.get("presets") for t in topics)
+
+
+def _preset_target(topic: dict) -> str:
+    """Who a preset like "Roast {target}" is aimed at: the team, else the
+    person at the centre of the story, else the story itself."""
+    return (topic.get("team") or (topic.get("who") or [""])[0] or "them").strip()[:40]
+
+
 def _sweep(sport: str) -> list[dict] | None:
     """Stage 1: web search → ranked factual topics."""
-    body = {
-        "model": getattr(settings, "OPENAI_RESEARCH_MODEL", "gpt-4.1-mini"),
-        "tools": [{"type": "web_search"}],
-        "input": SWEEP_PROMPT.format(sport=sport, today=date.today().isoformat(), n=TOPICS),
-    }
-    with httpx.Client(timeout=75.0) as client:
-        resp = client.post(
-            RESPONSES_URL, json=body,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-        )
-    if resp.status_code >= 400:
-        log.warning("trending sweep -> %s %s", resp.status_code, resp.text[:300])
+    prompt = SWEEP_PROMPT.format(sport=sport, today=date.today().isoformat(), n=TOPICS)
+    answer = websearch.ask(prompt, [
+        websearch.SearchSpec(f"{sport} news today", limit=8, recent="day"),
+        websearch.SearchSpec(f"{sport} latest results controversy fans reaction", limit=8, recent="day"),
+        websearch.SearchSpec(f"{sport} transfer trade rumours this week", limit=6, recent="week"),
+    ], timeout=75.0, max_tokens=2500)
+    data = answer.data
+    if data is None:
         return None
-    texts: list[str] = []
-    for item in resp.json().get("output") or []:
-        for part in item.get("content") or []:
-            if isinstance(part, dict) and part.get("text"):
-                texts.append(str(part["text"]))
-    match = re.search(r"\{.*\}", "\n".join(texts), re.S)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
+    log.info("trending sweep for %s answered via %s (%d sources)",
+             sport, answer.provider, len(answer.sources))
     if not (isinstance(data, dict) and data.get("found") and data.get("topics")):
         return None
     topics = []
@@ -173,6 +211,7 @@ def _sweep(sport: str) -> list[dict] | None:
             "who": [str(w)[:40] for w in (t.get("who") or [])[:3]],
             "team": str(t.get("team") or "")[:60],
             "prompts": [],
+            "presets": [],
         })
     return topics or None
 
@@ -189,9 +228,10 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
          "who": t["who"], "team": t["team"]}
         for i, t in enumerate(topics)
     ], ensure_ascii=False)
+    preset_lines = "\n".join(f"- {key}: {brief}" for key, _icon, _label, brief in PRESETS)
     raw = client.complete_json(
-        WRITE_SYSTEM.format(sport=sport, k=PROMPTS_PER_TOPIC),
-        f"Today's topics:\n{payload}", max_tokens=2500, temperature=0.9,
+        WRITE_SYSTEM.format(sport=sport, k=PROMPTS_PER_TOPIC, presets=preset_lines),
+        f"Today's topics:\n{payload}", max_tokens=6000, temperature=0.9,
     )
     if not raw:
         return
@@ -210,10 +250,35 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
                 continue
             topic["prompts"].append({
                 "take": take[:280],
-                "tone": p.get("tone") if p.get("tone") in ("Funny", "Savage", "Hype", "Bold") else "Funny",
-                "seconds": int(p["seconds"]) if p.get("seconds") in (10, 15, 30) else 15,
+                "tone": _tone(p.get("tone")),
+                "seconds": _seconds(p.get("seconds")),
                 "angle": str(p.get("angle") or "")[:40],
             })
+        # One-tap presets, in the fixed order the Viral tab shows them.
+        written = entry.get("presets") if isinstance(entry.get("presets"), dict) else {}
+        target = _preset_target(topic)
+        presets = []
+        for key, icon, label, _brief in PRESETS:
+            p = written.get(key) if isinstance(written.get(key), dict) else None
+            take = str((p or {}).get("take") or "").strip()
+            if not take:
+                continue
+            presets.append({
+                "key": key, "icon": icon,
+                "label": label.format(target=target),
+                "take": take[:280],
+                "tone": _tone(p.get("tone"), default="Savage" if key == "roast" else "Bold"),
+                "seconds": _seconds(p.get("seconds")),
+            })
+        topic["presets"] = presets
+
+
+def _tone(value, default: str = "Funny") -> str:
+    return value if value in ("Funny", "Savage", "Roast", "Hype", "Bold") else default
+
+
+def _seconds(value) -> int:
+    return int(value) if value in (10, 15, 30) else 15
 
 
 # --------------------------------------------------------------------- cache
@@ -235,7 +300,8 @@ def _cache_get(sport: str) -> tuple[datetime, dict] | None:
         db.close()
 
 
-def _cache_put(sport: str, pack: dict) -> None:
+def _cache_put(sport: str, pack: dict, fetched_at: datetime | None = None) -> None:
+    fetched_at = fetched_at or datetime.now(timezone.utc)
     from ..db import SessionLocal
     from ..models import TrendingPack
 
@@ -243,10 +309,10 @@ def _cache_put(sport: str, pack: dict) -> None:
     try:
         row = db.query(TrendingPack).filter(TrendingPack.sport == sport).first()
         if row is None:
-            db.add(TrendingPack(sport=sport, pack=pack))
+            db.add(TrendingPack(sport=sport, pack=pack, fetched_at=fetched_at))
         else:
             row.pack = pack
-            row.fetched_at = datetime.now(timezone.utc)
+            row.fetched_at = fetched_at
         db.commit()
     except Exception:  # noqa: BLE001 — a cache miss next time is the only cost
         log.warning("could not cache trending feed for %s", sport)

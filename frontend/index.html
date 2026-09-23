@@ -38,11 +38,10 @@
          it needs a real crawlable URL (a data: URI does not qualify) and at
          least 48px, which this file carries alongside 16 and 32. The inline
          SVG stays because it stays crisp on any tab-bar density. -->
-    <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%2334e27a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='34' height='34' rx='9' fill='url(%23g)'/%3E%3Cpath d='M13 10.5 L25 17 L13 23.5 Z' fill='%23fff'/%3E%3C/svg%3E" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -120,14 +119,14 @@
               "name": "Free",
               "price": "0",
               "priceCurrency": "USD",
-              "description": "60 welcome credits, 720p, publishes with a BanterClips watermark."
+              "description": "Welcome credits on signup, 720p, publishes with a BanterClips watermark."
             },
             {
               "@type": "Offer",
               "name": "Creator",
               "price": "19.00",
               "priceCurrency": "USD",
-              "description": "150 video credits per month, 1080p, watermark-free downloads and a priority render queue.",
+              "description": "150 credits every month, 1080p, 500-character prompts, watermark-free downloads and a priority render queue.",
               "priceSpecification": {
                 "@type": "UnitPriceSpecification",
                 "price": "19.00",
@@ -144,12 +143,18 @@
     </script>
   </head>
   <body>
-    <!-- Server-rendered fallback. React clears and replaces this on boot, so
-         nobody with JS ever sees it — but Google's first-pass crawl, Bing, and
-         every LLM/social scraper that does not execute JS see only this. It
-         therefore carries the real headline and copy, not a spinner. -->
+    <!-- Server-rendered fallback for Google's first-pass crawl, Bing, and
+         every LLM/social scraper that does not execute JS: they see only
+         this, so it carries the real headline and copy, not a spinner.
+
+         React does replace it on boot — but not instantly. Between the HTML
+         painting and the bundle downloading, parsing and mounting there is a
+         real window (hundreds of ms on a cold load), and this whole page was
+         flashing up in it on every reload. The inline script below hides it
+         before the first paint; anything that never runs that script still
+         reads the copy exactly as before. -->
     <div id="root">
-      <div style="font-family: system-ui, sans-serif; padding: 48px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box; max-width: 720px; margin: 0 auto">
+      <div id="bc-prerender" style="font-family: system-ui, sans-serif; padding: 48px 24px; color: #f2f4fa; background: #0b0d13; min-height: 100vh; box-sizing: border-box; max-width: 720px; margin: 0 auto">
         <h1 style="margin: 0 0 16px; font-size: 32px; line-height: 1.15">
           BanterClips — turn any sports opinion into a viral video
         </h1>
@@ -167,8 +172,9 @@
           <li>One-click publishing to Instagram</li>
         </ul>
         <p style="margin: 0 0 24px; color: #98a1b5; font-size: 16px">
-          Free plan: 60 welcome credits, no credit card. Creator: $19 a month for
-          1080p and watermark-free downloads.
+          Free: welcome credits to make your first video, no credit card.
+          Creator: $19 a month for 150 credits, 1080p, 500-character prompts
+          and watermark-free downloads.
         </p>
         <p style="margin: 0; color: #6b7488; font-size: 14px">
           <a href="/privacy" style="color: #98a1b5">Privacy</a> ·
@@ -177,6 +183,22 @@
         </p>
       </div>
     </div>
+    <script>
+      // Inline and synchronous on purpose: it runs during parse, before the
+      // browser paints, so the crawler copy above is never shown to a person.
+      (function () {
+        var el = document.getElementById("bc-prerender");
+        if (!el) return;
+        el.style.display = "none";
+        // Failsafe: if the bundle never boots (blocked or failed script) React
+        // never clears #root, and a blank page is worse than the copy. React
+        // removes this node on mount, so a live node means it never mounted.
+        setTimeout(function () {
+          var stranded = document.getElementById("bc-prerender");
+          if (stranded) stranded.style.display = "";
+        }, 8000);
+      })();
+    </script>
     <noscript>BanterClips needs JavaScript — please enable it to continue.</noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>

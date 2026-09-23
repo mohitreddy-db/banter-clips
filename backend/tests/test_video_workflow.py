@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.video import catalog, defaults, focus, library, media, planner, prompts  # noqa: E402
-from app.video import enhancer, prompt_registry, review, shotwriter  # noqa: E402
+from app.video import enhancer, prompt_registry, providers, review, shotwriter  # noqa: E402
 from app.video.types import CastMember, Scene, VideoPlan  # noqa: E402
 
 
@@ -37,6 +37,69 @@ def test_resolve_rejects_junk_without_failing():
     assert r.sport == "Soccer"      # inferred from the take, not the bad input
     assert r.tone == defaults.DEFAULT_TONE
     assert r.seconds == defaults.DEFAULT_SECONDS
+
+
+def test_reference_person_is_cast_by_the_planner_and_bound_in_the_keyframe():
+    """The user's uploaded photo must flow all the way through: resolve
+    carries the flag, the planner is told to cast id='reference' without
+    describing the face, and the keyframe prompt names the photo as that
+    member's identity. Before this, the model drew a generic stand-in."""
+    r = defaults.resolve("A take about the person in the reference photo.",
+                         "NBA", "Funny", 15, has_reference=True)
+    assert r.has_reference is True
+    assert defaults.resolve("Plain take with no photo attached here.").has_reference is False
+
+    told = prompts.planner_user_message("t", "NBA", "Funny", [], [], has_reference=True)
+    assert "id='reference'" in told
+    assert "never their face" in told.lower()
+    assert "id='reference'" not in prompts.planner_user_message("t", "NBA", "Funny", [], [])
+
+    member = CastMember(id="reference", name="a Philly die-hard",
+                        look="", wardrobe="courtside casual", voice="")
+    line = prompts.reference_binding(member)
+    assert "first attached image" in line.lower()
+    assert "a Philly die-hard" in line and "EXACTLY" in line
+
+
+def test_identity_route_exists_only_with_a_real_provider_and_model():
+    """Reference scenes render on a chat-shaped identity model (Grok ignores
+    attached faces). Stub mode and an empty model both disable the route so
+    development and the standard pipeline never touch it."""
+    from app.config import settings
+
+    old = (settings.IMAGE_PROVIDER, settings.OPENROUTER_API_KEY,
+           settings.IMAGE_IDENTITY_MODEL)
+    try:
+        settings.IMAGE_PROVIDER = "openrouter"
+        settings.OPENROUTER_API_KEY = "test-key"
+        settings.IMAGE_IDENTITY_MODEL = "google/gemini-2.5-flash-image"
+        p = providers.identity_image_provider()
+        assert isinstance(p, providers.ChatImageProvider) and p.available
+
+        settings.IMAGE_IDENTITY_MODEL = ""
+        assert providers.identity_image_provider() is None
+
+        settings.IMAGE_IDENTITY_MODEL = "google/gemini-2.5-flash-image"
+        settings.IMAGE_PROVIDER = "stub"
+        assert providers.identity_image_provider() is None
+    finally:
+        (settings.IMAGE_PROVIDER, settings.OPENROUTER_API_KEY,
+         settings.IMAGE_IDENTITY_MODEL) = old
+
+
+def test_fit_frame_covers_any_canvas_to_the_916_frame():
+    """Chat image models pick their own canvas; the animator needs 720x1280
+    exactly, cover-cropped rather than stretched or letterboxed."""
+    if not media.available():
+        return
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "wide.jpg"
+        media._run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=640x480",
+                    "-frames:v", "1", str(src)], "test frame")
+        out = media.fit_frame(src, Path(td) / "fit.jpg")
+        assert out is not None
+        info = media.probe(out)
+        assert (info["width"], info["height"]) == (720, 1280)
 
 
 def test_resolve_infers_sport_per_league():
@@ -58,7 +121,26 @@ def test_resolve_clamps_duration_and_scales_scenes():
 
 
 def test_resolve_truncates_an_overlong_take():
-    assert len(defaults.resolve("x" * 5000).take) <= 280
+    # The Creator ceiling; the per-plan gate (280 on Free) lives in the API.
+    assert len(defaults.resolve("x" * 5000).take) <= 500
+
+
+def test_guided_direction_reaches_the_planner_prompt():
+    resolved = defaults.resolve("Messi is still the GOAT", direction="A tense press room")
+    message = prompts.planner_user_message(
+        resolved.take, resolved.sport, resolved.tone, [], [], direction=resolved.direction
+    )
+    assert "A tense press room" in message
+
+
+def test_seedance_capabilities_keep_audio_and_valid_bounds():
+    mini = providers.video_options("bytedance/seedance-2.0-mini", 2, "1080p")
+    assert mini == {"duration": 4, "resolution": "720p", "generate_audio": True}
+    pro = providers.video_options("bytedance/seedance-1-5-pro", 20, "1080p")
+    assert pro["duration"] == 12 and pro["generate_audio"] is True
+    assert providers.video_options("another/provider", 2, "1080p") == {
+        "duration": 2, "resolution": "1080p"
+    }
 
 
 # --------------------------------------------------------------------- library
@@ -360,7 +442,7 @@ def test_model_style_can_never_replace_the_photoreal_anchor():
     for text in (image, motion):
         assert "REAL PHOTOGRAPH" in text
         assert "photoreal" in text.lower()
-        assert "Not animation, illustration, cartoon" in text
+        assert "Never animation, illustration, cartoon" in text
         assert "metallic silver-blue grade" in text   # flavour still survives
 
 
@@ -452,6 +534,234 @@ def test_motion_prompt_covers_every_directed_field():
     assert "No music" in text
     # We burn our own captions; a second set from the model would collide.
     assert "No subtitles" in text
+
+
+def test_only_the_speaker_lip_syncs():
+    """Two clips shipped with two people mouthing one line in identical sync
+    (2026-08-28). Naming the speaker was not enough — everyone else has to be
+    told to stay shut, and a silent shot has to say nobody speaks at all."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    spoken = [s for s in plan.scenes if s.line]
+    assert spoken, "need a scene with dialogue"
+    for scene in spoken:
+        text = prompts.build_motion_prompt(plan, scene)
+        speaker = plan.speaker_for(scene)
+        assert f"Only {speaker.name}'s lips move in sync" in text
+        assert "Nobody else speaks, mouths or echoes it" in text
+        assert "One voice on the track." in text
+        # Last word wins: a shot description can itself put several mouths in
+        # motion ("both mouths agape"), so this has to sit at the very end.
+        assert text.rstrip().endswith("One voice on the track.")
+    for scene in (s for s in plan.scenes if not s.line):
+        assert "nobody speaks and no lips move" in prompts.build_motion_prompt(plan, scene)
+
+
+def test_nobody_is_rendered_twice():
+    """A person drawn twice is the most obviously-broken defect a viewer sees,
+    so every prompt forbids it and the review gate fails the frame."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    for scene in plan.scenes:
+        for text in (prompts.build_image_prompt(plan, scene),
+                     prompts.build_motion_prompt(plan, scene)):
+            assert "EXACTLY ONCE" in text
+            assert "twin" in text
+
+    class Doubled:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"duplicate_person": True, "is_photoreal": True,
+                               "is_single_frame": True})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        frame = Path(tmp) / "f.jpg"
+        frame.write_bytes(b"x")
+        verdict = review.review_keyframe(frame, "Wemby", Doubled())
+    assert not verdict, "a duplicated person must be a hard failure"
+    assert any("twice" in h for h in verdict.hard)
+    # And the retry says what to fix, rather than just trying again.
+    assert "exactly ONE time" in prompts.escalate("p", verdict.hard)
+
+
+def test_the_expected_real_logo_is_not_reported_as_a_problem():
+    """Real crests and sponsor boards are what make a frame read as broadcast
+    footage — noting them filled every clip's provenance with a warning about
+    the thing we asked for."""
+    class Logos:
+        available = True
+
+        def complete_json(self, *_a, **_k):
+            return json.dumps({"has_real_logo": True, "is_photoreal": True,
+                               "is_single_frame": True, "visible_text": "REAL MADRID"})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        frame = Path(tmp) / "f.jpg"
+        frame.write_bytes(b"x")
+        verdict = review.review_keyframe(frame, "Mourinho", Logos())
+    assert verdict, "real logos are expected, never a failure"
+    assert not any("logo" in note.lower() for note in verdict.soft + verdict.hard)
+
+
+def test_the_shot_is_anchored_to_whoever_it_is_actually_about():
+    """A silent shot's speaker_id is a leftover field. One clip's action was
+    entirely about a forward while speaker_id named the manager, so the
+    keyframe was anchored to the wrong face and the model drew both."""
+    plan = _plan(take="Wemby can't find Brunson", seconds=15)
+    scene = plan.scenes[-1]
+    forward, manager = plan.cast[0], plan.cast[-1]
+    scene.line = ""
+    scene.speaker_id = manager.id
+    scene.action = f"{forward.name} spins away laughing, alone in frame"
+    assert prompts.visible_cast(plan, scene)[0] is forward
+    assert prompts.cast_clause(plan, scene).startswith(forward.name)
+
+
+def test_a_person_is_described_by_something_that_describes_them():
+    """`short_look` attributes dialogue. It used to emit pure modifiers —
+    "Wembanyama, an extremely tall, says" — which describe nobody."""
+    for member in _plan(take="Wemby can't find Brunson", seconds=15).cast:
+        look = prompts.short_look(member)
+        assert len(look.split()) >= 3
+        assert not look.split()[-1].rstrip(",.;").lower() in {
+            "a", "an", "the", "very", "extremely", "tall", "fast", "with"
+        }, look
+
+
+def test_out_of_provider_credits_pauses_instead_of_shipping_stills():
+    """The failure that shipped twice: the provider ran dry, every scene
+    degraded to a gradient placeholder, and the 'successful' slideshow charged
+    the user. Now the job pauses, completed scenes are reused from the
+    checkpoint, and nothing pretends to be a video."""
+    import subprocess
+    from app.video import providers, runner
+
+    class Broke:
+        available = True
+
+        def generate(self, *_a, **_k):
+            raise providers.OutOfCredits("no money")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp) / "work"
+        work.mkdir()
+        # Scene 0 finished on a previous run: a real keyframe and clip exist
+        # and the checkpoint records them.
+        kf = work / "scene0_kf1.jpg"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "color=c=blue:s=72x128", "-frames:v", "1", str(kf)],
+                       check=True)
+        clip0 = work / "scene0.mp4"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+                        "-i", "color=c=blue:s=72x128:d=1", "-pix_fmt", "yuv420p",
+                        str(clip0)], check=True)
+        (work / "checkpoint.json").write_text(json.dumps(
+            {"0": {"keyframe": str(kf), "clip": str(clip0)}}))
+
+        real = providers.image_provider
+        providers.image_provider = lambda: Broke()
+        try:
+            result = runner.generate_video(
+                "Wemby can't find Brunson", "NBA", "Funny", 15,
+                work_dir=work, out_path=work / "final.mp4",
+            )
+        finally:
+            providers.image_provider = real
+
+    assert result.paused, "provider 402 must pause, not degrade"
+    assert not result.ok
+    assert "provider out of credits" in result.error
+    # The checkpointed scene was reused for free; nothing became a placeholder.
+    scene0 = next(a for a in result.assets if a.index == 0)
+    assert scene0.ok and scene0.cost_usd == 0
+    assert any("reused" in n for n in scene0.notes)
+    for asset in result.assets:
+        assert not (asset.keyframe_path and "placeholder" in asset.keyframe_path)
+        for note in asset.notes:
+            assert "Ken Burns" not in note and "placeholder" not in note
+
+
+def test_the_fake_voice_stage_is_gone():
+    from app.models import CLIP_STATUSES, GENERATION_STAGES
+
+    assert "creating_voice" not in GENERATION_STAGES
+    assert "paused" in CLIP_STATUSES
+
+
+def test_the_sport_is_inferred_so_picking_one_is_optional():
+    """Sport used to be a required choice before you could type. Almost every
+    take names its own league, club or player, so the words decide it."""
+    from app.video import sports as sports_mod
+
+    for take, expected in (
+        ("Mbappé just turned Real Sociedad's defense into cone drills", "Soccer"),
+        ("Seven foot four and Wemby still couldn't find Brunson", "NBA"),
+        ("Mahomes throws another touchdown and the Chiefs win again", "NFL"),
+        ("Verstappen wins another grand prix from pole", "F1"),
+        ("Kohli scored a century and the IPL crowd went wild", "Cricket"),
+        ("Djokovic won Wimbledon again somehow", "Tennis"),
+        ("McDavid is dragging the Oilers to the Stanley Cup", "NHL"),
+        ("Canelo knocked him out in the third round", "Boxing"),
+    ):
+        assert sports_mod.infer(take) == expected, take
+
+    # Nothing to go on: fall back to what the user follows, then to a default.
+    assert sports_mod.infer("my neighbour is very loud") is None
+    assert sports_mod.resolve(None, "my neighbour is very loud", ["NHL"]) == "NHL"
+    assert sports_mod.resolve(None, "my neighbour is very loud", []) == "Soccer"
+    # An explicit pick always wins over the guess.
+    assert sports_mod.resolve("Golf", "Wemby dunked on everyone", []) == "Golf"
+
+
+def test_ambiguous_names_follow_the_sports_the_fan_actually_watches():
+    from app.video import sports as sports_mod
+
+    assert sports_mod.resolve(None, "The Giants collapsed again", ["MLB"]) == "MLB"
+    assert sports_mod.resolve(None, "The Giants collapsed again", ["NFL"]) == "NFL"
+
+
+def test_every_sport_has_its_own_world():
+    """Unlisted sports fell through to the NBA venue list, which staged a
+    Formula 1 take in a basketball arena."""
+    from app.models import SPORTS
+    from app.video.library import default_venue
+
+    seen = set()
+    for sport in SPORTS:
+        venue = default_venue(sport)
+        assert venue and venue not in seen, f"{sport} shares a venue with another sport"
+        seen.add(venue)
+    assert "pit lane" in default_venue("F1")
+    assert "cricket" in default_venue("Cricket")
+
+
+def test_roast_is_a_tone_the_pipeline_understands():
+    from app.models import TONES
+
+    assert "Roast" in TONES
+    assert "Roast" in prompts.TONE_DIRECTION
+    plan = _plan(take="Arsenal bottled it again", tone="Roast", seconds=15)
+    assert plan.tone == "Roast"
+    assert "roast" in prompts.style_for(plan).lower()
+
+
+def test_named_teams_and_players_are_requirements_not_hints():
+    """A user who types "put Mbappé in it" gets Mbappé in it."""
+    resolved = defaults.resolve(
+        take="Two legends argue about who is more clutch", tone="Roast",
+        also_sports=["NBA"], subjects=["Patrick Mahomes", "LeBron James"],
+    )
+    message = prompts.planner_user_message(
+        resolved.take, resolved.sport, resolved.tone, [], ["a stadium"],
+        also_sports=resolved.also_sports, subjects=resolved.subjects,
+    )
+    assert "MUST feature: Patrick Mahomes, LeBron James" in message
+    # A second sport is offered as crossover, never as a second world.
+    crossed = defaults.resolve(take="Wemby tries out for the Chiefs", also_sports=["NFL"])
+    if crossed.also_sports:
+        assert "may cross" in prompts.planner_user_message(
+            crossed.take, crossed.sport, crossed.tone, [], ["a stadium"],
+            also_sports=crossed.also_sports,
+        )
 
 
 def test_prompts_stay_inside_the_useful_length_band():
@@ -644,11 +954,15 @@ def test_written_bodies_are_capped():
 
 
 def test_speaker_attribution_cuts_at_a_clause_not_mid_phrase():
+    """It must also pick a clause that describes somebody. This asserted
+    "an extremely tall" for months — the exact dangling-modifier output the
+    function was written to prevent, reached because three words of pure
+    qualifier satisfied the old length check."""
     member = CastMember(
         name="Victor Wembanyama",
         look="an extremely tall, very slim 7-foot-4 French basketball player with long limbs")
     short = prompts.short_look(member)
-    assert short == "an extremely tall"
+    assert short == "very slim 7-foot-4 French basketball player with long limbs"
     assert not short.endswith(("basketball", ","))
 
 
@@ -673,6 +987,121 @@ def test_cast_member_coerces_anything():
 def test_scene_clamps_a_silly_duration():
     assert Scene.from_raw({"seconds": 900}, 0, "v").seconds <= 15
     assert Scene.from_raw({"seconds": "abc"}, 0, "v").seconds > 0
+
+
+def test_trending_write_stage_fills_one_tap_presets():
+    """The Viral tab's angles come from the same write call as the free-form
+    prompts: five fixed keys in order, labels built server-side, bad values
+    falling back — and a pack without them counts as stale."""
+    from app.video import trending
+
+    topics = [{"title": "Arsenal vs Man City", "summary": "s", "why_now": "w", "heat": "viral",
+               "who": ["Arteta"], "team": "Arsenal", "prompts": [], "presets": []}]
+
+    class Fake:
+        available = True
+
+        def complete_json(self, system, user, **_k):
+            assert "roast" in system and "controversial" in system
+            return json.dumps({"topics": [{
+                "index": 0,
+                "prompts": [{"take": "Arsenal bottle it again", "tone": "Savage", "seconds": 15, "angle": "roast"}],
+                "presets": {
+                    "roast": {"take": "Arsenal in August is a comedy special", "tone": "Savage", "seconds": 10},
+                    "predict": {"take": "City win it by March", "tone": "Bold", "seconds": 15},
+                    "better": {"take": "Haaland vs Havertz isn't a debate", "tone": "Bold"},
+                    "threat": {"take": "Their biggest threat is their own back line", "tone": "Funny", "seconds": 99},
+                    "controversial": {"take": "Arteta out would fix nothing", "tone": "Hype", "seconds": 30},
+                },
+            }]})
+
+    real = providers.text_client
+    providers.text_client = lambda: Fake()
+    try:
+        trending._write_prompts("Soccer", topics)
+    finally:
+        providers.text_client = real
+    presets = topics[0]["presets"]
+    assert [p["key"] for p in presets] == ["roast", "predict", "better", "threat", "controversial"]
+    assert presets[0]["label"] == "Roast Arsenal" and presets[0]["icon"] == "🔥"
+    assert presets[2]["seconds"] == 15 and presets[3]["seconds"] == 15  # missing / bad → default
+    assert trending._has_presets({"topics": topics})
+    assert not trending._has_presets({"topics": [{"presets": []}]})
+
+# ------------------------------------------------------------- web search
+
+def test_firecrawl_results_parse_both_api_shapes_and_dedupe():
+    from app.video import websearch
+
+    v2 = {"data": {"news": [{"url": "https://a/1", "title": "A", "description": "  first   story ", "date": "2026-09-04"}],
+                   "web": [{"url": "https://a/1", "title": "dup"}, {"url": "https://b/2", "title": "B", "markdown": "x" * 5000}]}}
+    hits = websearch.parse_results(v2)
+    assert [h.url for h in hits] == ["https://a/1", "https://b/2"]   # news first, dupes dropped
+    assert hits[0].snippet == "first story" and hits[0].date == "2026-09-04"
+    assert len(hits[1].excerpt) == websearch.EXCERPT_CHARS
+    v1 = {"data": [{"url": "https://c/3", "title": "C", "description": "d"}]}
+    assert [h.title for h in websearch.parse_results(v1)] == ["C"]
+    assert websearch.parse_results({"success": False}) == []
+
+
+def test_ask_answers_from_firecrawl_sources_and_falls_back_cleanly():
+    """With a Firecrawl key the answer is written from the search hits by the
+    research model; with no hits and no OpenAI search the answer is empty
+    rather than an exception."""
+    from app.config import settings
+    from app.video import websearch
+
+    old = (settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY,
+           websearch._key_rejected, websearch.search, providers.TextClient)
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, key, model, timeout=90.0):
+            seen["model"] = model
+
+        def complete_json(self, system, user, **_k):
+            seen["user"] = user
+            return '{"found": true, "topics": [{"title": "Arsenal vs City"}]}'
+
+    try:
+        settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY = "k", "openai", "ok"
+        websearch._key_rejected = False
+        websearch.search = lambda spec: [websearch.Hit(title="T", url=f"https://x/{spec.query[:3]}", snippet="s")]
+        providers.TextClient = FakeClient
+        ans = websearch.ask("Return the topics.", [websearch.SearchSpec("q one"), websearch.SearchSpec("q two")])
+        assert ans.provider == "firecrawl" and ans.data["found"] is True
+        assert len(ans.sources) == 2 and "[1] T — https://x/q o" in seen["user"]
+        assert seen["model"] == settings.OPENAI_RESEARCH_MODEL
+
+        # No key at all and OpenAI search off: research is simply disabled.
+        settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH = "", "off"
+        assert websearch.enabled() is False
+        assert websearch.ask("x", [websearch.SearchSpec("q")]).data is None
+    finally:
+        (settings.FIRECRAWL_API_KEY, settings.WEB_RESEARCH, settings.OPENAI_API_KEY,
+         websearch._key_rejected, websearch.search, providers.TextClient) = old
+
+
+def test_trending_sweep_goes_through_websearch_and_refresh_is_throttled():
+    from datetime import datetime, timedelta, timezone
+    from app.video import trending, websearch
+
+    old = websearch.ask
+    websearch.ask = lambda prompt, specs, **k: websearch.Answer(
+        data={"found": True, "topics": [{"title": "Messi retires", "summary": "s", "heat": "viral",
+                                          "who": ["Messi"], "team": "Argentina"}]},
+        provider="firecrawl")
+    try:
+        topics = trending._sweep("Soccer")
+    finally:
+        websearch.ask = old
+    assert topics and topics[0]["title"] == "Messi retires" and topics[0]["presets"] == []
+
+    now = datetime.now(timezone.utc)
+    assert trending.refresh_allowed(now - trending.REFRESH_FLOOR, now)
+    assert not trending.refresh_allowed(now - timedelta(seconds=30), now)
+    assert trending._refresh_after(now - timedelta(seconds=30), now) == int(trending.REFRESH_FLOOR.total_seconds()) - 30
+    assert trending._refresh_after(now - timedelta(hours=1), now) == 0
 
 
 if __name__ == "__main__":

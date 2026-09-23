@@ -50,4 +50,4 @@ def strip(take: str | None) -> str:
     if len(text) < MIN_TAKE_CHARS:
         # Stripping can leave too little for the clips_take_len constraint.
         text = (text + PADDING).strip()
-    return text[:280]
+    return text[:500]

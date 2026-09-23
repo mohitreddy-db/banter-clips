@@ -5,8 +5,8 @@ showed the wow factor is context: the actual current squad, this week's
 storylines, the real kit and sponsor, a real place, the person's famous
 mannerisms. Our planner used to know none of that.
 
-One web-search call (the same OpenAI `web_search` tool character research
-already uses) fetches a structured pack; packs are cached in Postgres per
+One web-search round (Firecrawl, falling back to the OpenAI `web_search`
+tool — see websearch.py) fetches a structured pack; packs are cached in Postgres per
 topic per day, so a hot take about the same team costs ~$0 after the first
 video. Strictly optional and strictly non-fatal: no key, a bad response, or
 a timeout simply yields no pack, and the planner works as before.
@@ -19,14 +19,10 @@ import logging
 import re
 from datetime import date
 
-import httpx
-
 from ..config import settings
-from . import catalog
+from . import catalog, websearch
 
 log = logging.getLogger("banter.video.context")
-
-RESPONSES_URL = "https://api.openai.com/v1/responses"
 
 PACK_PROMPT = """\
 Search the web for the CURRENT situation around: {topic} ({sport}).
@@ -61,8 +57,7 @@ never invent scores or quotes. If the topic is unrecognisable, return
 def enabled() -> bool:
     return (
         str(getattr(settings, "STORYLINE_CONTEXT", "on")).lower() == "on"
-        and getattr(settings, "WEB_RESEARCH", "off") == "openai"
-        and bool(getattr(settings, "OPENAI_API_KEY", ""))
+        and websearch.enabled()
     )
 
 
@@ -131,32 +126,13 @@ def summarize(pack: dict | None) -> str:
 # ------------------------------------------------------------------ plumbing
 
 def _fetch(topic: str, sport: str) -> dict | None:
-    body = {
-        "model": getattr(settings, "OPENAI_RESEARCH_MODEL", "gpt-4.1-mini"),
-        "tools": [{"type": "web_search"}],
-        "input": PACK_PROMPT.format(topic=topic, sport=sport, today=date.today().isoformat()),
-    }
-    with httpx.Client(timeout=60.0) as client:
-        resp = client.post(
-            RESPONSES_URL, json=body,
-            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-        )
-    if resp.status_code >= 400:
-        log.warning("storyline fetch -> %s %s", resp.status_code, resp.text[:300])
-        return None
-    texts: list[str] = []
-    for item in resp.json().get("output") or []:
-        for part in item.get("content") or []:
-            if isinstance(part, dict) and part.get("text"):
-                texts.append(str(part["text"]))
-    match = re.search(r"\{.*\}", "\n".join(texts), re.S)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    prompt = PACK_PROMPT.format(topic=topic, sport=sport, today=date.today().isoformat())
+    answer = websearch.ask(prompt, [
+        websearch.SearchSpec(f"{topic} {sport} latest news", limit=8, recent="week"),
+        # Kit sponsor wordmarks and stadium looks rarely fit a snippet.
+        websearch.SearchSpec(f"{topic} {sport} squad kit sponsor stadium", limit=5, scrape_top=2),
+    ], timeout=60.0, max_tokens=2500)
+    return answer.data
 
 
 def _cache_get(key: str) -> dict | None:

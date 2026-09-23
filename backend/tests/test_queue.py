@@ -205,6 +205,284 @@ def test_depth_reports_every_status():
         db.close()
 
 
+# ---- regenerate-with-different-options, at the script approval gate --------
+
+def _script_clip(db, *, plan="free", balance=200):
+    """A clip parked at the approval gate, plus its owner in a known state."""
+    user = _user(db)
+    user.plan = plan
+    user.credits = balance
+    clip = Clip(
+        user_id=user.id,
+        take="A script options test take that is long enough.",
+        sport="NBA", tone="Funny", duration_target=15, resolution="720p",
+        status="script_ready", credits_quoted=60,
+        script={"title": "t", "scenes": [{"seconds": 4.0, "line": "hi", "action": "waves"}]},
+    )
+    db.add(clip)
+    db.commit()
+    return user, clip
+
+
+def _quiet_generation():
+    """Swap the router's start_generation for a noop; returns the original."""
+    from app.routers import clips as clips_router
+
+    real = clips_router.start_generation
+    clips_router.start_generation = lambda cid: None
+    return clips_router, real
+
+
+def test_regenerate_with_new_options_requotes_and_updates_the_clip():
+    """Changing tone/length/quality at the approval gate must re-quote the
+    video at the exact menu price — and still charge nothing (rule 3)."""
+    from app.services import credits
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        user, clip = _script_clip(db, plan="creator", balance=500)
+        clips_router.regenerate_script(
+            clip.id,
+            clips_router.ScriptRegenerate(tone="Roast", duration=30, resolution="1080p"),
+            user, db)
+        db.refresh(clip)
+        assert (clip.tone, clip.duration_target, clip.resolution) == ("Roast", 30, "1080p")
+        assert clip.credits_quoted == credits.video_price(db, 30, "1080p")
+        assert clip.status == "queued" and clip.script is None
+        db.refresh(user)
+        assert user.credits == 500  # charge-on-completion: wallet untouched
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+def test_regenerate_options_respect_plan_gates_and_change_nothing_on_refusal():
+    """A Free user asking for 30s or 1080p at the gate is told to upgrade,
+    and the clip stays exactly as it was — same script, same quote."""
+    from fastapi import HTTPException
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        user, clip = _script_clip(db, plan="free", balance=500)
+        for body in (clips_router.ScriptRegenerate(duration=30),
+                     clips_router.ScriptRegenerate(resolution="1080p")):
+            try:
+                clips_router.regenerate_script(clip.id, body, user, db)
+                raise AssertionError("expected a 403 upgrade_required")
+            except HTTPException as exc:
+                assert exc.status_code == 403
+        db.refresh(clip)
+        assert clip.status == "script_ready"
+        assert (clip.duration_target, clip.resolution, clip.credits_quoted) == (15, "720p", 60)
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+def test_regenerate_options_check_the_balance_against_the_new_quote():
+    """Upsizing past the wallet is refused with a top-up 402 — but a plain
+    rewrite (no option change) stays free even on a low balance."""
+    from fastapi import HTTPException
+    from app.services import credits
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        needed = credits.video_price(db, 15, "1080p")
+        user, clip = _script_clip(db, plan="creator", balance=needed - 1)
+        try:
+            clips_router.regenerate_script(
+                clip.id, clips_router.ScriptRegenerate(resolution="1080p"), user, db)
+            raise AssertionError("expected a 402 insufficient_credits")
+        except HTTPException as exc:
+            assert exc.status_code == 402
+        db.refresh(clip)
+        assert clip.status == "script_ready" and clip.resolution == "720p"
+
+        clips_router.regenerate_script(
+            clip.id, clips_router.ScriptRegenerate(feedback="less cringe"), user, db)
+        db.refresh(clip)
+        assert clip.status == "queued"  # rewriting itself never needs credits
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+# ---- plan capabilities ------------------------------------------------------
+
+def test_prompt_length_is_a_plan_capability():
+    """280 characters on Free, 500 on Creator: a long take from a Free
+    account gets the upgrade message, never a validation error, and the same
+    take is accepted once the plan allows it."""
+    from fastapi import HTTPException
+    from app.schemas import ClipCreate
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    try:
+        user = _user(db)
+        user.plan, user.credits = "free", 500
+        db.commit()
+        long_take = ("Arsenal fans plan the parade in August every single year, " * 6)[:320]
+        body = ClipCreate(take=long_take, tone="Funny", duration=10, resolution="720p")
+        try:
+            clips_router.create_clip(body, user, db)
+            raise AssertionError("expected a 403 upgrade_required")
+        except HTTPException as exc:
+            assert exc.status_code == 403 and exc.detail["code"] == "upgrade_required"
+
+        user.plan = "creator"
+        db.commit()
+        out = clips_router.create_clip(body, user, db)
+        assert out.take.startswith("Arsenal fans") and len(out.take) > 280
+    finally:
+        clips_router.start_generation = real
+        _cleanup(db)
+        db.close()
+
+
+# ---- feedback ---------------------------------------------------------------
+
+def test_feedback_is_stored_for_anyone_and_the_honeypot_is_silent():
+    from sqlalchemy import delete as _delete
+    from app.models import Feedback
+    from app.routers import feedback as fb
+
+    db = SessionLocal()
+    try:
+        row = fb.submit(db, fb.FeedbackIn(message="The outro sting is too loud on phones.",
+                                          category="bug", rating=4, email="  guest@example.com "),
+                        None, "203.0.113.9", "pytest")
+        assert row is not None and row.status == "new"
+        assert row.email == "guest@example.com" and row.user_id is None
+        assert fb.submit(db, fb.FeedbackIn(message="buy cheap watches now!!", website="http://spam"),
+                         None, "203.0.113.9", "bot") is None
+        # A signed-in note carries the account, not whatever email was typed.
+        user = _user(db)
+        mine = fb.submit(db, fb.FeedbackIn(message="Love the Roast tone.", category="praise",
+                                           email="other@example.com"),
+                         user, "203.0.113.10", "pytest")
+        assert mine.user_id == user.id and mine.email == user.email
+        db.execute(_delete(Feedback).where(Feedback.id.in_([row.id, mine.id])))
+        db.commit()
+    finally:
+        db.close()
+
+
+# ---- scene edits of a finished video ----------------------------------------
+
+def test_scene_edits_requote_only_the_chosen_scenes_and_need_work_files():
+    """Re-rendering one scene is priced for that scene alone, edits the script
+    in place, charges nothing up front, and is only offered while the other
+    scenes' clips are still on disk to be reused."""
+    import json
+    import shutil
+    from fastapi import HTTPException
+    from app.services import credits
+    from app.video import runner as runner_mod
+
+    db = SessionLocal()
+    clips_router, real = _quiet_generation()
+    work = None
+    try:
+        user = _user(db)
+        user.plan, user.credits = "creator", 500
+        db.commit()
+        clip = Clip(
+            user_id=user.id, take="A finished video whose middle scene needs a better line.",
+            sport="Soccer", tone="Funny", duration_target=15, resolution="720p",
+            status="ready", credits_charged=60, video_url="https://x/final.mp4",
+            script={"title": "t", "scenes": [
+                {"seconds": 3.0, "line": "one", "action": "a"},
+                {"seconds": 5.0, "line": "two", "action": "b"},
+                {"seconds": 4.0, "line": "three", "action": "c"},
+            ]},
+        )
+        db.add(clip)
+        db.commit()
+        body = clips_router.SceneRerender(
+            scenes=[clips_router.SceneEdit(index=1, line="a much better line")])
+
+        # No work files on disk: honestly unavailable, and nothing changes.
+        assert clips_router.get_clip(clip.id, user, db).editable is False
+        try:
+            clips_router.rerender_scenes(clip.id, body, user, db)
+            raise AssertionError("expected a 409 edit_unavailable")
+        except HTTPException as exc:
+            assert exc.status_code == 409 and exc.detail["code"] == "edit_unavailable"
+
+        # The other scenes' clips exist: the edit is quoted for scene 1 only.
+        work = runner_mod.work_dir_for(clip.id)
+        work.mkdir(parents=True, exist_ok=True)
+        ckpt = {}
+        for i in range(3):
+            f = work / f"scene{i}.mp4"
+            f.write_bytes(b"x")
+            ckpt[str(i)] = {"keyframe": str(f), "clip": str(f)}
+        (work / "checkpoint.json").write_text(json.dumps(ckpt))
+        assert clips_router.get_clip(clip.id, user, db).editable is True
+
+        clips_router.rerender_scenes(clip.id, body, user, db)
+        db.refresh(clip)
+        assert clip.status == "queued" and clip.edit_pending["scenes"] == [1]
+        assert clip.edit_pending["credits"] == credits.scene_price(db, 5.0, "720p") == 20
+        assert clip.script["scenes"][1]["line"].startswith("a much better line")
+        assert clip.script["scenes"][0]["line"] == "one"
+        db.refresh(user)
+        assert user.credits == 500  # charged only when the new cut lands
+
+        # Short on credits: refused with a top-up 402, clip left alone.
+        clip.status, clip.edit_pending, user.credits = "ready", None, 1
+        db.commit()
+        try:
+            clips_router.rerender_scenes(clip.id, body, user, db)
+            raise AssertionError("expected a 402")
+        except HTTPException as exc:
+            assert exc.status_code == 402
+        db.refresh(clip)
+        assert clip.status == "ready" and clip.edit_pending is None
+    finally:
+        clips_router.start_generation = real
+        if work is not None:
+            shutil.rmtree(work, ignore_errors=True)
+        _cleanup(db)
+        db.close()
+
+
+def test_a_failed_scene_edit_keeps_the_original_video():
+    """An edit that fails must not turn a finished video into a failed one:
+    the clip goes back to ready, video untouched, reason attached."""
+    from app.video import runner as runner_mod
+
+    db = SessionLocal()
+    try:
+        user = _user(db)
+        clip = Clip(
+            user_id=user.id, take="A finished video that is being edited right now.",
+            sport="NBA", tone="Funny", duration_target=10, status="queued",
+            video_url="https://x/final.mp4", edit_pending={"scenes": [0], "credits": 12},
+        )
+        db.add(clip)
+        db.commit()
+        runner_mod._settle_failure(db, clip, "provider exploded")
+        db.refresh(clip)
+        assert clip.status == "ready" and clip.edit_pending is None
+        assert "unchanged" in clip.error and clip.video_url == "https://x/final.mp4"
+
+        plain = _clip(db)
+        runner_mod._settle_failure(db, plain, "provider exploded")
+        db.refresh(plain)
+        assert plain.status == "failed"
+    finally:
+        _cleanup(db)
+        db.close()
+
+
 if __name__ == "__main__":
     if not _reachable():
         print("database not reachable — skipping queue tests")

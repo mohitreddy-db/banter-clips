@@ -14,13 +14,22 @@ import json
 import shutil
 import sys
 import tempfile
+
+import pytest
+import uuid
+from types import SimpleNamespace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from fastapi import HTTPException  # noqa: E402
+
 from app.config import settings  # noqa: E402
-from app.services import markers, spend, storage  # noqa: E402
+from app.routers.clips import _tiktok_options, _youtube_options, reference_matches  # noqa: E402
+from app.routers.socials import _clear_credentials, _revoke_with_platform  # noqa: E402
+from app.schemas import PublishCreate  # noqa: E402
+from app.services import markers, publishing, spend, storage, tiktok, youtube  # noqa: E402
 from app.services.housekeeping import STUCK_AFTER  # noqa: E402
 
 
@@ -44,15 +53,50 @@ def test_markers_never_survive_into_the_stored_take():
 
 
 def test_stripping_still_satisfies_the_database_minimum():
-    # clips_take_len requires 10..280 characters; stripping must not go under.
+    # clips_take_len requires 10..500 characters; stripping must not go under.
     assert len(markers.strip("[mock]")) >= markers.MIN_TAKE_CHARS
     assert len(markers.strip("[mock] hi")) >= markers.MIN_TAKE_CHARS
-    assert len(markers.strip("[mock] " + "x" * 500)) <= 280
+    assert len(markers.strip("[mock] " + "x" * 600)) <= 500
 
 
 def test_stripping_leaves_an_unmarked_take_alone():
     take = "The Lakers are frauds and everyone knows it"
     assert markers.strip(take) == take
+
+
+def test_youtube_upload_requires_creator_selected_metadata():
+    missing = PublishCreate(social_account_id=uuid.uuid4(), caption="not enough")
+    with pytest.raises(HTTPException) as exc:
+        _youtube_options(missing)
+    assert exc.value.detail["code"] == "youtube_options_required"
+
+    chosen = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        youtube={"title": "Exact title", "description": "Exact description", "privacy_status": "unlisted"},
+    )
+    assert _youtube_options(chosen) == {
+        "title": "Exact title",
+        "description": "Exact description",
+        "privacy_status": "unlisted",
+    }
+
+
+def test_reference_upload_checks_file_signatures():
+    assert reference_matches(b"\xff\xd8\xffphoto", ".jpg")
+    assert reference_matches(b"\x00\x00\x00\x18ftypmp42", ".mp4")
+    assert not reference_matches(b"not really a video", ".mp4")
+
+
+def test_social_disconnect_removes_every_credential():
+    account = SimpleNamespace(
+        access_token="access", refresh_token="refresh",
+        platform_user_id="platform-user", token_expires_at="later",
+    )
+    _clear_credentials(account)
+    assert account.access_token is None
+    assert account.refresh_token is None
+    assert account.platform_user_id is None
+    assert account.token_expires_at is None
 
 
 # ------------------------------------------------------------------ storage
@@ -213,6 +257,51 @@ def test_sample_is_delivered_under_the_clips_own_key():
         shutil.rmtree(root, ignore_errors=True)
 
 
+# ------------------------------------------------------------ take enhancer
+
+def test_take_enhancement_is_told_to_keep_staging_directions():
+    """A take may end with a filming direction ("the person in the reference
+    sits in the audience…"). The enhancer once rewrote takes as pure banter
+    and dropped it; the rule that forbids that must stay in the prompt, and
+    the full take — direction included — must reach the model."""
+    from app.video import takes
+
+    rule = " ".join(takes.TAKE_ENHANCER_SYSTEM.lower().split())
+    assert "filming direction" in rule and "the reference" in rule
+    assert "every variation" in rule
+
+    captured = {}
+
+    class DropsDirection:
+        available = True
+
+        def complete_json(self, system, user, **_k):
+            captured["user"] = user
+            return json.dumps({"takes": [
+                {"take": "LeBron treats every arrival like a movie premiere.",
+                 "angle": "absurd", "why": "w"},
+                {"take": "Pure banter with no staging in it at all. " * 8,
+                 "angle": "prediction", "why": "w"},
+            ]})
+
+    staged = ("LeBron pulls up in this new toy. "
+              "The person in the reference sits in the audience and smirks.")
+    out = takes.variations(staged, "NBA", "Funny", client=DropsDirection())
+    # The model is warned explicitly, and when it drops the direction anyway
+    # the code puts it back — trimmed banter, intact direction, under the cap.
+    assert "filming direction" in captured["user"].lower()
+    assert "sits in the audience and smirks" in captured["user"]
+    assert len(out) == 2
+    for o in out:
+        assert o["take"].endswith("The person in the reference sits in the audience and smirks.")
+        assert len(o["take"]) <= takes.MAX_TAKE_CHARS
+
+    # A take with no staging direction gets no direction treatment at all.
+    plain = takes.variations("The Lakers are frauds and everyone knows it",
+                             "NBA", "Funny", client=DropsDirection())
+    assert all("reference" not in o["take"].lower() for o in plain)
+
+
 # ---------------------------------------------------------------- captions
 
 def test_captions_always_returns_three_even_with_no_model():
@@ -363,6 +452,57 @@ def test_a_fresh_job_is_never_considered_stuck():
     assert now - timedelta(minutes=5) > now - STUCK_AFTER
 
 
+# ------------------------------------------------------------------ billing
+
+def test_topup_metadata_survives_a_real_stripe_payload():
+    """Stripe deserializes a webhook payload into StripeObject, which has no
+    .get(). Reading the top-up metadata with one raised AttributeError, the
+    webhook 500'd, and credits the customer had already paid for were never
+    granted. Every read of a Stripe payload goes through _g."""
+    import stripe
+
+    from app.routers.billing import _g
+
+    session = stripe.checkout.Session.construct_from(
+        {
+            "id": "cs_test_1",
+            "object": "checkout.session",
+            "mode": "payment",
+            "payment_status": "paid",
+            "client_reference_id": "user-1",
+            "metadata": {"kind": "topup", "user_id": "user-1",
+                         "credits": "300", "pack": "pack_300"},
+        },
+        key=None,
+    )
+
+    meta = _g(session, "metadata") or {}
+    assert not hasattr(meta, "get"), "a plain dict here would hide the regression"
+    assert _g(meta, "kind") == "topup"
+    assert int(_g(meta, "credits") or 0) == 300
+    assert _g(meta, "pack", "?") == "pack_300"
+    assert _g(session, "mode") == "payment"
+    assert _g(session, "payment_status") == "paid"
+    assert _g(session, "client_reference_id") == "user-1"
+
+
+def test_topup_reads_tolerate_a_session_without_metadata():
+    """A subscription checkout carries no top-up metadata; the same reads must
+    fall through to the subscription branch instead of raising."""
+    import stripe
+
+    from app.routers.billing import _g
+
+    session = stripe.checkout.Session.construct_from(
+        {"id": "cs_test_2", "object": "checkout.session", "mode": "subscription",
+         "customer": "cus_1"},
+        key=None,
+    )
+    meta = _g(session, "metadata") or {}
+    assert _g(meta, "kind") is None
+    assert int(_g(meta, "credits") or 0) == 0
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
@@ -376,3 +516,232 @@ if __name__ == "__main__":
             print(f"  FAIL  {name}: {exc}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ------------------------------------------------------------------- tiktok
+# TikTok's audit turns UI behaviour into API correctness: the creator's choices
+# must reach post_init unchanged, and the rules TikTok states as absolutes must
+# hold even if the composer is bypassed.
+
+def _init_payload(monkeypatch, **kwargs):
+    """Capture the JSON post_init would send, without touching the network."""
+    captured = {}
+
+    class _FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            captured.update(json)
+            return SimpleNamespace(json=lambda: {"data": {"publish_id": "p"}})
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _FakeClient())
+    tiktok.post_init(
+        "token",
+        caption="hot take",
+        privacy="PUBLIC_TO_EVERYONE",
+        video_size=1_000_000,
+        **kwargs,
+    )
+    return captured["post_info"]
+
+
+def test_interaction_choices_are_sent_as_tiktoks_negated_fields(monkeypatch):
+    """The composer asks "allow comments?"; TikTok's field is disable_comment.
+    Inverting it in the wrong place silently publishes the opposite of what the
+    creator ticked."""
+    allowed = _init_payload(monkeypatch, allow_comment=True, allow_duet=True, allow_stitch=False)
+    assert allowed["disable_comment"] is False
+    assert allowed["disable_duet"] is False
+    assert allowed["disable_stitch"] is True
+
+    nothing = _init_payload(monkeypatch)
+    assert nothing["disable_comment"] is True
+    assert nothing["disable_duet"] is True
+    assert nothing["disable_stitch"] is True
+
+
+def test_commercial_disclosure_reaches_tiktok_and_ai_content_is_always_declared(monkeypatch):
+    """"Your brand" and "Branded content" drive the Promotional content and
+    Paid partnership labels. is_aigc is ours, not the creator's: every
+    BanterClips video is generated, so it is declared on every post."""
+    post = _init_payload(monkeypatch, brand_organic=True, branded_content=True)
+    assert post["brand_organic_toggle"] is True
+    assert post["brand_content_toggle"] is True
+    assert post["is_aigc"] is True
+
+    plain = _init_payload(monkeypatch)
+    assert plain["brand_organic_toggle"] is False
+    assert plain["brand_content_toggle"] is False
+    assert plain["is_aigc"] is True
+
+
+def test_privacy_level_is_sent_exactly_as_chosen(monkeypatch):
+    """No "most public option wins" fallback: TikTok's audit reads that as the
+    app choosing the audience instead of the creator."""
+    captured = {}
+
+    class _FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            captured.update(json)
+            return SimpleNamespace(json=lambda: {"data": {}})
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _FakeClient())
+    for level in tiktok.PRIVACY_LEVELS:
+        tiktok.post_init("t", caption="c", privacy=level, video_size=10)
+        assert captured["post_info"]["privacy_level"] == level
+
+
+def test_creator_profile_offers_only_the_levels_tiktok_returned(monkeypatch):
+    """A private account never gets offered "Everyone". The composer renders
+    exactly this list, so anything we invent here becomes a failed publish."""
+    monkeypatch.setattr(
+        tiktok,
+        "creator_info",
+        lambda token: {
+            "data": {
+                "creator_nickname": "Ni",
+                "creator_username": "ni.process",
+                "privacy_level_options": ["SELF_ONLY", "MUTUAL_FOLLOW_FRIENDS"],
+                "comment_disabled": True,
+                "max_video_post_duration_sec": 60,
+            },
+            "error": {"code": "ok"},
+        },
+    )
+    profile = tiktok.creator_profile("token")
+    assert profile["privacy_level_options"] == ["MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"]
+    assert profile["comment_disabled"] is True
+    assert profile["duet_disabled"] is False
+    assert profile["max_video_post_duration_sec"] == 60
+
+
+def test_creator_profile_surfaces_tiktoks_own_message(monkeypatch):
+    """When TikTok refuses, the creator should read TikTok's reason — not a
+    generic failure that sends them to support."""
+    monkeypatch.setattr(
+        tiktok,
+        "creator_info",
+        lambda token: {"error": {"code": "spam_risk_too_many_posts", "message": "Daily post cap reached."}},
+    )
+    try:
+        tiktok.creator_profile("token")
+    except RuntimeError as exc:
+        assert "Daily post cap reached." in str(exc)
+    else:
+        raise AssertionError("a TikTok error must not look like success")
+
+
+def test_publishing_to_tiktok_requires_the_creators_choices():
+    """Publishing without composer options is a bug, not a default. TikTok
+    forbids the app picking an audience, so there is nothing safe to assume."""
+    body = PublishCreate(social_account_id=uuid.uuid4(), caption="hi")
+    try:
+        _tiktok_options(body)
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail["code"] == "tiktok_options_required"
+    else:
+        raise AssertionError("a TikTok publish with no options must be refused")
+
+
+def test_branded_content_cannot_be_posted_privately():
+    """TikTok's rule, enforced server-side too: the composer greys out "Only
+    me" for branded content, and a client that ignores that is still refused."""
+    body = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        caption="hi",
+        tiktok={"privacy_level": "SELF_ONLY", "branded_content": True},
+    )
+    try:
+        _tiktok_options(body)
+    except HTTPException as exc:
+        assert exc.detail["code"] == "branded_content_private"
+    else:
+        raise AssertionError("branded content + private must be refused")
+
+    allowed = PublishCreate(
+        social_account_id=uuid.uuid4(),
+        caption="hi",
+        tiktok={"privacy_level": "PUBLIC_TO_EVERYONE", "branded_content": True},
+    )
+    assert _tiktok_options(allowed)["branded_content"] is True
+
+
+def test_options_default_to_private_when_a_publish_row_has_none():
+    """Rows queued before the composer existed still publish — as private,
+    the one audience a creator cannot be surprised by."""
+    assert publishing.TIKTOK_FALLBACK["privacy_level"] == "SELF_ONLY"
+    assert not any(
+        publishing.TIKTOK_FALLBACK[k]
+        for k in ("allow_comment", "allow_duet", "allow_stitch", "brand_organic", "branded_content")
+    )
+
+
+# ------------------------------------------------------------------- revoke
+# "Disconnect" has to mean the same thing on both ends. Deleting our token
+# leaves the grant alive in the user's Google/TikTok account; the YouTube API
+# Services Developer Policies require us to revoke it, and it is the honest
+# behaviour regardless.
+
+def test_youtube_disconnect_revokes_the_refresh_token(monkeypatch):
+    """The refresh token ends the whole grant; revoking only the access token
+    would leave a refreshable authorization behind."""
+    seen = []
+    monkeypatch.setattr(youtube, "revoke", lambda token: seen.append(token))
+    account = SimpleNamespace(platform="youtube", access_token="acc", refresh_token="ref")
+    _revoke_with_platform(account)
+    assert seen == ["ref"]
+
+
+def test_youtube_disconnect_falls_back_to_the_access_token(monkeypatch):
+    seen = []
+    monkeypatch.setattr(youtube, "revoke", lambda token: seen.append(token))
+    _revoke_with_platform(SimpleNamespace(platform="youtube", access_token="acc", refresh_token=None))
+    assert seen == ["acc"]
+
+
+def test_tiktok_disconnect_revokes_too(monkeypatch):
+    seen = []
+    monkeypatch.setattr(tiktok, "revoke", lambda token: seen.append(token))
+    _revoke_with_platform(SimpleNamespace(platform="tiktok", access_token="acc", refresh_token="ref"))
+    assert seen == ["acc"]
+
+
+def test_mock_and_empty_accounts_never_call_a_platform(monkeypatch):
+    """The dev mock connector has no real grant to revoke, and a row that
+    already lost its token has nothing to send."""
+    monkeypatch.setattr(youtube, "revoke", lambda token: pytest.fail("called Google"))
+    monkeypatch.setattr(tiktok, "revoke", lambda token: pytest.fail("called TikTok"))
+    _revoke_with_platform(SimpleNamespace(platform="youtube", access_token="mock-oauth-token", refresh_token=None))
+    _revoke_with_platform(SimpleNamespace(platform="tiktok", access_token=None, refresh_token=None))
+
+
+def test_revoke_is_best_effort(monkeypatch):
+    """Disconnecting must succeed even when the platform is unreachable —
+    otherwise a Google outage would trap users in a connection they asked to
+    leave."""
+    import httpx as _httpx
+
+    def boom(*a, **k):
+        raise _httpx.ConnectError("down")
+
+    monkeypatch.setattr(youtube.httpx, "post", boom)
+    youtube.revoke("token")  # must not raise
+
+    class _Client:
+        def __enter__(self): return self
+        def __exit__(self, *e): return False
+        def post(self, *a, **k): raise _httpx.ConnectError("down")
+
+    monkeypatch.setattr(tiktok, "client", lambda timeout=20: _Client())
+    tiktok.revoke("token")  # must not raise

@@ -18,72 +18,73 @@ export const posterUrl = (slug) => `${SHOWCASE_BASE}/${slug}/poster.jpg`;
 
 export const showcaseClips = [
   {
-    // Leads the strip: the first clip made after kits stopped being banned,
-    // and the only one showing legible "RONALDO 7" and a readable sign.
-    slug: "ronaldo-penalties",
+    // Leads the strip: the strongest thing the pipeline has produced — a real
+    // Real Madrid press room, Mourinho's likeness and mannerisms, and a
+    // legible "FOR DEFENSE ONLY" prop it invented and rendered cleanly.
+    slug: "mbappe-cone-drills",
     sport: "Soccer",
-    cap: "He takes penalties so the camera has somewhere to point.",
+    cap: "Mbappé just turned Real Sociedad's defense into cone drills.",
     blurb:
-      "A penalty-box wind-up about Ronaldo's favourite way to score, staged as a broadcast moment — floodlights, a readable crowd sign, and the number 7 kit in frame. Generated from the one-line take above: script, casting, voiceover and captions are all the pipeline's work.",
+      "A press-conference bit built on a real week in Madrid: Mbappé fields questions in the club's own media room while Mourinho works the crowd with a hand-lettered \"FOR DEFENSE ONLY\" sign. Casting, script, dialogue, voices and captions all came from the single line above — including the joke prop.",
+    duration: "PT18S",
+    uploadDate: "2026-08-29",
+    c1: "#1e3a8a",
+    c2: "#7c3aed",
+  },
+  {
+    slug: "lewis-skelly-vs-yamal",
+    sport: "Soccer",
+    cap: "Lewis-Skelly is as good as Yamal — so where's the fuss?",
+    blurb:
+      "Two 19-year-olds, one argument. Lamine Yamal in the Barcelona kit and Myles Lewis-Skelly in Arsenal red make the case on a training pitch, with \"MLS\" whiteboards as the running gag. The pipeline researched both players before writing a word.",
+    duration: "PT17S",
+    uploadDate: "2026-08-29",
+    c1: "#a50044",
+    c2: "#004d98",
+  },
+  {
+    slug: "arsenal-trust-the-process",
+    sport: "Soccer",
+    cap: "Arsenal bottled the title again and the fans still say trust the process.",
+    blurb:
+      "Confetti on the pitch, a \"TRUST THE PROCESS\" banner and Arteta talking his squad through another almost. Eleven words of take became four shots, three characters and a punchline delivered to camera.",
     duration: "PT16S",
-    uploadDate: "2026-08-13",
+    uploadDate: "2026-08-29",
+    c1: "#ef4444",
+    c2: "#1f2937",
+  },
+  {
+    slug: "arsenal-undefeated-2026",
+    sport: "Soccer",
+    cap: "Arsenal fans are acting undefeated — give it two weeks.",
+    blurb:
+      "One game into the season and the banner is already printed. Face paint, a cardboard crown and Arteta handing out tissues at the Emirates — the tone dial was set to Savage and the script came back accordingly.",
+    duration: "PT17S",
+    uploadDate: "2026-08-29",
+    c1: "#dc2626",
+    c2: "#0f172a",
+  },
+  {
+    slug: "klay-south-beach",
+    sport: "NBA",
+    cap: "Klay Thompson and Spoelstra might cook up Heat basketball that makes Giannis sweat.",
+    blurb:
+      "Miami in the sun: a fan sprinting down the boardwalk, a tactics board on the sand and Klay in Heat colours. Twelve seconds, one take, and a voice that sounds like it actually believes it.",
+    duration: "PT12S",
+    uploadDate: "2026-08-29",
+    c1: "#f97316",
+    c2: "#0891b2",
+  },
+  {
+    slug: "mourinho-mop-meltdown",
+    sport: "Soccer",
+    cap: "Mourinho at Real Madrid again? I'm rehearsing my sideline meltdowns with a mop.",
+    blurb:
+      "A fan rehearsing for the return of the Special One, mop in hand, while Mourinho runs his own touchline theatre in the background. Absurd, committed and entirely generated — props, blocking and all.",
+    duration: "PT17S",
+    uploadDate: "2026-08-29",
     c1: "#facc15",
-    c2: "#1d4ed8",
-  },
-  {
-    slug: "wemby-hide-and-seek",
-    sport: "NBA",
-    cap: "Seven foot four and Wemby still couldn't find Brunson.",
-    blurb:
-      "The height gap between Wembanyama and Brunson, played as a game of hide-and-seek in the paint. The take went in as one sentence; the scene, dialogue and lip-synced delivery came out the other end.",
-    duration: "PT19S",
-    uploadDate: "2026-08-13",
-    c1: "#0f172a",
-    c2: "#334155",
-  },
-  {
-    slug: "wemby-roof",
-    sport: "NBA",
-    cap: "Wemby's so tall the Spurs just pass him the roof.",
-    blurb:
-      "A tall joke taken literally: San Antonio runs its offense through the ceiling. Sixteen seconds from a one-line take, with burned-in captions timed to the punchline so it lands muted.",
-    duration: "PT16S",
-    uploadDate: "2026-08-13",
-    c1: "#2563eb",
-    c2: "#0ea5e9",
-  },
-  {
-    slug: "goat-debate",
-    sport: "Soccer",
-    cap: "Messi and Ronaldo argued so long they forgot to retire.",
-    blurb:
-      "The GOAT debate as its own explanation for two twenty-year careers. Both legends appear in their iconic kits, each speaking their own lines — the pipeline casts, scripts and voices every character from the single take above.",
-    duration: "PT16S",
-    uploadDate: "2026-08-13",
-    c1: "#16a34a",
-    c2: "#65a30d",
-  },
-  {
-    slug: "spurs-collapse",
-    sport: "NBA",
-    cap: "Blowing a 29-point lead takes real commitment.",
-    blurb:
-      "A eulogy for a 29-point lead, delivered dead seriously — which is the joke. Written, voiced and cut by the pipeline from the caption above, in the tone the take deserved: savage.",
-    duration: "PT16S",
-    uploadDate: "2026-08-13",
-    c1: "#111827",
-    c2: "#4b5563",
-  },
-  {
-    slug: "wemby-blocks",
-    sport: "NBA",
-    cap: "Wemby blocks everything except the losing streak.",
-    blurb:
-      "Wembanyama's block reel meets the standings. One sentence in, a finished 9:16 clip out — commentator voice, crowd noise and captions included, ready for Reels.",
-    duration: "PT16S",
-    uploadDate: "2026-08-13",
-    c1: "#7c3aed",
-    c2: "#db2777",
+    c2: "#111827",
   },
 ];
 

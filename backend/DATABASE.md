@@ -18,6 +18,7 @@ erDiagram
     users ||--o{ clips : "creates"
     users ||--o{ social_accounts : "connects"
     users ||--o{ events : "emits"
+    users ||--o{ store_subscriptions : "buys through Apple or Google"
     clips ||--o{ publishes : "is published as"
     social_accounts ||--o{ publishes : "receives"
 
@@ -26,11 +27,15 @@ erDiagram
         text email UK "stored lowercased"
         text supabase_uid UK "Supabase Auth identity"
         text display_name
-        text plan "free | creator — derived from Stripe"
+        text plan "free | creator — derived from every billing source"
         timestamptz plan_renews_at
         boolean cancel_at_period_end
         text stripe_customer_id UK
         text stripe_subscription_id
+        text stripe_subscription_status
+        timestamptz stripe_current_period_end
+        boolean stripe_cancel_at_period_end
+        text stripe_mobile_pending_subscription_id
         timestamptz created_at
         timestamptz last_login_at
     }
@@ -39,6 +44,18 @@ erDiagram
         text type
         timestamptz event_created_at
         timestamptz processed_at
+    }
+    store_subscriptions {
+        uuid id PK
+        uuid user_id FK
+        text platform "ios | android"
+        text product_id
+        text purchase_token UK "unique with platform"
+        text status "active | cancelled | expired"
+        timestamptz expires_at
+        boolean auto_renewing
+        timestamptz last_verified_at
+        timestamptz next_verification_at
     }
     user_preferences {
         uuid user_id PK,FK
@@ -112,12 +129,18 @@ One row per account. `plan` is the whole monetization switch (BR-15):
 `creator` → downloads + watermark-free, 30/month. `cancel_at_period_end`
 models "downgrade applies at period end" without deleting anything.
 
-**Billing design: Stripe is the ledger.** We never mirror invoices/charges —
-`plan`, `stripe_customer_id`, `stripe_subscription_id`, `plan_renews_at`, and
-`cancel_at_period_end` are *derived entitlement state*, converged from
-Stripe's API on every billing webhook (webhooks are treated as triggers, not
-truth, because Stripe delivers at-least-once and unordered). The sync also
-enforces one-live-subscription-per-user by cancelling extras.
+**Billing design: each provider is its own ledger.** Stripe state and verified
+Apple/Google subscription state are persisted independently. `plan`,
+`plan_renews_at`, and `cancel_at_period_end` are a combined compatibility cache:
+Creator remains active while any source is entitled. Stripe webhooks converge
+Stripe state; authenticated activity periodically reverifies due store state.
+One provider therefore cannot downgrade access still paid for through another.
+
+### `store_subscriptions`
+One row per verified Apple original transaction id or Google purchase token.
+`UNIQUE(platform, purchase_token)` prevents receipt sharing across accounts.
+Expiry is enforced locally, and `next_verification_at` throttles periodic store
+API calls and short retries after provider outages.
 
 ### `stripe_events`
 Audit log + idempotency marker: one row per processed Stripe webhook
@@ -174,6 +197,8 @@ dashboard — query with SQL when evaluating the gates.
 ## Migration path to Supabase
 
 1. Create the Supabase project, note the pooler `DATABASE_URL` in `infra/supabase.md`.
-2. Run `schema.sql` in the Supabase SQL editor (or point the backend's
-   `DATABASE_URL` at Supabase and let `create_all` do it once).
-3. Backend on the droplet gets `DATABASE_URL` switched — no code change.
+2. Run `schema.sql` in the Supabase SQL editor for a fresh database.
+3. For an existing database, apply additive files in `migrations/` before the
+   matching application deploy. Mobile billing uses
+   `migrations/20260909_mobile_billing.sql`; startup verifies it is present.
+4. Backend on the droplet gets `DATABASE_URL` switched — no code change.

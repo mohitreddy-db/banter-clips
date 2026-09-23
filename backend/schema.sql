@@ -14,6 +14,10 @@ CREATE TABLE users (
     cancel_at_period_end  boolean NOT NULL DEFAULT false,
     stripe_customer_id    text UNIQUE,
     stripe_subscription_id text,
+    stripe_subscription_status text,
+    stripe_current_period_end timestamptz,
+    stripe_cancel_at_period_end boolean NOT NULL DEFAULT false,
+    stripe_mobile_pending_subscription_id text,
     created_at            timestamptz NOT NULL DEFAULT now(),
     last_login_at         timestamptz
 );
@@ -40,8 +44,13 @@ CREATE TABLE clips (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id           uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     take              text NOT NULL CHECK (char_length(take) BETWEEN 10 AND 280),
-    sport             text NOT NULL CHECK (sport IN ('NBA', 'NFL', 'Soccer', 'MLB', 'F1', 'Tennis', 'College Sports', 'Combat Sports')),
-    tone              text NOT NULL CHECK (tone IN ('Funny', 'Savage', 'Hype', 'Bold')),
+    -- Kept in lockstep with models.SPORTS / models.TONES by db_migrate,
+    -- which rebuilds both constraints on every boot.
+    sport             text NOT NULL CHECK (sport IN ('Soccer', 'NBA', 'NFL', 'MLB',
+                          'NHL', 'Tennis', 'F1', 'Cricket', 'Golf', 'Boxing',
+                          'MMA', 'Other')),
+    tone              text NOT NULL CHECK (tone IN ('Funny', 'Savage', 'Roast',
+                          'Hype', 'Bold')),
     status            text NOT NULL DEFAULT 'queued' CHECK (status IN (
                           'queued', 'planning_story', 'creating_voice',
                           'designing_characters', 'generating_scenes',
@@ -93,8 +102,9 @@ CREATE TABLE social_accounts (
     handle        text NOT NULL,
     status        text NOT NULL DEFAULT 'connected'
                   CHECK (status IN ('connected', 'revoked')),
-    access_token  text,                                  -- long-lived IG token (or mock)
-    platform_user_id text,                               -- IG professional account id
+    access_token  text,                                  -- long-lived IG / 24h TikTok token (or mock)
+    refresh_token text,                                  -- TikTok only: year-long refresh token
+    platform_user_id text,                               -- IG professional account id / TikTok open_id
     token_expires_at timestamptz,                        -- auto-refreshed near expiry
     connected_at  timestamptz NOT NULL DEFAULT now(),
     revoked_at    timestamptz,
@@ -106,6 +116,10 @@ CREATE TABLE publishes (
     clip_id            uuid NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
     social_account_id  uuid NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
     caption            text NOT NULL DEFAULT '',
+    -- Composer choices sent to the platform. TikTok requires every post to
+    -- carry the audience, interaction permissions and commercial-content
+    -- disclosure the creator selected; null for platforms with no such step.
+    options            jsonb,
     status             text NOT NULL DEFAULT 'queued'
                        CHECK (status IN ('queued', 'uploading', 'published', 'failed')),
     error              text,
@@ -124,6 +138,40 @@ CREATE TABLE stripe_events (
     processed_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Verified Apple/Google subscription state. A store token is claimable by one
+-- BanterClips user only; users.plan is reconciled across this table and Stripe.
+CREATE TABLE store_subscriptions (
+    id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id               uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform              text NOT NULL CHECK (platform IN ('ios', 'android')),
+    product_id            text NOT NULL,
+    purchase_token        text NOT NULL,
+    status                text NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'cancelled', 'expired')),
+    expires_at            timestamptz,
+    auto_renewing         boolean NOT NULL DEFAULT true,
+    created_at            timestamptz NOT NULL DEFAULT now(),
+    last_verified_at      timestamptz NOT NULL DEFAULT now(),
+    next_verification_at  timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT store_sub_provider_token UNIQUE (platform, purchase_token)
+);
+CREATE INDEX store_subscriptions_user ON store_subscriptions (user_id, expires_at);
+
+-- Credit packs bought through Apple or Google. The store is the ledger; this
+-- records that a purchase token has been granted, so a retried verify
+-- converges instead of granting twice.
+CREATE TABLE store_purchases (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform        text NOT NULL CHECK (platform IN ('ios', 'android')),
+    product_id      text NOT NULL,
+    purchase_token  text NOT NULL UNIQUE,
+    pack            text NOT NULL,
+    credits         integer NOT NULL,
+    granted_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX store_purchases_user ON store_purchases (user_id);
+
 CREATE TABLE events (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id     uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -132,40 +180,3 @@ CREATE TABLE events (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX events_name_time ON events (name, created_at);
-
-
--- ---------------------------------------------------------------------------
--- Credit wallet + store credit packs (mobile top-ups). The ledger mirrors what
--- production already carries; store_purchases is new.
--- ---------------------------------------------------------------------------
-ALTER TABLE users ADD COLUMN IF NOT EXISTS credits integer NOT NULL DEFAULT 0;
-
-CREATE TABLE IF NOT EXISTS credit_entries (
-    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id       uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    delta         integer NOT NULL,
-    balance_after integer NOT NULL,
-    kind          text NOT NULL CHECK (kind IN (
-                    'grant_signup','grant_monthly','grant_admin','topup',
-                    'video_charge','video_refund','enhance_charge','edit_charge')),
-    clip_id       uuid REFERENCES clips(id) ON DELETE SET NULL,
-    note          text,
-    created_at    timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS credit_entries_user_idx ON credit_entries(user_id);
-
-CREATE TABLE IF NOT EXISTS store_purchases (
-    id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    platform       text NOT NULL CHECK (platform IN ('ios','android')),
-    product_id     text NOT NULL,
-    purchase_token text NOT NULL UNIQUE,
-    pack           text NOT NULL,
-    credits        integer NOT NULL,
-    granted_at     timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS store_purchases_user_idx ON store_purchases(user_id);
-
--- Creator prompts are up to 500 characters.
-ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_len;
-ALTER TABLE clips ADD CONSTRAINT clips_take_len CHECK (char_length(take) BETWEEN 10 AND 500);

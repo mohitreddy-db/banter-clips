@@ -29,6 +29,13 @@ def get_current_user(
         # Kills already-issued session JWTs too, with the same generic 401 a
         # stale session gets — blocked users are never told they're blocked.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session")
+
+    # Store subscriptions are locally cheap to check and reverified only when
+    # due. Doing this in the auth dependency keeps every capability gate honest
+    # even when a client skips /me/usage and calls a protected action directly.
+    from .services import entitlements
+
+    entitlements.refresh_store_entitlements(db, user)
     return user
 
 
@@ -65,13 +72,29 @@ def successful_clips_this_month(db: Session, user: User) -> int:
 
 
 def usage_for(db: Session, user: User) -> dict:
-    limit = settings.PLAN_LIMITS.get(user.plan, 60)
+    """Plan capabilities + the credit wallet (PRICING.md).
+
+    The old "X of N videos" allowance is gone — credits are the only usage
+    unit. `used/limit/left` stay in the payload for any stale client, mapped
+    onto credits. Creator's monthly grant is applied lazily here (idempotent,
+    28-day guard) so renewals never depend on a Stripe webhook event."""
+    from .services import credits
+
+    credits.maybe_grant_monthly(db, user)
+    price_cfg = credits.prices(db)
     used = successful_clips_this_month(db, user)
     return {
         "plan": user.plan,
         "used": used,
-        "limit": limit,
-        "left": max(0, limit - used),
+        "limit": None,
+        "left": user.credits,
+        "credits": user.credits,
+        # What things cost, so the client can quote exactly and estimate
+        # "≈ N videos" dynamically. Never includes our costs.
+        "prices": {
+            "per_second": price_cfg["per_second"],
+            "enhance_take": price_cfg["enhance_take"],
+        },
         # Client non-negotiables: Free = publish-only + watermark;
         # Creator = download + watermark-free.
         "can_download": user.plan == "creator",
@@ -83,3 +106,17 @@ def record_event(db: Session, name: str, user: User | None = None, **props) -> N
     """BR-11 product analytics — server-side event log, no dashboard."""
     db.add(Event(user_id=user.id if user else None, name=name, props=props))
     db.commit()
+
+
+def get_optional_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """The signed-in user when a valid session is presented, otherwise None —
+    for public endpoints that attach identity when they can (feedback)."""
+    if creds is None:
+        return None
+    try:
+        return get_current_user(creds, db)
+    except HTTPException:
+        return None

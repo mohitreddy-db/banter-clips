@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Navigate, Link } from "react-router-dom";
 import { useSeo, useJsonLd, SITE_URL } from "../lib/seo.js";
 import { showcaseClips, findClip, videoUrl, posterUrl } from "../lib/showcase.js";
+import Logo from "../components/BrandMark.jsx";
 
 /* Public, indexable pages for the showcase clips — one URL per clip plus an
  * index. Before these existed the six videos lived only as <video> tags in the
@@ -11,21 +12,6 @@ import { showcaseClips, findClip, videoUrl, posterUrl } from "../lib/showcase.js
  *
  * Path is /showcase/:slug, NOT /clips/:slug — /clips is the gated user library.
  */
-
-function Logo({ size = 26 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34">
-      <defs>
-        <linearGradient id="sclg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#22d3ee" />
-          <stop offset="1" stopColor="#34e27a" />
-        </linearGradient>
-      </defs>
-      <rect width="34" height="34" rx="9" fill="url(#sclg)" />
-      <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#06121A" />
-    </svg>
-  );
-}
 
 /** Shared public chrome: top bar with sign-up CTA, footer with legal links. */
 function PublicFrame({ children }) {

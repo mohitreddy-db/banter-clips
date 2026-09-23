@@ -24,7 +24,7 @@ from .types import _clean
 log = logging.getLogger("banter.video.takes")
 
 VARIATIONS = 2
-MAX_TAKE_CHARS = 280
+MAX_TAKE_CHARS = 500
 # Round 1 is already loose; later rounds push further so repeat clicks feel
 # like new ideas rather than rephrasings of the same one.
 BASE_TEMPERATURE = 0.9
@@ -58,7 +58,15 @@ argues with is a take nobody spreads.
 - Sound like a fan in a group chat: confident, conversational, a little
   unhinged. Never like a brand, a headline, or a sports broadcaster.
 - Comedy comes from exaggeration and specificity, never from puns.
-- Under 200 characters. Shorter usually hits harder.
+- A take may include scene or staging instructions — anything describing
+  what should appear or happen on camera, especially a mention of "the
+  reference" / an uploaded photo, video or person. That part is a filming
+  direction, not banter: carry it into EVERY variation essentially
+  word-for-word (after the banter is fine). Compress the banter to fit,
+  never the direction.
+- Under 200 characters for the banter itself; shorter usually hits harder.
+  The whole take, direction included, must stay within the hard length
+  limit given in the request.
 - Never state a real score, result, injury, trade or quote as fact.
 - Never insult a person's appearance, family, race, or intelligence. Mock
   performance, decisions and situations only.
@@ -82,7 +90,22 @@ Return ONLY JSON:
 ]}"""
 
 
-def variations(take: str, sport: str, tone: str, client=None, round_index: int = 0) -> list[dict]:
+# Words that mark a filming direction referring to the user's uploaded
+# reference. Sentences containing one are staging, not banter, and must
+# survive enhancement — the prompt rule alone proved too weak at these
+# temperatures, so the direction is also re-attached in code below.
+_DIRECTION_MARKERS = re.compile(
+    r"\b(reference|photo|pic|picture|image|upload(?:ed)?)\b", re.I)
+
+
+def _direction_sentences(take: str) -> str:
+    """The staging sentences a rewrite must not lose ('' when none)."""
+    parts = re.split(r"(?<=[.!?])\s+", take)
+    return " ".join(p.strip() for p in parts if _DIRECTION_MARKERS.search(p))
+
+
+def variations(take: str, sport: str, tone: str, client=None, round_index: int = 0,
+               max_chars: int = MAX_TAKE_CHARS) -> list[dict]:
     """Two enhanced takes. Never raises; returns [] when nothing is available.
 
     `round_index` is how many times the user has already asked, and only
@@ -93,13 +116,21 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
     if not take or client is None or not getattr(client, "available", False):
         return []
 
+    direction = _direction_sentences(take)
     temperature = min(MAX_TEMPERATURE, BASE_TEMPERATURE + TEMPERATURE_STEP * max(0, round_index))
     user = (
         f"Sport: {sport}\n"
         f"Tone to write in: {tone}\n"
         f"The fan's original take: {take}\n\n"
-        f"Give me two sharper versions, in different angles."
+        f"Give me two sharper versions, in different angles.\n"
+        f"Hard length limit: {max_chars} characters per take."
     )
+    if direction:
+        user += (
+            f"\n\nThe take includes a filming direction about the user's uploaded "
+            f"reference: \"{direction}\" — every variation MUST keep that direction, "
+            f"essentially word-for-word."
+        )
     try:
         raw = client.complete_json(
             TAKE_ENHANCER_SYSTEM, user, max_tokens=2000, temperature=temperature
@@ -111,9 +142,16 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
 
     out: list[dict] = []
     for item in parsed[:VARIATIONS]:
-        text = _clean(item.get("take"))[:MAX_TAKE_CHARS]
+        text = _clean(item.get("take"))[:max_chars]
         if not text or text.lower() == take.lower():
             continue
+        if direction and not _DIRECTION_MARKERS.search(text):
+            # The model wrote pure banter anyway: put the direction back,
+            # trimming the banter (never the direction) to stay under the cap.
+            room = max_chars - len(direction) - 1
+            if len(text) > room:
+                text = text[:room].rsplit(" ", 1)[0].rstrip(".,;:!? ")
+            text = f"{text.rstrip()} {direction}"[:max_chars]
         out.append({
             "take": text,
             "angle": _clean(item.get("angle"))[:40],

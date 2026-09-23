@@ -1,70 +1,167 @@
+import { useState } from "react";
 import { api } from "../lib/api.js";
-import { Card, LoadingOrError, PageHead, T, useFetch } from "./ui.jsx";
+import { Badge, Card, Kpi, LoadingOrError, PageHead, T, Table, timeAgo, useFetch } from "./ui.jsx";
 
 /**
- * Credits — deliberately a placeholder. The credit system (PRICING.md) is not
- * integrated yet; this page owns the spot so the ledger, grant actions and
- * issued/consumed KPIs land here without touching the rest of the console.
+ * Credits — the live credit system (PRICING.md / services/credits.py):
+ * outstanding + 30d KPIs, the price config editor, manual grants, and the
+ * recent ledger. Every mutation lands in the audit log.
  */
+
+const KIND_COLORS = {
+  grant_signup: T.green, grant_monthly: T.green, grant_admin: T.cyan,
+  topup: T.cyan, video_charge: T.amber, video_refund: T.muted,
+  enhance_charge: T.amber,
+};
+
+function GrantBox({ onDone }) {
+  const [email, setEmail] = useState("");
+  const [delta, setDelta] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const grant = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await api.adminGrantCredits(email.trim(), parseInt(delta, 10), reason.trim());
+      setMsg({ ok: true, text: `${res.email} → ${res.balance.toLocaleString()} credits` });
+      setEmail(""); setDelta(""); setReason("");
+      onDone();
+    } catch (e) {
+      setMsg({ ok: false, text: e.message });
+    }
+    setBusy(false);
+  };
+
+  const input = { width: "100%", boxSizing: "border-box", padding: "9px 11px", fontSize: 13, color: T.text, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8 };
+  const valid = email.includes("@") && parseInt(delta, 10) && reason.trim().length >= 3;
+  return (
+    <Card title="Grant / deduct credits" sub="reason required — lands in the ledger and the audit log">
+      <div style={{ display: "grid", gap: 10 }}>
+        <input style={input} placeholder="user email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input style={input} placeholder="credits (negative to deduct) — e.g. 150" value={delta}
+               onChange={(e) => setDelta(e.target.value.replace(/[^-0-9]/g, ""))} />
+        <input style={input} placeholder="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button
+          onClick={grant}
+          disabled={!valid || busy}
+          style={{ padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: valid ? "pointer" : "not-allowed", color: "#04121a", background: valid ? T.cyan : T.border, border: "none", opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? "Applying…" : "Apply"}
+        </button>
+        {msg && <div style={{ fontSize: 12.5, color: msg.ok ? T.green : T.error }}>{msg.text}</div>}
+      </div>
+    </Card>
+  );
+}
+
+function PricesEditor({ prices, onSaved }) {
+  const [form, setForm] = useState({
+    r720: prices.per_second["720p"], r1080: prices.per_second["1080p"],
+    enhance: prices.enhance_take, signup: prices.signup_grant, monthly: prices.monthly_grant,
+  });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api.adminSaveCreditSettings({
+        per_second: { "720p": +form.r720, "1080p": +form.r1080 },
+        enhance_take: +form.enhance, signup_grant: +form.signup, monthly_grant: +form.monthly,
+      });
+      setMsg({ ok: true, text: "Saved — applies to the next generation, no release needed." });
+      onSaved();
+    } catch (e) {
+      setMsg({ ok: false, text: e.message });
+    }
+    setBusy(false);
+  };
+
+  const row = (label, key, note) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ flex: 1, fontSize: 12.5, color: T.muted }}>{label}</span>
+      <input
+        value={form[key]}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value.replace(/[^0-9]/g, "") }))}
+        style={{ width: 76, textAlign: "right", padding: "7px 9px", fontSize: 13, fontWeight: 700, color: T.text, background: T.panel, border: `1px solid ${T.border}`, borderRadius: 8 }}
+      />
+      <span style={{ width: 74, fontSize: 11, color: T.muted2 }}>{note}</span>
+    </div>
+  );
+
+  const sample = (s, key) => +form[key] * s;
+  return (
+    <Card title="Price config" sub="credits are the unit everywhere — video price = rate × seconds">
+      <div style={{ display: "grid", gap: 10 }}>
+        {row("Standard (720p), per second", "r720", `15s = ${sample(15, "r720")}`)}
+        {row("HD (1080p), per second", "r1080", `15s = ${sample(15, "r1080")}`)}
+        {row("Enhance take, per press", "enhance", "")}
+        {row("Signup grant (one-time)", "signup", "")}
+        {row("Creator monthly grant", "monthly", "")}
+        <button onClick={save} disabled={busy}
+                style={{ padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#04121a", background: T.cyan, border: "none", opacity: busy ? 0.6 : 1 }}>
+          {busy ? "Saving…" : "Save prices"}
+        </button>
+        {msg && <div style={{ fontSize: 12.5, color: msg.ok ? T.green : T.error }}>{msg.text}</div>}
+      </div>
+    </Card>
+  );
+}
+
 export default function AdminCredits() {
   const { data, error, loading, reload } = useFetch(() => api.adminCredits(), []);
 
   return (
     <>
-      <PageHead title="Credits" sub="One wallet per user · 1 credit = $0.01 face value — once the credit system ships." />
+      <PageHead title="Credits" sub="One wallet per user · reserve on start, refund on failure · top up, never upgrade" />
       <LoadingOrError loading={loading} error={error} reload={reload} />
-      {data && !data.enabled && (
+      {data?.enabled && (
         <>
-          <div className="panel" style={{ padding: "16px 20px", border: "1px solid rgba(225,158,60,.5)", borderRadius: 14 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.amber, marginBottom: 6 }}>
-              ⚑ Credit system not live yet
-            </div>
-            <div style={{ fontSize: 12.5, color: T.muted, lineHeight: 1.6 }}>
-              {data.note} When the ledger ships, this page gains: issued / consumed / purchased / expired KPIs,
-              the per-user ledger (consumed · purchased · granted · reserved · released · expired),
-              and the <b style={{ color: T.text }}>grant credits</b> action. The backend placeholder is
-              <code style={{ color: T.cyan }}> GET /admin/credits</code> — everything else in the console
-              reports provider dollars and does not assume credits exist.
-            </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            <Kpi label="OUTSTANDING" value={data.outstanding.toLocaleString()} note="credits users hold" />
+            <Kpi label="GRANTED · 30D" value={data.last_30d.granted.toLocaleString()} note="signup + monthly + admin" tone="good" />
+            <Kpi label="PURCHASED · 30D" value={data.last_30d.purchased.toLocaleString()} note="top-up packs"  />
+            <Kpi label="CONSUMED · 30D" value={data.last_30d.consumed.toLocaleString()} note="net of refunds" tone="warn" />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-            <Card title="Launch price list (PRICING.md §4)" sub="read-only — prices are code constants for MVP">
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse", color: T.text }}>
-                <thead>
-                  <tr>
-                    {["LENGTH", "720P", "1080P"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", fontSize: 9.5, letterSpacing: ".08em", color: T.muted2, padding: "6px 8px", borderBottom: `1px solid ${T.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(data.price_list.video).map(([len, res]) => (
-                    <tr key={len}>
-                      <td style={{ padding: "8px", color: T.muted }}>{len}</td>
-                      <td style={{ padding: "8px", fontWeight: 700 }}>{res["720p"].toLocaleString()} cr</td>
-                      <td style={{ padding: "8px", fontWeight: 700 }}>{res["1080p"].toLocaleString()} cr</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 12 }}>
-                ✨ Enhance take: <b style={{ color: T.text }}>{data.price_list.extras.enhance_take} cr</b> ·
-                captions / publish / retry: <b style={{ color: T.text }}>0</b> ·
-                1 credit = ${data.price_list.face_value_usd}
-              </div>
-            </Card>
-
-            <Card title="What lands here when credits ship" sub="kept open by design">
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: T.muted, lineHeight: 2 }}>
-                <li>Issued vs consumed vs purchased vs expired KPIs</li>
-                <li>Ledger table with reserve-on-start / release-on-failure rows (PRICING rule 3)</li>
-                <li>Grant credits (reason required → audit log) · mark comped (1,100/mo, no billing)</li>
-                <li>Per-clip credit receipts with line items on All Videos</li>
-                <li>Gross margin switches from MRR-basis to consumed-credits basis</li>
-              </ul>
+            <PricesEditor prices={data.prices} onSaved={reload} />
+            <GrantBox onDone={reload} />
+            <Card title="Top-up packs" sub="Stripe one-time payments — pack changes are code-side">
+              <Table
+                columns={[
+                  { key: "key", label: "PACK" },
+                  { key: "credits", label: "CREDITS", render: (r) => r.credits.toLocaleString() },
+                  { key: "usd", label: "PRICE", render: (r) => `$${r.usd}` },
+                  { key: "rate", label: "$/CREDIT", render: (r) => `$${(r.usd / r.credits).toFixed(3)}` },
+                ]}
+                rows={data.prices.packs}
+              />
             </Card>
           </div>
+
+          <Card title="Recent ledger" sub="latest 60 movements, all users">
+            <Table
+              columns={[
+                { key: "created_at", label: "WHEN", render: (r) => timeAgo(r.created_at) },
+                { key: "email", label: "USER" },
+                { key: "kind", label: "KIND", render: (r) => <Badge color={KIND_COLORS[r.kind] || T.muted}>{r.kind.replace("_", " ")}</Badge> },
+                { key: "delta", label: "Δ", render: (r) => (
+                  <span style={{ fontWeight: 700, color: r.delta >= 0 ? T.green : T.amber }}>
+                    {r.delta >= 0 ? "+" : ""}{r.delta.toLocaleString()}
+                  </span>
+                ) },
+                { key: "balance_after", label: "BALANCE", render: (r) => r.balance_after.toLocaleString() },
+                { key: "note", label: "NOTE", render: (r) => <span style={{ color: T.muted2 }}>{r.note || ""}</span> },
+              ]}
+              rows={data.ledger}
+              empty="No credit movements yet."
+            />
+          </Card>
         </>
       )}
     </>

@@ -2,13 +2,15 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-Sport = Literal[
-    "NBA", "NFL", "Soccer", "MLB", "F1", "Tennis",
-    "College Sports", "Combat Sports",
-]
-Tone = Literal["Funny", "Savage", "Hype", "Bold"]
+from .models import SPORTS, TONES
+
+# Built from the model tuples, so the API, the database check constraints and
+# the pipeline vocabulary can never drift apart — adding a sport is a one-line
+# change in models.py.
+Sport = Literal[SPORTS]  # type: ignore[valid-type]
+Tone = Literal[TONES]  # type: ignore[valid-type]
 Platform = Literal["instagram", "tiktok", "youtube", "x", "linkedin"]
 Role = Literal["Sports Fan", "Creator", "Podcaster", "Media Company", "Fantasy Creator"]
 
@@ -57,8 +59,13 @@ class PreferencesUpdate(BaseModel):
 class UsageOut(BaseModel):
     plan: Literal["free", "creator"]
     used: int
-    limit: int
+    # Video-count limits are gone (credits are the unit); kept nullable for
+    # stale clients, with `left` mapped onto the credit balance.
+    limit: int | None = None
     left: int
+    credits: int = 0
+    # The public price list: what actions cost, so the client quotes exactly.
+    prices: dict = {}
     can_download: bool
     watermarked: bool
 
@@ -80,8 +87,17 @@ class UserOut(BaseModel):
 
 # ---------- clips ----------
 class ClipCreate(BaseModel):
-    take: str = Field(min_length=10, max_length=280)
-    sport: Sport
+    take: str = Field(min_length=10, max_length=500)
+    # Optional, not a gate: most takes name a league, club or player, so the
+    # sport is inferred from the words when nothing is ticked (video/sports.py).
+    # `sports` carries a multi-select — a take can straddle two ("NBA + NFL")
+    # — and the first one is the world the video is built in.
+    sport: Sport | None = None
+    sports: list[Sport] = Field(default_factory=list, max_length=4)
+    # Optional teams/players the user wants in it, in their own words.
+    subjects: list[str] = Field(default_factory=list, max_length=8)
+    direction: str = Field(default="", max_length=400)
+    reference_key: str | None = Field(default=None, max_length=300)
     tone: Tone
     duration: Literal[10, 15, 30] = 15
     resolution: Literal["720p", "1080p"] = "720p"
@@ -92,7 +108,7 @@ class EnhanceRequest(BaseModel):
     """Anything the user has typed so far. Every field is optional except the
     take, because the point of enhancement is to work out what is missing."""
 
-    take: str = Field(max_length=280, default="")
+    take: str = Field(max_length=500, default="")
     sport: Sport | None = None
     tone: Tone | None = None
     duration: int | None = None
@@ -145,6 +161,7 @@ class PublishOut(BaseModel):
     clip_id: uuid.UUID
     social_account_id: uuid.UUID
     caption: str
+    options: dict | None = None
     status: str
     error: str | None
     external_url: str | None
@@ -160,6 +177,10 @@ class ClipOut(BaseModel):
     id: uuid.UUID
     take: str
     sport: str
+    # What the user picked beyond the primary sport, echoed back so the UI can
+    # show what the video was actually built from.
+    sports: list[str] = []
+    subjects: list[str] = []
     tone: str
     status: str
     stage_index: int
@@ -185,6 +206,19 @@ class ClipOut(BaseModel):
     # A real frame from the clip, for thumbnails. None for clips made before
     # posters were stored, so the client keeps its gradient fallback.
     poster_url: str | None = None
+    # The user's uploaded reference photo/video, shown with the clip so it is
+    # always clear what the generation was anchored to. None when none given.
+    reference_url: str | None = None
+    # The credit receipt (PRICING rule 4): what this video charged. 0 after a
+    # refund and for clips that predate the credit system.
+    credits_charged: int = 0
+    # Scene edits: what re-rendering chosen scenes has charged so far, the
+    # edit currently in flight (if any), and whether one can be requested —
+    # the untouched scenes must still be on disk (7 days), so this is
+    # computed only for GET /clips/{id}.
+    credits_edits: int = 0
+    edit_pending: dict | None = None
+    editable: bool = False
 
 
 class CaptionSuggestions(BaseModel):
@@ -192,7 +226,7 @@ class CaptionSuggestions(BaseModel):
 
 
 class TakeEnhanceRequest(BaseModel):
-    take: str = Field(min_length=1, max_length=280)
+    take: str = Field(min_length=1, max_length=500)
     sport: Sport | None = None
     tone: Tone | None = None
     # How many times the user has already asked. Only widens the search, so
@@ -227,9 +261,76 @@ class SocialAccountOut(BaseModel):
 
 
 # ---------- publishing ----------
+class TikTokOptions(BaseModel):
+    """What the creator chose in the TikTok composer.
+
+    TikTok's Content Sharing Guidelines make every one of these a creator
+    decision rather than an app default: the privacy level must be picked
+    explicitly (no pre-selection), the three interaction permissions start
+    off, and commercial content must be disclosed by the person posting.
+    The API mirrors that — there is no default privacy_level here.
+    """
+
+    privacy_level: Literal[
+        "PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"
+    ]
+    allow_comment: bool = False
+    allow_duet: bool = False
+    allow_stitch: bool = False
+    # Commercial content disclosure: "Your brand" → Promotional content label,
+    # "Branded content" → Paid partnership label.
+    brand_organic: bool = False
+    branded_content: bool = False
+
+
+class TikTokCreatorInfo(BaseModel):
+    """`creator_info` as the composer needs it, plus what we know about our
+    own audit state so the UI can be honest about what will happen."""
+
+    nickname: str
+    username: str
+    avatar_url: str
+    privacy_level_options: list[str]
+    comment_disabled: bool
+    duet_disabled: bool
+    stitch_disabled: bool
+    max_video_post_duration_sec: int
+    # True while our TikTok client has not passed the content audit, when
+    # TikTok refuses anything but a private post. Drives a warning, not a
+    # silent override — the creator's choice is always sent as chosen.
+    unaudited: bool
+
+
+class YouTubeOptions(BaseModel):
+    """The exact metadata the creator approved for one YouTube upload.
+
+    YouTube's Required Minimum Functionality requires all three fields to be
+    user-controlled.  Keep this separate from the cross-platform caption so no
+    server default can silently choose the title, description, or visibility.
+    """
+
+    title: str = Field(min_length=1, max_length=100)
+    description: str = ""
+    privacy_status: Literal["public", "private", "unlisted"]
+
+    @field_validator("title", "description")
+    @classmethod
+    def youtube_text(cls, value: str, info):
+        if "<" in value or ">" in value:
+            raise ValueError(f"YouTube {info.field_name} cannot contain < or >")
+        if info.field_name == "title" and not value.strip():
+            raise ValueError("YouTube title cannot be blank")
+        if info.field_name == "description" and len(value.encode("utf-8")) > 5000:
+            raise ValueError("YouTube description cannot exceed 5000 UTF-8 bytes")
+        return value
+
+
 class PublishCreate(BaseModel):
     social_account_id: uuid.UUID
     caption: str = Field(default="", max_length=2200)
+    # Required for the matching destination; ignored for other platforms.
+    tiktok: TikTokOptions | None = None
+    youtube: YouTubeOptions | None = None
 
 
 # ---------- billing ----------

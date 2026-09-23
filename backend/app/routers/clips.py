@@ -1,7 +1,9 @@
 import logging
 import uuid
+from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -14,15 +16,22 @@ from ..models import Clip, Publish, SocialAccount, User
 from ..schemas import (
     CaptionSuggestions,
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
-    TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation,
+    TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation, Tone,
 )
-from ..services import markers, storage
+from ..services import markers, plans, storage
 from ..services.generation import start_generation
 from ..services.publishing import start_publish
 
 log = logging.getLogger("banter.clips")
 
 router = APIRouter(prefix="/clips", tags=["clips"])
+
+REFERENCE_LIMIT = 15 * 1024 * 1024
+REFERENCE_TYPES = {"image/jpeg": ".jpg", "video/mp4": ".mp4"}
+
+
+def reference_matches(payload: bytes, suffix: str) -> bool:
+    return payload.startswith(b"\xff\xd8\xff") if suffix == ".jpg" else payload[4:8] == b"ftyp"
 
 
 def _own_clip(clip_id: uuid.UUID, user: User, db: Session) -> Clip:
@@ -43,8 +52,17 @@ def _serialize(clip: Clip) -> ClipOut:
     if clip.poster_key:
         try:
             out.poster_url = storage.get().url(clip.poster_key)
+            if clip.completed_at:
+                # Posters are re-uploaded under the same key after a scene
+                # edit; the version tag keeps browsers from showing the old one.
+                out.poster_url += f"?v={int(clip.completed_at.timestamp())}"
         except Exception:  # noqa: BLE001 — a thumbnail is never worth a 500
             log.warning("could not build a poster URL for clip %s", clip.id)
+    if clip.reference_key:
+        try:
+            out.reference_url = storage.get().url(clip.reference_key)
+        except Exception:  # noqa: BLE001 — same rule as the poster
+            log.warning("could not build a reference URL for clip %s", clip.id)
     return out
 
 
@@ -89,21 +107,35 @@ def enhance_take(
 def enhance_take_variations(
     body: TakeEnhanceRequest,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Two sharper versions of a take, for the input page.
 
     Called on demand and repeatedly — every press returns two NEW variations,
     and the original is echoed back so the client can always offer it as the
-    third choice. Nothing is generated and no allowance is touched.
+    third choice. Costs 1 credit per press (PRICING §4) — charged up front,
+    which is also the farming guard.
 
     An empty `variations` list is a valid answer: it means keep what you
     wrote, which is never the wrong outcome.
     """
-    from ..video import providers, takes
+    from ..services import credits
+    from ..video import providers, sports as sports_mod, takes
 
+    fee = int(credits.prices(db)["enhance_take"])
+    if fee > 0:
+        try:
+            credits.apply(db, user, -fee, "enhance_charge", note="enhance take")
+        except ValueError:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"Enhancing costs {fee} credit — you have {user.credits}.",
+                "needed": fee, "balance": user.credits,
+            })
     options = takes.variations(
-        body.take, body.sport or "NBA", body.tone or "Funny",
+        body.take, sports_mod.resolve(body.sport, body.take), body.tone or "Funny",
         client=providers.text_client(), round_index=body.round,
+        max_chars=plans.take_limit(user.plan),
     )
     return TakeEnhanceResponse(
         original=body.take.strip(),
@@ -112,7 +144,7 @@ def enhance_take_variations(
 
 
 @router.get("/trending")
-def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
+def trending(sport: str = "NBA", refresh: bool = False, user: User = Depends(get_current_user)):
     """The trending feed for the create page.
 
     Shared 20-minute cache per sport (see app/video/trending.py), so this is
@@ -125,24 +157,41 @@ def trending(sport: str = "NBA", user: User = Depends(get_current_user)):
     """
     from ..video import trending as trending_feed
 
-    return trending_feed.get_feed(sport)
+    return trending_feed.get_feed(sport, force=refresh)
 
 
 @router.post("", response_model=ClipOut, status_code=201)
 def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     # A demo run costs nothing and produces nothing publishable, so it must
-    # not be charged against the monthly allowance or gated by it.
+    # not be charged credits or gated by the balance.
     simulated = markers.is_simulated(body.take)
 
-    usage = usage_for(db, user)
-    if not simulated and usage["left"] <= 0:
-        # BR-09: at the limit → upgrade prompt, never a silent failure.
+    # The exact menu quote. The balance is only CHECKED here — the single
+    # charge happens when the finished video lands (charge_on_completion),
+    # so a failed or paused generation never touches the wallet.
+    price = 0 if simulated else credits.video_price(db, body.duration, body.resolution)
+    if user.credits < price:
+        # PRICING rule 2: an empty balance means top up — never an upgrade
+        # prompt, and never a plan mention.
         raise HTTPException(
             402,
             detail={
-                "code": "limit_reached",
-                "message": f"You've used all {usage['limit']} videos on the "
-                f"{user.plan} plan this month.",
+                "code": "insufficient_credits",
+                "message": f"This video needs {price} credits — you have {user.credits}.",
+                "needed": price,
+                "balance": user.credits,
+            },
+        )
+
+    # Longer prompts are a Creator feature (Free tops out at 280 characters).
+    if len(markers.strip(body.take)) > plans.take_limit(user.plan):
+        raise HTTPException(
+            403,
+            detail={
+                "code": "upgrade_required",
+                "message": f"Prompts over {plans.FREE_TAKE_CHARS} characters are a Creator feature.",
             },
         )
 
@@ -166,13 +215,30 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
             },
         )
 
+    # Sport is optional (a take usually names its own league or player), and
+    # multi-select: the first pick is the world the video is built in, the
+    # rest are context. Nothing here can fail — resolve always answers.
+    from ..video import sports as sports_mod
+
+    picked = [s for s in ([body.sport] if body.sport else []) + list(body.sports) if s]
+    primary = sports_mod.resolve(
+        picked[0] if picked else None,
+        body.take,
+        (user.preferences.sports if user.preferences else None) or [],
+    )
+    subjects = [s.strip()[:60] for s in body.subjects if s and s.strip()][:8]
+
     clip = Clip(
         user_id=user.id,
         # Markers are stripped so they can never surface in the video, the
         # captions, or a published Instagram caption.
         take=markers.strip(body.take),
         is_simulated=simulated,
-        sport=body.sport,
+        sport=primary,
+        sports=list(dict.fromkeys(picked)),
+        subjects=subjects,
+        direction=body.direction.strip(),
+        credits_quoted=price,
         tone=body.tone,
         duration_target=body.duration,
         resolution=body.resolution,
@@ -180,15 +246,74 @@ def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Se
         watermarked=user.plan != "creator",
     )
     db.add(clip)
+    db.flush()
+    if body.reference_key:
+        expected = f"users/{user.id}/uploads/"
+        if not body.reference_key.startswith(expected):
+            raise HTTPException(400, "Invalid reference upload")
+        store = storage.get()
+        payload = store.open(body.reference_key)
+        if payload is None:
+            raise HTTPException(400, "Reference upload expired — choose it again")
+        suffix = ".mp4" if body.reference_key.endswith(".mp4") else ".jpg"
+        key = f"{storage.clip_prefix(user.id, clip.id)}/reference{suffix}"
+        store.put(key, payload, "video/mp4" if suffix == ".mp4" else "image/jpeg")
+        store.delete(body.reference_key)
+        clip.reference_key = key
     db.commit()
-    record_event(db, "generation_started", user, sport=body.sport, tone=body.tone, duration=body.duration)
+    record_event(db, "generation_started", user, sport=primary, tone=body.tone,
+                 duration=body.duration, inferred_sport=not picked)
     start_generation(clip.id)
     return _serialize(clip)
 
 
+@router.post("/reference", status_code=201)
+async def upload_reference(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """One optional JPEG or MP4 reference for the guided prompt builder.
+
+    Raw-body upload avoids a multipart dependency. The key is temporary and
+    is moved under the clip when POST /clips succeeds.
+    """
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    suffix = REFERENCE_TYPES.get(content_type)
+    if not suffix:
+        raise HTTPException(415, "Reference must be a JPEG image or MP4 video")
+    payload = bytearray()
+    async for chunk in request.stream():
+        payload.extend(chunk)
+        if len(payload) > REFERENCE_LIMIT:
+            raise HTTPException(413, "Reference must be between 1 byte and 15 MB")
+    payload = bytes(payload)
+    if not payload:
+        raise HTTPException(413, "Reference must be between 1 byte and 15 MB")
+    if not reference_matches(payload, suffix):
+        raise HTTPException(415, "Reference file contents do not match its type")
+    key = f"users/{user.id}/uploads/{uuid.uuid4()}{suffix}"
+    storage.get().put(key, payload, content_type)
+    return {"key": key}
+
+
+def _editable(clip: Clip) -> bool:
+    """Scene edits need the untouched scenes still on disk (housekeeping
+    keeps work files 7 days) — otherwise there is nothing to reuse and the
+    honest answer is a new video."""
+    if clip.status != "ready" or clip.is_simulated or not clip.script:
+        return False
+    from ..video import runner as runner_mod
+
+    count = len(clip.script.get("scenes") or [])
+    return count > 0 and set(range(count)) <= runner_mod.checkpointed_scenes(clip.id)
+
+
 @router.get("/{clip_id}", response_model=ClipOut)
 def get_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _serialize(_own_clip(clip_id, user, db))
+    clip = _own_clip(clip_id, user, db)
+    out = _serialize(clip)
+    out.editable = _editable(clip)
+    return out
 
 
 class SceneEdit(BaseModel):
@@ -243,6 +368,12 @@ class ScriptRegenerate(BaseModel):
     # Optional note telling the writer what was wrong ("less cringe",
     # "make it about the derby") — folded into the rewrite prompt.
     feedback: str = Field(default="", max_length=400)
+    # Rewrite with different options: swap the tone, length or quality and
+    # write the script for THOSE settings. Omitted fields keep the clip's
+    # current value; a change re-quotes the video at the menu price.
+    tone: Tone | None = None
+    duration: Literal[10, 15, 30] | None = None
+    resolution: Literal["720p", "1080p"] | None = None
 
 
 @router.post("/{clip_id}/script/approve", response_model=ClipOut)
@@ -269,9 +400,43 @@ def regenerate_script(
 ):
     """Reject the current script and write a different one. Free — only the
     render costs real money, and it hasn't started."""
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
     if clip.status != "script_ready" or not clip.script:
         raise HTTPException(409, "This clip has no script awaiting approval.")
+
+    # New options ride along with the rewrite. Same gates as create — plan
+    # capabilities and the balance are checked against the NEW quote before
+    # anything is queued. Still charge-on-completion: nothing moves here.
+    tone = body.tone or clip.tone
+    duration = body.duration or clip.duration_target
+    resolution = body.resolution or clip.resolution
+    options_changed = (tone, duration, resolution) != (
+        clip.tone, clip.duration_target, clip.resolution)
+    if options_changed:
+        if duration > 15 and user.plan != "creator":
+            raise HTTPException(403, detail={
+                "code": "upgrade_required",
+                "message": "Videos longer than 15 seconds are a Creator feature.",
+            })
+        if resolution == "1080p" and user.plan != "creator":
+            raise HTTPException(403, detail={
+                "code": "upgrade_required",
+                "message": "1080p video is a Creator feature — Free renders at 720p.",
+            })
+        price = 0 if clip.is_simulated else credits.video_price(db, duration, resolution)
+        if user.credits < price:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"This video needs {price} credits — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
+        clip.tone = tone
+        clip.duration_target = duration
+        clip.resolution = resolution
+        clip.credits_quoted = price
+
     history = list(clip.script_history or [])
     history.append({"script": clip.script, "feedback": body.feedback.strip()})
     clip.script_history = history[-10:]   # rejected drafts, capped
@@ -281,17 +446,105 @@ def regenerate_script(
     clip.stage_index = 0
     db.commit()
     record_event(db, "script_regenerated", user, clip_id=str(clip.id),
-                 with_feedback=bool(body.feedback.strip()))
+                 with_feedback=bool(body.feedback.strip()),
+                 options_changed=options_changed)
+    start_generation(clip.id)
+    return _serialize(clip)
+
+
+class SceneRerender(BaseModel):
+    # Every listed scene is re-rendered; line/action are optional edits to
+    # apply first. Listing a scene with no edits simply re-rolls it.
+    scenes: list[SceneEdit] = Field(min_length=1, max_length=20)
+
+
+@router.post("/{clip_id}/scenes/rerender", response_model=ClipOut)
+def rerender_scenes(
+    clip_id: uuid.UUID,
+    body: SceneRerender,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Edit or re-roll chosen scenes of a FINISHED video without paying for
+    the rest. Priced per scene at the video's per-second rate (PRICING §4),
+    quoted here and charged only when the new cut lands; the untouched
+    scenes are reused from disk. A failed edit leaves the original video
+    exactly as it was."""
+    from ..services import credits
+    from ..video import runner as runner_mod
+    from ..video.types import Scene
+
+    clip = _own_clip(clip_id, user, db)
+    if clip.status != "ready" or not clip.script:
+        raise HTTPException(409, "Only finished videos can have scenes edited.")
+    if clip.is_simulated:
+        raise HTTPException(409, "Demo videos can't be edited.")
+    scenes = [dict(s) for s in clip.script.get("scenes") or []]
+    wanted = sorted({e.index for e in body.scenes})
+    if not scenes or any(i >= len(scenes) for i in wanted):
+        raise HTTPException(400, "That scene doesn't exist in this video.")
+    keep = set(range(len(scenes))) - set(wanted)
+    if not keep <= runner_mod.checkpointed_scenes(clip.id):
+        raise HTTPException(409, detail={
+            "code": "edit_unavailable",
+            "message": "This video's working files have expired, so single scenes "
+                       "can't be re-rendered any more — generate a new video instead.",
+        })
+    price = sum(
+        credits.scene_price(db, float(scenes[i].get("seconds") or 4.0), clip.resolution)
+        for i in wanted
+    )
+    if user.credits < price:
+        raise HTTPException(402, detail={
+            "code": "insufficient_credits",
+            "message": f"Re-rendering these scenes needs {price} credits — you have {user.credits}.",
+            "needed": price, "balance": user.credits,
+        })
+    for edit in body.scenes:
+        scene = scenes[edit.index]
+        if edit.action is not None and edit.action.strip():
+            scene["action"] = edit.action.strip()
+        if edit.line is not None:
+            fitted = Scene(seconds=float(scene.get("seconds") or 4.0), line=edit.line.strip())
+            scene["line"] = fitted.trimmed_line() if fitted.line else ""
+    script = dict(clip.script)
+    script["scenes"] = scenes
+    script["edited"] = True
+    clip.script = script
+    clip.edit_pending = {"scenes": wanted, "credits": price,
+                         "requested_at": datetime.now(timezone.utc).isoformat()}
+    clip.status = "queued"
+    clip.stage_index = 0
+    clip.error = None
+    clip.current_step = None
+    db.commit()
+    record_event(db, "scenes_rerendered", user, clip_id=str(clip.id),
+                 scenes=len(wanted), credits=price)
     start_generation(clip.id)
     return _serialize(clip)
 
 
 @router.post("/{clip_id}/retry", response_model=ClipOut)
 def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
-    if clip.status != "failed":
-        raise HTTPException(409, "Only failed jobs can be retried.")
-    # BR-09: retries are free — the allowance is only charged on success.
+    if clip.status not in ("failed", "paused"):
+        raise HTTPException(409, "Only failed or paused jobs can be retried.")
+    # Nothing is charged here: a resumed job reuses its checkpointed scenes
+    # and the single charge happens when the video completes. The balance
+    # check just keeps that completion charge from landing on an empty
+    # wallet the user already spent elsewhere.
+    edit = clip.edit_pending if isinstance(clip.edit_pending, dict) else None
+    if not clip.is_simulated and (edit or clip.credits_charged <= 0):
+        price = int(edit.get("credits") or 0) if edit else (
+            clip.credits_quoted or credits.video_price(db, clip.duration_target, clip.resolution))
+        if user.credits < price:
+            raise HTTPException(402, detail={
+                "code": "insufficient_credits",
+                "message": f"Resuming needs {price} credits available — you have {user.credits}.",
+                "needed": price, "balance": user.credits,
+            })
     clip.status = "queued"
     clip.stage_index = 0
     clip.error = None
@@ -307,7 +560,13 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
 
 @router.delete("/{clip_id}", status_code=204)
 def delete_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from ..services import credits
+
     clip = _own_clip(clip_id, user, db)
+    # Abandoning an unfinished clip (script stage, queue, mid-render) releases
+    # its reservation — only a completed video keeps its charge (rule 3).
+    if clip.status != "ready":
+        credits.refund_video(db, clip)
     # Delete the bytes too. Dropping only the row leaves the video publicly
     # fetchable at its URL forever — a deletion that does not delete.
     try:
@@ -388,6 +647,53 @@ def caption_suggestions(
     return CaptionSuggestions(captions=options)
 
 
+def _youtube_options(body: PublishCreate) -> dict:
+    """Require the exact creator-approved metadata for every YouTube upload."""
+    if body.youtube is None:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "youtube_options_required",
+                "message": "Choose a YouTube title, description, and visibility before uploading.",
+            },
+        )
+    return body.youtube.model_dump()
+
+
+def _tiktok_options(body: PublishCreate) -> dict:
+    """The creator's composer choices, checked for the rules TikTok states as
+    absolutes rather than per-account settings.
+
+    Anything that depends on the creator's own TikTok settings — which privacy
+    levels they may use, whether comments/duet/stitch are permitted, how long
+    a video they may post — is enforced in services/publishing.py against the
+    `creator_info` call TikTok requires immediately before every publish.
+    Checking it here as well would mean querying TikTok twice per publish and
+    still racing a settings change between the two calls.
+    """
+    if body.tiktok is None:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "tiktok_options_required",
+                "message": "Choose who can view this video before posting to TikTok.",
+            },
+        )
+    options = body.tiktok
+    # TikTok forbids branded content on a private post: a paid partnership has
+    # to be visible to somebody. Its own composer greys out "Only me" once
+    # branded content is on, and ours does the same — this is the backstop.
+    if options.branded_content and options.privacy_level == "SELF_ONLY":
+        raise HTTPException(
+            400,
+            detail={
+                "code": "branded_content_private",
+                "message": "Branded content cannot be posted privately. Choose a different audience or turn off Branded content.",
+            },
+        )
+    return options.model_dump()
+
+
 @router.post("/{clip_id}/publish", response_model=PublishOut, status_code=201)
 def publish_clip(
     clip_id: uuid.UUID,
@@ -411,8 +717,16 @@ def publish_clip(
     if account is None or account.user_id != user.id or account.status != "connected":
         raise HTTPException(400, "Connect a social account before publishing.")
 
+    options = None
+    if account.platform == "tiktok":
+        options = _tiktok_options(body)
+    elif account.platform == "youtube":
+        options = _youtube_options(body)
+
     # BR-13: publishing is always an explicit per-clip action.
-    pub = Publish(clip_id=clip.id, social_account_id=account.id, caption=body.caption)
+    pub = Publish(
+        clip_id=clip.id, social_account_id=account.id, caption=body.caption, options=options
+    )
     db.add(pub)
     db.commit()
     record_event(db, "publish_started", user, clip_id=str(clip.id),

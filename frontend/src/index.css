@@ -650,3 +650,25 @@ video:-webkit-full-screen {
     margin: 0 auto;
   }
 }
+
+/* Viral tab: the sport row scrolls sideways on phones instead of wrapping
+   into a wall, and presets go two-up on narrow screens. */
+.viral-sports {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.viral-sports::-webkit-scrollbar { display: none; }
+.viral-sports .chip { flex-shrink: 0; white-space: nowrap; }
+.viral-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .viral-presets { grid-template-columns: 1fr 1fr; }
+  .app-bottomnav a { font-size: 10px; white-space: nowrap; }
+}

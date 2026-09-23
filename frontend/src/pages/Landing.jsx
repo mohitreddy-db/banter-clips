@@ -3,6 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { VIDEO_RES, VIDEO_RES_RATIO } from "../lib/format.js";
 import { showcaseClips, SHOWCASE_BASE } from "../lib/showcase.js";
+import Logo from "../components/BrandMark.jsx";
+
+// The clip the hero tile and the "Publish or download" card demo. Follows
+// whatever leads the catalog, so refreshing the showcase refreshes the whole
+// page instead of leaving two hard-coded slugs behind.
+const LEAD_CLIP = showcaseClips[0].slug;
 
 import { useSeo } from "../lib/seo.js";
 /* Faithful port of the client's landing page (slim MVP prototype).
@@ -20,7 +26,7 @@ const features = [
   { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — real players, real kits.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
   { key: "voice",    title: "AI Voiceovers",       desc: "Characters speak their own lines, lip-synced, with crowd noise underneath.", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
   { key: "captions", title: "Animated Captions",   desc: "Burned in and timed to the dialogue, so it lands with the sound off.", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
-  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram the moment it renders. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
+  { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram, TikTok or YouTube Shorts when you press Publish. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
   { key: "tone",     title: "Tone Control",        desc: "Funny, savage, hype or bold — the tone changes the script and the lighting.", c1: "#ea580c", c2: "#f59e0b", span: "span 2" },
 ];
 
@@ -46,7 +52,7 @@ function FeatureVisual({ f }) {
     // vertical" message, so the image only has to look like a real broadcast
     // frame. `center 34%` puts the crop band on the face rather than the
     // midriff, which is what a plain centred cover would land on.
-    const src = `${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`;
+    const src = `${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg`;
     return (
       <div style={frame}>
         <img
@@ -250,24 +256,9 @@ const testimonials = [
 ];
 
 const plansMini = [
-  { name: "Free", price: "$0", per: "/mo", tag: "60 welcome credits · publish-only · watermarked", cta: "Start free", popular: false },
-  { name: "Creator", price: "$19", per: "/mo", tag: "150 credits · HD download · no watermark", cta: "Go Creator", popular: true },
+  { name: "Free", price: "$0", per: "/mo", tag: "5 videos · publish-only · watermarked", cta: "Start free", popular: false },
+  { name: "Creator", price: "$19", per: "/mo", tag: "150 credits/mo · HD download · no watermark", cta: "Go Creator", popular: true },
 ];
-
-function Logo({ size = 30 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 34 34">
-      <defs>
-        <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="oklch(0.66 0.19 253)" />
-          <stop offset="1" stopColor="oklch(0.80 0.16 152)" />
-        </linearGradient>
-      </defs>
-      <rect width="34" height="34" rx="9" fill="url(#lg)" />
-      <path d="M13 10.5 L25 17 L13 23.5 Z" fill="#fff" />
-    </svg>
-  );
-}
 
 const WAVE_DELAYS = [0, 0.1, 0.2, 0.3, 0.15, 0.25, 0.05, 0.35];
 
@@ -355,7 +346,7 @@ export default function Landing() {
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent2)", boxShadow: "0 0 10px var(--accent2)" }} /> AI sports video studio
             </div>
             <h1 className="hero-h1" style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(33px, 8vw, 54px)", lineHeight: 1.05, letterSpacing: "-.03em", margin: "0 0 22px", textWrap: "balance" }}>
-              Turn Any Sports Opinion Into A <span style={{ background: "var(--grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Viral Video</span> In Seconds.
+              BanterClips Turns Any Sports Opinion Into A <span style={{ background: "var(--grad)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Viral Video</span> In Seconds.
             </h1>
             <p style={{ fontSize: "clamp(15.5px, 4.2vw, 18.5px)", lineHeight: 1.55, color: "var(--muted)", margin: "0 0 32px", maxWidth: 520 }}>
               Create AI-powered sports banter, predictions, reactions and debates — ready for TikTok, Instagram Reels and YouTube Shorts.
@@ -573,6 +564,8 @@ export default function Landing() {
             <span>© 2026 BanterClips · Every sports opinion deserves a viral video. · All videos are AI-generated parody.</span>
             <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "none" }}>Privacy</a>
             <a href="/terms" style={{ color: "var(--muted)", textDecoration: "none" }}>Terms</a>
+            <a href="/feedback" style={{ color: "var(--muted)", textDecoration: "none" }}>Feedback</a>
+            <a href="/data-deletion" style={{ color: "var(--muted)", textDecoration: "none" }}>Data deletion</a>
             {/* Google's Preferred Sources deeplink — the visitor confirms on
                 Google's side and our content gets a "preferred" badge in THEIR
                 results (Top Stories / AI Mode / AI Overviews). Per-user
@@ -785,8 +778,8 @@ function HowItWorks() {
             // this card advertises stay in shot; a plain centred cover would
             // cut them off along with the bottom of the kit.
             <video
-              src={`${SHOWCASE_BASE}/ronaldo-penalties/final.mp4`}
-              poster={`${SHOWCASE_BASE}/ronaldo-penalties/poster.jpg`}
+              src={`${SHOWCASE_BASE}/${LEAD_CLIP}/final.mp4`}
+              poster={`${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg`}
               muted
               loop
               autoPlay

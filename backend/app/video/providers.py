@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import mimetypes
 import time
 from pathlib import Path
 
@@ -100,6 +101,19 @@ class NullTextClient:
         return None
 
 
+class OutOfCredits(RuntimeError):
+    """The provider refused to spend — its account balance is below the
+    pre-authorization for the call. Nothing is wrong with the request; money
+    is. Callers pause the job (progress saved, user not charged) rather than
+    degrading it, because a placeholder video costs the user credits and
+    trust while telling them nothing about what actually happened."""
+
+
+def _raise_if_out_of_credits(resp) -> None:
+    if resp.status_code == 402:
+        raise OutOfCredits("provider account has insufficient credits")
+
+
 # ------------------------------------------------------------------- images
 
 class ImageProvider:
@@ -148,6 +162,7 @@ class ImageProvider:
                         f"{OPENROUTER}/images", json=body,
                         headers={"Authorization": f"Bearer {self.api_key}"},
                     )
+            _raise_if_out_of_credits(resp)
             if resp.status_code >= 400:
                 log.warning("image gen -> %s %s", resp.status_code, resp.text[:300])
                 return None, 0.0
@@ -157,13 +172,83 @@ class ImageProvider:
                 return None, 0.0
             out.write_bytes(base64.b64decode(payload))
             return out, float((data.get("usage") or {}).get("cost") or 0.0)
+        except OutOfCredits:
+            raise
         except Exception:  # noqa: BLE001
             log.exception("image generation failed")
             return None, 0.0
 
 
 def _data_uri(path: str | Path) -> str:
-    return "data:image/jpeg;base64," + base64.b64encode(Path(path).read_bytes()).decode()
+    kind = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+    return f"data:{kind};base64," + base64.b64encode(Path(path).read_bytes()).decode()
+
+
+class ChatImageProvider:
+    """Image generation through /chat/completions, for models that only work
+    in the multimodal chat shape (Gemini 2.5 Flash Image).
+
+    This is the IDENTITY route: unlike the /images models — Grok accepts
+    `image_urls` and then draws a different person entirely (verified
+    2026-09-03) — Gemini reproduces the exact person in an attached photo.
+    Used only for scenes that cast the user's uploaded reference."""
+
+    def __init__(self, api_key: str, model: str, timeout: float = 180.0):
+        self.api_key, self.model, self.timeout = api_key, model, timeout
+
+    @property
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def generate(
+        self, prompt: str, out: Path, references: list[Path] | None = None,
+        aspect_ratio: str = "9:16",
+    ) -> tuple[Path | None, float]:
+        if not self.available:
+            return None, 0.0
+        content: list[dict] = [{"type": "text", "text":
+                                f"{prompt} Output one photoreal {aspect_ratio} "
+                                f"vertical photograph."}]
+        for p in (references or [])[:3]:
+            if Path(p).exists():
+                content.append({"type": "image_url",
+                                "image_url": {"url": _data_uri(p)}})
+        body = {"model": self.model,
+                "messages": [{"role": "user", "content": content}],
+                "modalities": ["image", "text"]}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(
+                    f"{OPENROUTER}/chat/completions", json=body,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+            _raise_if_out_of_credits(resp)
+            if resp.status_code >= 400:
+                log.warning("identity image gen -> %s %s",
+                            resp.status_code, resp.text[:300])
+                return None, 0.0
+            data = resp.json()
+            message = (data.get("choices") or [{}])[0].get("message") or {}
+            images = message.get("images") or []
+            url = (images[0].get("image_url") or {}).get("url", "") if images else ""
+            if not url.startswith("data:"):
+                # The model answered with text (usually a refusal) — surface it.
+                log.warning("identity image gen returned no image: %s",
+                            str(message.get("content"))[:200])
+                return None, 0.0
+            raw = out.with_name(out.stem + "_raw.jpg")
+            raw.write_bytes(base64.b64decode(url.split(",", 1)[1]))
+            # Chat models pick their own canvas; the animator needs 9:16.
+            if media.fit_frame(raw, out) is None:
+                out.write_bytes(raw.read_bytes())
+            raw.unlink(missing_ok=True)
+            cost = float((data.get("usage") or {}).get("cost") or 0.0)
+            return out, cost
+        except OutOfCredits:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("identity image generation failed")
+            return None, 0.0
 
 
 class StubImageProvider:
@@ -202,11 +287,11 @@ class VideoProvider:
                 first_frame: Path | None = None) -> tuple[Path | None, float]:
         if not self.available:
             return None, 0.0
+        options = video_options(self.model, seconds, self.resolution)
         body: dict = {
             "model": self.model,
             "prompt": prompt,
-            "duration": max(1, min(15, int(round(seconds)))),
-            "resolution": self.resolution,
+            **options,
             "aspect_ratio": "9:16",
         }
         if first_frame and first_frame.exists():
@@ -218,6 +303,7 @@ class VideoProvider:
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
                 resp = client.post(f"{OPENROUTER}/videos", json=body, headers=headers)
+                _raise_if_out_of_credits(resp)
                 if resp.status_code >= 400:
                     log.warning("video submit -> %s %s", resp.status_code, resp.text[:300])
                     return None, 0.0
@@ -245,6 +331,8 @@ class VideoProvider:
                     return None, cost
                 out.write_bytes(content.content)
                 return out, cost
+        except OutOfCredits:
+            raise
         except Exception:  # noqa: BLE001
             log.exception("video generation failed")
             return None, 0.0
@@ -267,6 +355,29 @@ class StubVideoProvider:
 
 
 # ----------------------------------------------------------------- factories
+
+SEEDANCE_CAPABILITIES = {
+    "bytedance/seedance-2.0-mini": (4, 15, "720p"),
+    "bytedance/seedance-1-5-pro": (4, 12, "1080p"),
+    "bytedance/seedance-2.0-fast": (4, 15, "1080p"),
+    "bytedance/seedance-2.0": (4, 15, "1080p"),
+    "bytedance/seedance-2.5": (4, 30, "720p"),
+}
+
+
+def video_options(model: str, seconds: float, resolution: str) -> dict:
+    """Model-specific bounds; unknown OpenRouter models keep the old contract."""
+    minimum, maximum, max_resolution = SEEDANCE_CAPABILITIES.get(model, (1, 15, "1080p"))
+    selected = resolution
+    if max_resolution == "720p" and resolution == "1080p":
+        selected = "720p"
+    options = {
+        "duration": max(minimum, min(maximum, int(round(seconds)))),
+        "resolution": selected,
+    }
+    if model in SEEDANCE_CAPABILITIES:
+        options["generate_audio"] = True
+    return options
 
 def text_client() -> TextClient | NullTextClient:
     """The planner's client — a capable model; script quality starts here."""
@@ -292,15 +403,29 @@ def image_provider():
     return StubImageProvider()
 
 
+def identity_image_provider() -> ChatImageProvider | None:
+    """The keyframe generator for scenes that cast the user's reference photo.
+    None in stub mode or when no identity model is configured — callers fall
+    back to the standard image provider."""
+    mode = getattr(settings, "IMAGE_PROVIDER", "stub")
+    key = getattr(settings, "OPENROUTER_API_KEY", "")
+    model = getattr(settings, "IMAGE_IDENTITY_MODEL", "")
+    if mode == "openrouter" and key and model:
+        return ChatImageProvider(key, model)
+    return None
+
+
 def video_provider(resolution: str | None = None):
     """`resolution` is the per-clip choice (720p free, 1080p Creator);
     VIDEO_RESOLUTION remains the default for callers that don't pass one."""
     mode = getattr(settings, "VIDEO_PROVIDER", "stub")
     key = getattr(settings, "OPENROUTER_API_KEY", "")
     if mode == "openrouter" and key:
+        selected_resolution = resolution or getattr(settings, "VIDEO_RESOLUTION", "720p")
+        routes = getattr(settings, "VIDEO_MODEL_ROUTES", {}) or {}
         return VideoProvider(
             key,
-            getattr(settings, "VIDEO_MODEL", ""),
-            resolution or getattr(settings, "VIDEO_RESOLUTION", "720p"),
+            routes.get(selected_resolution) or getattr(settings, "VIDEO_MODEL", ""),
+            selected_resolution,
         )
     return StubVideoProvider()

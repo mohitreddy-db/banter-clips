@@ -520,7 +520,7 @@ class PurchaseController extends Notifier<PurchaseState> {
         packGranted: (result['credits_granted'] as num?)?.toInt() ?? 0,
       );
     } on ApiException catch (error) {
-      await _finishAfter(error, purchase);
+      await _finishAfterPack(error, purchase);
       state = state.copyWith(packBusy: '', packError: error.message);
     } catch (_) {
       state = state.copyWith(
@@ -565,6 +565,18 @@ class PurchaseController extends Notifier<PurchaseState> {
         error.status >= 500 || retryableStatuses.contains(error.status);
     return retryable ? Future<void>.value() : _finish(purchase);
   }
+
+  /// The same decision for a credit pack, which is a consumable and so has
+  /// the opposite failure mode.
+  ///
+  /// Google refunds a consumable left unacknowledged for three days. When the
+  /// server will never accept the receipt, leaving it unfinished is therefore
+  /// what gives the customer their money back — finishing it would take the
+  /// payment and hand over nothing. On iOS there is no such rule, packs are
+  /// not sold there at all, and an unfinished transaction blocks that product
+  /// for good, so there the ordinary rule applies.
+  Future<void> _finishAfterPack(ApiException error, PurchaseDetails purchase) =>
+      Platform.isIOS ? _finishAfter(error, purchase) : Future<void>.value();
 
   String _token(PurchaseDetails purchase) {
     final token = purchase.verificationData.serverVerificationData;
