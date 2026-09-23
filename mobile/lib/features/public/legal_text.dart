@@ -138,7 +138,7 @@ const privacyPolicy = <LegalSection>[
       'Disconnecting YouTube immediately asks Google to revoke the grant and deletes our stored access token, refresh token, expiry, connection identifier and every retained YouTube video ID/link. You can also revoke access from Google Security settings; our scheduled check detects that change and removes the same data.',
     ),
     LegalBlock.li(
-      'You can request full deletion of your account — including your videos, preferences, events, social connections and billing identifiers — by emailing $legalSupportEmail. YouTube API Data and authorization tokens are deleted as soon as possible and within seven calendar days; remaining account deletion completes within 30 days. Step-by-step instructions: banterclips.com/data-deletion.',
+      'You can delete your account — including your videos, preferences, social connections and billing identifiers — from Account → “Delete my account and videos” in the app, which removes it immediately, or by emailing $legalSupportEmail. YouTube API Data and authorization tokens are deleted as soon as possible and within seven calendar days; remaining account deletion completes within 30 days. Step-by-step instructions: banterclips.com/data-deletion.',
     ),
   ]),
   LegalSection('Your rights', [

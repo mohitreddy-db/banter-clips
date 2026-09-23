@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/states.dart';
@@ -176,7 +177,32 @@ class _UpgradeSheetState extends ConsumerState<_UpgradeSheet> {
                 color: AppColors.muted2,
               ),
             ),
-            const SizedBox(height: 8),
+            // App Store guideline 3.1.2 asks for the subscription's terms
+            // and a link to the EULA and privacy policy on the screen that
+            // sells it — not buried in Account. Both are root-level routes,
+            // so they open above this sheet and it is still here on the way
+            // back.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextAction(
+                  label: 'Terms of Use',
+                  color: AppColors.muted,
+                  fontSize: 11.5,
+                  onPressed: () => context.push('/terms'),
+                ),
+                const Text(
+                  '·',
+                  style: TextStyle(fontSize: 11.5, color: AppColors.muted2),
+                ),
+                TextAction(
+                  label: 'Privacy Policy',
+                  color: AppColors.muted,
+                  fontSize: 11.5,
+                  onPressed: () => context.push('/privacy'),
+                ),
+              ],
+            ),
             TextAction(
               label: 'Maybe later',
               color: AppColors.muted,

@@ -13,6 +13,7 @@ import '../../theme/colors.dart';
 import '../../widgets/buttons.dart';
 import '../../widgets/surfaces.dart';
 import 'instagram_connect.dart';
+import 'purchases.dart';
 import 'top_up_sheet.dart';
 import 'upgrade_sheet.dart';
 
@@ -340,9 +341,13 @@ class AccountScreen extends ConsumerWidget {
                     label: 'Download my data',
                     onTap: () => _open('${Env.webUrl}/account'),
                   ),
+                  // In the app, not on the website: App Store guideline
+                  // 5.1.1(v) requires an account that can be created in the
+                  // app to be deletable in it, and a link out to a web page
+                  // is the exact thing it rules out.
                   _LinkRow(
                     label: 'Delete my account and videos',
-                    onTap: () => _open('${Env.webUrl}/account'),
+                    onTap: () => _confirmDeleteAccount(context, ref),
                   ),
                 ],
               ),
@@ -387,6 +392,98 @@ class AccountScreen extends ConsumerWidget {
 
   static Future<void> _open(String url) =>
       launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+  /// Ask, then delete everything.
+  ///
+  /// Two things the confirmation must say, because both are how this goes
+  /// wrong for real people: it cannot be undone, and it does NOT cancel a
+  /// Creator subscription — no app can cancel one, so somebody who deletes
+  /// their account without cancelling keeps being charged.
+  static Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final creator = ref.read(appStateProvider).user?.plan == 'creator';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Delete your account?'),
+        content: Text(
+          'This permanently deletes your account, every clip and video in '
+          'it, your credits and your connected social accounts. It cannot '
+          'be undone.'
+          '${creator ? '\n\nIt does not cancel your Creator subscription. '
+                    'Cancel that first in your $storeSubscriptionsName, or '
+                    'it keeps renewing.' : ''}',
+          style: const TextStyle(
+            fontSize: 13.5,
+            height: 1.55,
+            color: AppColors.muted,
+          ),
+        ),
+        actions: [
+          TextAction(
+            label: 'Keep my account',
+            color: AppColors.muted,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          TextAction(
+            label: 'Delete everything',
+            color: AppColors.error,
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    // Captured before the first await: signing out rebuilds the tree out
+    // from under this screen, and by then `context` is no use for finding
+    // a navigator or a messenger.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+
+    // A modal barrier while it runs: deletion is not instant (it clears the
+    // stored video files first) and a second tap must not start a second one.
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(color: AppColors.cyan),
+      ),
+    );
+    try {
+      await ref.read(apiClientProvider).deleteAccount();
+    } on ApiException catch (error) {
+      navigator.pop(); // the spinner
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      return;
+    } catch (_) {
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete the account. Please try again.'),
+        ),
+      );
+      return;
+    }
+
+    // Spinner down BEFORE the sign-out: that redirect replaces the screen
+    // this dialog was opened from, and a barrier left behind it locks the
+    // app on a page nobody can dismiss.
+    navigator.pop();
+    // The session is dead server-side; drop it here too rather than letting
+    // the next poll 401 its way out.
+    await ref.read(appStateProvider.notifier).signOut();
+    router.go('/');
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Your account and videos have been deleted.'),
+      ),
+    );
+  }
 
   /// Where this Creator subscription is managed. A store subscription lives
   /// in the store's own settings; a website one in Stripe's portal, which

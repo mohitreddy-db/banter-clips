@@ -165,6 +165,13 @@ class ApiClient {
 
   Future<Usage> usage() async => Usage.fromJson(await _map('GET', '/me/usage'));
 
+  /// Delete the account and everything in it. Irreversible, and the session
+  /// it was called with is dead the moment it returns.
+  ///
+  /// It does not cancel a store subscription — only Apple or Google can —
+  /// which is why the screen that calls this says so first.
+  Future<void> deleteAccount() async => _send('DELETE', '/me');
+
   Future<Preferences> updatePreferences({
     List<String>? sports,
     List<String>? teams,
