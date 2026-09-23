@@ -106,6 +106,10 @@ class PurchaseController extends Notifier<PurchaseState> {
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
   Timer? _buyTimeout;
 
+  /// Set once the provider is gone, so a delayed callback does not write to
+  /// a disposed notifier.
+  bool _disposed = false;
+
   /// The pack product ids we are expecting purchases for, so a receipt can
   /// be told apart from the subscription's.
   final Set<String> _knownPackIds = {};
@@ -132,6 +136,7 @@ class PurchaseController extends Notifier<PurchaseState> {
       ),
     );
     ref.onDispose(() {
+      _disposed = true;
       _purchaseSubscription?.cancel();
       _buyTimeout?.cancel();
     });
@@ -223,11 +228,52 @@ class PurchaseController extends Notifier<PurchaseState> {
       }
     } catch (error) {
       _disarmBuyTimeout();
+      if (_isStuckTransaction(error)) {
+        await _flushStuckTransactions();
+        return;
+      }
       state = state.copyWith(
         phase: PurchasePhase.failed,
         error: _startFailure(error),
       );
     }
+  }
+
+  /// StoreKit's refusal to start a purchase because one for the same product
+  /// is still sitting unfinished in its queue. Nothing the customer did, and
+  /// nothing they can act on — so it is recovered from rather than shown.
+  bool _isStuckTransaction(Object error) =>
+      error is PlatformException &&
+      (error.code == 'storekit_duplicate_product_object' ||
+          (error.message ?? '').contains('pending transaction for the same'));
+
+  /// Get the stuck transaction moving again.
+  ///
+  /// Asking the store to restore is what pushes it back through
+  /// `_handlePurchases`, where it is verified and then finished — which both
+  /// grants what was already paid for and unblocks the buy button.
+  Future<void> _flushStuckTransactions() async {
+    state = state.copyWith(phase: PurchasePhase.verifying, error: '');
+    try {
+      await _store.restorePurchases();
+    } catch (_) {
+      state = state.copyWith(
+        phase: PurchasePhase.failed,
+        error: '$_storeName is still finishing an earlier purchase. '
+            'Please try again in a moment.',
+      );
+      return;
+    }
+    Future<void>.delayed(const Duration(seconds: 8), () {
+      if (_disposed) return;
+      if (state.phase == PurchasePhase.verifying) {
+        state = state.copyWith(
+          phase: PurchasePhase.failed,
+          error: '$_storeName is still finishing an earlier purchase. '
+              'Please try again in a moment.',
+        );
+      }
+    });
   }
 
   Future<void> restore() async {
@@ -236,6 +282,7 @@ class PurchaseController extends Notifier<PurchaseState> {
     try {
       await _store.restorePurchases();
       Future<void>.delayed(const Duration(seconds: 8), () {
+        if (_disposed) return;
         if (state.phase == PurchasePhase.verifying) {
           state = state.copyWith(
             phase: PurchasePhase.failed,
@@ -363,6 +410,7 @@ class PurchaseController extends Notifier<PurchaseState> {
       // used to stay on "loading" forever after the Play sheet was closed.
       if (purchase.status == PurchaseStatus.canceled) {
         _disarmBuyTimeout();
+        await _finish(purchase);
         state = state.copyWith(
           phase: state.phase == PurchasePhase.buying
               ? PurchasePhase.idle
@@ -375,6 +423,7 @@ class PurchaseController extends Notifier<PurchaseState> {
       }
       if (purchase.status == PurchaseStatus.error) {
         _disarmBuyTimeout();
+        await _finish(purchase);
         final message = _friendly(purchase.error?.message);
         if (state.packBusy.isNotEmpty && (isPack || !isSubscription)) {
           state = state.copyWith(packBusy: '', packError: message);
@@ -384,6 +433,13 @@ class PurchaseController extends Notifier<PurchaseState> {
         continue;
       }
       if (purchase.status == PurchaseStatus.pending) {
+        // A purchase the store has taken but not settled — Ask to Buy
+        // awaiting a parent, a bank step, or a sandbox transaction left
+        // mid-flight. StoreKit forbids finishing one in this state, and it
+        // can be delivered at launch without the customer touching
+        // anything, so the spinner it puts the screen into needs its own
+        // way out: arm the timeout that gives the button back.
+        _armBuyTimeout();
         if (isPack) {
           state = state.copyWith(packBusy: purchase.productID, packError: '');
         } else if (isSubscription) {
@@ -395,13 +451,16 @@ class PurchaseController extends Notifier<PurchaseState> {
           purchase.status != PurchaseStatus.restored) {
         continue;
       }
-      if (!isPack && !isSubscription) continue;
 
       _disarmBuyTimeout();
-      if (isPack) {
-        await _verifyPack(purchase);
-      } else {
+      if (isSubscription) {
         await _verifySubscription(purchase);
+      } else {
+        // Packs, and anything else the store delivers. An id we do not
+        // recognise is usually a pack bought before `loadPacks` ran on this
+        // launch; the server maps product ids itself and rejects a genuinely
+        // unknown one, which finishes it below rather than leaving it stuck.
+        await _verifyPack(purchase);
       }
     }
   }
@@ -417,14 +476,15 @@ class PurchaseController extends Notifier<PurchaseState> {
             purchaseToken: _token(purchase),
             transactionId: purchase.purchaseID,
           );
-      if (purchase.pendingCompletePurchase) {
-        await _store.completePurchase(purchase);
-      }
+      await _finish(purchase);
       await ref.read(appStateProvider.notifier).refreshUser();
       state = state.copyWith(phase: PurchasePhase.success, error: '');
     } on ApiException catch (error) {
-      // Do not acknowledge a purchase the server could not verify. The store
-      // will redeliver it, allowing a temporary backend outage to recover.
+      // Do not acknowledge a purchase the server could not verify *yet*. The
+      // store redelivers it, so a temporary backend outage recovers by
+      // itself. A refusal it will repeat forever is finished instead — see
+      // `_finishAfter`.
+      await _finishAfter(error, purchase);
       state = state.copyWith(
         phase: error.status == 503
             ? PurchasePhase.unavailable
@@ -452,9 +512,7 @@ class PurchaseController extends Notifier<PurchaseState> {
           );
       // Only now, with the credits in the wallet server-side, is the
       // purchase consumed — which is what lets it be bought again.
-      if (purchase.pendingCompletePurchase) {
-        await _store.completePurchase(purchase);
-      }
+      await _finish(purchase);
       await ref.read(appStateProvider.notifier).refreshUsage();
       state = state.copyWith(
         packBusy: '',
@@ -462,6 +520,7 @@ class PurchaseController extends Notifier<PurchaseState> {
         packGranted: (result['credits_granted'] as num?)?.toInt() ?? 0,
       );
     } on ApiException catch (error) {
+      await _finishAfter(error, purchase);
       state = state.copyWith(packBusy: '', packError: error.message);
     } catch (_) {
       state = state.copyWith(
@@ -471,6 +530,40 @@ class PurchaseController extends Notifier<PurchaseState> {
             '— the credits will appear once it clears.',
       );
     }
+  }
+
+  /// Hand the transaction back to the store as settled.
+  ///
+  /// StoreKit keeps every delivered transaction in its queue until the app
+  /// finishes it, and refuses `addPayment` for a product that still has one:
+  /// "There is a pending transaction for the same product identifier."
+  /// One leaked transaction therefore blocks that product's purchase button
+  /// on that device for good, so every terminal outcome — bought, cancelled,
+  /// failed, permanently refused — ends here.
+  Future<void> _finish(PurchaseDetails purchase) async {
+    if (!purchase.pendingCompletePurchase) return;
+    try {
+      await _store.completePurchase(purchase);
+    } catch (_) {
+      // Best effort: an unfinished transaction is redelivered on the next
+      // launch, which is another chance to finish it.
+    }
+  }
+
+  /// Finish a purchase the server refused, unless the refusal is one that
+  /// could succeed later.
+  ///
+  /// A 5xx, a dead connection (status 0), an expired session, a timeout or a
+  /// rate limit all mean "ask again" — leaving the transaction unfinished is
+  /// what makes the store redeliver it on the next launch. Anything else (an
+  /// unknown product, a lapsed subscription, a receipt already linked to
+  /// another account) is a verdict that will not change, and holding the
+  /// transaction open only blocks the customer's next purchase.
+  Future<void> _finishAfter(ApiException error, PurchaseDetails purchase) {
+    const retryableStatuses = {0, 401, 408, 429};
+    final retryable =
+        error.status >= 500 || retryableStatuses.contains(error.status);
+    return retryable ? Future<void>.value() : _finish(purchase);
   }
 
   String _token(PurchaseDetails purchase) {
