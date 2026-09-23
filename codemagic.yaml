@@ -59,6 +59,7 @@ workflows:
           SUPABASE_ANON_KEY="$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')"
           echo "SUPABASE_URL length: ${#SUPABASE_URL}, SUPABASE_ANON_KEY length: ${#SUPABASE_ANON_KEY}"
           flutter build ipa --release \
+            --build-name=1.0 \
             --build-number="$BUILD_NUMBER" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
