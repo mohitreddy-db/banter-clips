@@ -110,6 +110,15 @@ class PurchaseController extends Notifier<PurchaseState> {
   final Set<String> _knownPackIds = {};
 
   String get _platform => Platform.isIOS ? 'ios' : 'android';
+
+  /// The signed-in BanterClips user id, handed to the store when a purchase
+  /// starts. The store carries it through and gives it back to the server as
+  /// Apple's `appAccountToken` / Play's `obfuscatedAccountId`, and the server
+  /// refuses any receipt whose token does not match the account redeeming it.
+  /// A purchase started without one verifies fine and is then rejected with
+  /// `purchase_account_mismatch` — paid for, never granted — so every buy
+  /// path must set it.
+  String? get _accountToken => ref.read(appStateProvider).user?.id;
   String get _storeName => storeName;
 
   @override
@@ -170,11 +179,23 @@ class PurchaseController extends Notifier<PurchaseState> {
       if (state.product == null) return;
     }
 
+    final accountToken = _accountToken;
+    if (accountToken == null) {
+      state = state.copyWith(
+        phase: PurchasePhase.failed,
+        error: 'Sign in again before subscribing.',
+      );
+      return;
+    }
+
     state = state.copyWith(phase: PurchasePhase.buying, error: '');
     _armBuyTimeout();
     try {
       final started = await _store.buyNonConsumable(
-        purchaseParam: PurchaseParam(productDetails: state.product!),
+        purchaseParam: PurchaseParam(
+          productDetails: state.product!,
+          applicationUserName: accountToken,
+        ),
       );
       if (!started) {
         _disarmBuyTimeout();
@@ -272,6 +293,11 @@ class PurchaseController extends Notifier<PurchaseState> {
       );
       return;
     }
+    final accountToken = _accountToken;
+    if (accountToken == null) {
+      state = state.copyWith(packError: 'Sign in again before buying credits.');
+      return;
+    }
     _knownPackIds.add(details.id);
     state = state.copyWith(
       packBusy: details.id,
@@ -285,7 +311,10 @@ class PurchaseController extends Notifier<PurchaseState> {
       // consumed. Consuming first would let a verification failure eat a
       // paid purchase with nothing to show for it.
       final started = await _store.buyConsumable(
-        purchaseParam: PurchaseParam(productDetails: details),
+        purchaseParam: PurchaseParam(
+          productDetails: details,
+          applicationUserName: accountToken,
+        ),
         autoConsume: false,
       );
       if (!started) {
