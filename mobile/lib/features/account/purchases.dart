@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
@@ -172,6 +173,22 @@ class PurchaseController extends Notifier<PurchaseState> {
     }
   }
 
+  /// What to show when the store refuses to open the purchase sheet.
+  ///
+  /// The store's own message is included on purpose. "Could not start the
+  /// purchase" alone is unactionable for the customer and undiagnosable for
+  /// us, while the real causes — already subscribed, payments restricted,
+  /// a sandbox account in a bad state — all read clearly in what the store
+  /// says. A support screenshot is then worth something.
+  String _startFailure(Object error) {
+    final detail = error is PlatformException
+        ? (error.message?.trim().isNotEmpty ?? false
+              ? error.message!.trim()
+              : error.code)
+        : error.toString();
+    return '$_storeName could not start the purchase.\n$detail';
+  }
+
   Future<void> buy() async {
     if (state.busy) return;
     if (state.product == null) {
@@ -204,11 +221,11 @@ class PurchaseController extends Notifier<PurchaseState> {
           error: '$_storeName could not start the purchase.',
         );
       }
-    } catch (_) {
+    } catch (error) {
       _disarmBuyTimeout();
       state = state.copyWith(
         phase: PurchasePhase.failed,
-        error: '$_storeName could not start the purchase. Please try again.',
+        error: _startFailure(error),
       );
     }
   }
