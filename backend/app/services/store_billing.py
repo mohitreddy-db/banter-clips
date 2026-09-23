@@ -268,7 +268,13 @@ def verify_apple(transaction_id: str, requested_product_id: str) -> Entitlement:
                 raise StoreError("App Store Server API returned an unusable subscription")
             body = decoded
             break
-        if response.status_code == 404:
+        # 404 = this environment does not know the transaction.
+        # 401 = Apple rejects the production endpoint for an app that has never
+        #       shipped. Every TestFlight and App Review purchase is a sandbox
+        #       transaction, so neither status can be fatal here - it only means
+        #       "ask the other environment". A real outage (5xx) still raises,
+        #       so the client keeps its "reopen in a minute" retry behaviour.
+        if response.status_code in (401, 404):
             continue
         raise StoreError(f"App Store Server API returned {response.status_code}")
 
