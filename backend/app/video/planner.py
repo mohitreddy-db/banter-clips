@@ -20,6 +20,7 @@ import logging
 import re
 from dataclasses import replace
 
+from ..services import content_safety
 from . import catalog, library, prompts
 from .defaults import ResolvedInput
 from .types import WORDS_PER_SECOND, CastMember, Scene, VideoPlan, _clean
@@ -296,6 +297,19 @@ def _repair(plan: VideoPlan, inp: ResolvedInput, roster, venues) -> VideoPlan:
         scene.beat = beats[i]
         scene.venue = scene.venue or venues[i % len(venues)]
         scene.action = scene.action or "the subject reacts to the camera"
+        # Model output is untrusted. The request boundary blocks explicit
+        # intimate content, and this second gate prevents a planner from
+        # inventing it while turning an otherwise-safe sports take into shots.
+        if content_safety.contains_intimate_contact(
+            [scene.action, scene.blocking, scene.line, scene.expression]
+        ):
+            scene.action = (
+                "the subject celebrates toward the camera while everyone "
+                "else reacts separately in the background"
+            )
+            scene.blocking = "all people remain visibly separate without touching"
+            scene.line = "Keep it about the game."
+            scene.expression = "confident, playful sports rivalry"
         # Every camera axis gets a usable value: a model that omits one must
         # not leave the prompt with a dangling "Camera: , eye level, ,".
         scene.shot_size = scene.shot_size or "full shot"

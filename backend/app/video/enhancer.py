@@ -26,6 +26,7 @@ import logging
 import re
 from dataclasses import asdict, dataclass, field
 
+from ..services import content_safety
 from . import catalog, defaults, focus as focus_mod
 from .types import _clean
 
@@ -127,6 +128,8 @@ Rewrite the take so it is:
   "the Lakers are bad")
 - naturally spoken, under 200 characters
 - about something a camera could show happening
+- strictly sports-only: never add or retain hugging, kissing, cuddling,
+  embracing, romantic contact, sexual contact, or other intimate contact
 
 Then identify what it is really about.
 
@@ -170,6 +173,8 @@ def enhance(
             log.exception("enhancer call failed; using the take as written")
 
     sharpened = _clean((raw or {}).get("take")) or original
+    if content_safety.contains_intimate_contact(sharpened):
+        sharpened = original
     # A model that "sharpens" a take into something twice as long has usually
     # editorialised rather than sharpened; keep the user's own words instead.
     if original and len(sharpened) > max(280, len(original) * 2):

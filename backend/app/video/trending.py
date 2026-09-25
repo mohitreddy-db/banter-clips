@@ -26,6 +26,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 
 from ..config import settings
+from ..services import content_safety
 from . import websearch
 
 log = logging.getLogger("banter.video.trending")
@@ -88,6 +89,9 @@ Rules for every take:
 - Name the real people/team from the topic. Specific beats abstract.
 - Make it VISUAL — it becomes a comedy video, so imply a scene someone
   could film (a person doing something absurd), not an abstract judgement.
+- Sports-only safety rule: never suggest hugging, kissing, cuddling,
+  embracing, romantic contact, sexual contact, or other intimate contact.
+  People may celebrate without touching.
 - The two takes must attack the topic from different angles (e.g. one
   roasts the loser, one crowns the winner; one is a wild prediction).
 - No hashtags, no emojis, no quotation marks around the whole take.
@@ -246,7 +250,7 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
             continue
         for p in (entry.get("prompts") or [])[:PROMPTS_PER_TOPIC]:
             take = str(p.get("take") or "").strip()
-            if not take:
+            if not take or content_safety.contains_intimate_contact(take):
                 continue
             topic["prompts"].append({
                 "take": take[:280],
@@ -261,7 +265,7 @@ def _write_prompts(sport: str, topics: list[dict]) -> None:
         for key, icon, label, _brief in PRESETS:
             p = written.get(key) if isinstance(written.get(key), dict) else None
             take = str((p or {}).get("take") or "").strip()
-            if not take:
+            if not take or content_safety.contains_intimate_contact(take):
                 continue
             presets.append({
                 "key": key, "icon": icon,

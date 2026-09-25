@@ -52,9 +52,9 @@ PHOTOREAL = (
 # frame containing two Vinícius/Mourinho/Mbappé pairs side by side. Nothing in
 # the prompt had ever said a person may not be duplicated.
 NEGATIVES = (
-    "No captions, subtitles or watermarks (added later); no split screen, "
-    "panels or collage. Each person appears EXACTLY ONCE — never a twin, "
-    "clone, mirrored or look-alike copy of anyone, foreground or background"
+    "No captions, subtitles, watermarks, split screens, panels or collages. "
+    "Each person appears EXACTLY ONCE — no twins, clones, mirrors or look-alikes. "
+    "No kissing, hugging, cuddling, embracing or romantic/sexual contact"
 )
 
 # Every clip reviewed on 2026-08-20 carried invented lettering somewhere the
@@ -560,6 +560,9 @@ requested on-screen text — those are REQUIREMENTS, not inspiration:
 - Never present an invented score, result, injury, transfer or quote as real.
 - Mock performance, decisions and situations. Never mock a person's
   appearance, family, race or intelligence.
+- This is a SPORTS-ONLY generator. Never write hugging, kissing, cuddling,
+  embracing, holding hands, romantic contact, sexual contact, or any other
+  intimate contact. People may celebrate side by side without touching.
 - The payoff is a PHYSICAL comedic moment performed by the cast in-scene —
   a reaction, a reveal, an escalation completed. Never a person holding a
   homemade sign, never an empty-jersey tableau, never a summary shot: the
