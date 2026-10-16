@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +10,50 @@ from . import db_migrate
 from .config import settings
 from .db import Base, engine
 from .routers import admin, admin_console, auth, billing, clips, events, feedback, me, socials
+
+log = logging.getLogger("banter.api")
+
+
+class CrashToJSON:
+    """Turn an unhandled exception into a JSON 500 that carries CORS headers.
+
+    Starlette's own 500 comes from ServerErrorMiddleware, the outermost layer,
+    so it never passes through CORSMiddleware. The browser then withholds the
+    response and fetch() rejects as a *network* failure — the app told users
+    "can't reach the server" for a crash the server had answered (2026-10-16,
+    a DB constraint violation on POST /clips). Sitting inside the CORS layer,
+    this reply reaches the page with the real status and a message.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        started = False
+
+        async def send_tracking(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_tracking)
+        except Exception:
+            log.exception("unhandled error on %s %s", scope.get("method"), scope.get("path"))
+            if started:
+                raise  # headers are gone; nothing useful left to send
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": {
+                    "code": "server_error",
+                    "message": "Something went wrong on our side. Please try again in a moment.",
+                }},
+            )
+            await response(scope, receive, send)
 
 
 @asynccontextmanager
@@ -31,6 +76,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# add_middleware wraps outward: the last one added runs first. CrashToJSON goes
+# in before CORS so CORS sits outside it and stamps its 500 with the headers.
+app.add_middleware(CrashToJSON)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

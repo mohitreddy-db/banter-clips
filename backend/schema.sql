@@ -43,7 +43,10 @@ CREATE TABLE login_tokens (
 CREATE TABLE clips (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id           uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    take              text NOT NULL CHECK (char_length(take) BETWEEN 10 AND 280),
+    -- Named so db_migrate can rebuild it; an unnamed inline CHECK gets the
+    -- auto-name clips_take_check and silently outlives every later rebuild.
+    take              text NOT NULL
+                      CONSTRAINT clips_take_len CHECK (char_length(take) BETWEEN 10 AND 500),
     -- Kept in lockstep with models.SPORTS / models.TONES by db_migrate,
     -- which rebuilds both constraints on every boot.
     sport             text NOT NULL CHECK (sport IN ('Soccer', 'NBA', 'NFL', 'MLB',

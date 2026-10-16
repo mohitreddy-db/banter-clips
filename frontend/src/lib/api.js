@@ -51,9 +51,19 @@ async function upload(path, file) {
   const headers = { "content-type": file.type };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: file });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: "POST", headers, body: file });
+  } catch {
+    throw new ApiError(0, "network", "The upload didn't go through — check your connection and try again.");
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data?.detail?.code, data?.detail?.message || data?.detail || `Upload failed (${res.status})`);
+  if (!res.ok) {
+    const detail = data?.detail;
+    const message =
+      (typeof detail === "object" ? detail?.message : detail) || `Upload failed (${res.status})`;
+    throw new ApiError(res.status, typeof detail === "object" ? detail?.code : undefined, message);
+  }
   return data;
 }
 

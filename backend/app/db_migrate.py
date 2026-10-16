@@ -106,6 +106,12 @@ def _statements() -> tuple[str, ...]:
         "error = COALESCE(error, 'interrupted by a deploy') "
         "WHERE status = 'creating_voice'",
         # Creator prompts run to 500 characters; the plan gate is in the API.
+        # schema.sql declared the limit inline, which Postgres auto-named
+        # clips_take_check (280 chars). Rebuilding clips_take_len alone left
+        # that older, stricter twin in place, so production rejected every
+        # take between 280 and 500 characters (2026-10-16) while the API —
+        # and local, which never ran schema.sql — happily accepted them.
+        "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_check",
         "ALTER TABLE clips DROP CONSTRAINT IF EXISTS clips_take_len",
         "ALTER TABLE clips ADD CONSTRAINT clips_take_len "
         "CHECK (char_length(take) BETWEEN 10 AND 500)",
