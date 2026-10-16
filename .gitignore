@@ -3,14 +3,28 @@ infra/
 .env
 .env.*
 !.env.example
+mobile/config/*.local.json
 *.pem
 *.key
 *.crt
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+
+# Generated mobile packages and build output
+build/
+**/build/
+mobile/release/
+*.apk
+*.aab
+*.ipa
 
 # ── Node (frontend) ─────────────────────────────────────────────
 node_modules/
 dist/
 .vercel/
+.firecrawl/
 
 # ── Python (backend) ────────────────────────────────────────────
 .venv/

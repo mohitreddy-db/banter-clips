@@ -1,0 +1,72 @@
+name: banterclips
+description: "BanterClips — turn any sports take into a cinematic vertical video."
+publish_to: 'none'
+version: 1.0.0+8
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State + routing — the Dart counterparts of AppContext.jsx and react-router.
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.8.1
+
+  # HTTP. Interceptors give us one place for the bearer token and for
+  # unwrapping the backend's {detail: {code, message}} error contract.
+  dio: ^5.7.0
+
+  # Auth — the same Supabase project the web app signs in against.
+  supabase_flutter: ^2.8.4
+
+  # The 30-day session JWT lives in the Keychain / Keystore, never on disk
+  # in plaintext (the mobile equivalent of localStorage would be unsafe).
+  flutter_secure_storage: ^9.2.4
+
+  # Vertical clip playback.
+  video_player: ^2.9.2
+  chewie: ^1.8.5
+
+  # Native niceties the web version cannot have.
+  share_plus: ^10.1.4
+  cached_network_image: ^3.4.1
+  url_launcher: ^6.3.1
+  path_provider: ^2.1.5
+  google_fonts: ^6.3.0
+  image_picker: ^1.1.2
+
+  # Google Play Billing / StoreKit. Digital subscriptions sold inside the app
+  # must use the platform store; the website keeps its separate Stripe flow.
+  in_app_purchase: ^3.3.0
+
+  # Instagram Business Login in a system browser sheet
+  # (ASWebAuthenticationSession on iOS, Custom Tabs on Android).
+  flutter_web_auth_2: ^4.1.0
+  gal: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+
+# Keep the operating-system launch screen visually identical to the Flutter
+# boot screen. This is drawn before the Dart runtime starts, so it removes the
+# white flash that would otherwise appear on a cold launch.
+flutter_native_splash:
+  color: "#0B0F1C"
+  image: assets/images/banterclips-logo.png
+  android: true
+  ios: true
+  fullscreen: true
+  android_12:
+    color: "#0B0F1C"
+    image: assets/images/banterclips-logo.png

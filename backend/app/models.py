@@ -374,6 +374,33 @@ class StoreSubscription(Base):
     )
 
 
+class StorePurchase(Base):
+    """A credit pack bought through Apple or Google — a consumable.
+
+    Same rule as `StoreSubscription`: the store is the ledger, this only
+    records that a given purchase token has been granted, so a retry after a
+    dropped connection converges instead of granting twice, and a token
+    passed to another account hits the unique constraint.
+    """
+
+    __tablename__ = "store_purchases"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    platform: Mapped[str] = mapped_column(Text, nullable=False)  # "ios" | "android"
+    product_id: Mapped[str] = mapped_column(Text, nullable=False)
+    purchase_token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    pack: Mapped[str] = mapped_column(Text, nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios','android')", name="store_purchase_platform_check"),
+    )
+
+
 class Event(Base):
     __tablename__ = "events"
 

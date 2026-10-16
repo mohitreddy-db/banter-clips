@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BanterClips Mobile Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  /* ── Tokens: shared with CODEBASE-ATLAS.html — keep the two in step ───── */
+  :root {
+    --ground:      #f4f6f9;
+    --surface:     #ffffff;
+    --surface-2:   #eceff4;
+    --ink:         #0e1622;
+    --ink-2:       #35455a;
+    --muted:       #64748b;
+    --line:        #dbe1ea;
+    --line-soft:   #e7ecf2;
+
+    --accent:      #0b7f95;
+    --accent-soft: #e0f4f8;
+    --accent-ink:  #06555f;
+    --violet:      #6d28d9;
+    --violet-soft: #efe8fe;
+
+    --ok:          #17795a;
+    --warn:        #9a6206;
+    --crit:        #b1332f;
+    --ok-bg:       #e2f4ec;
+    --warn-bg:     #fbf0da;
+    --crit-bg:     #fbe6e5;
+
+    --code-bg:     #f1f4f8;
+    --shadow:      0 1px 2px rgba(14,22,34,.06), 0 8px 24px -16px rgba(14,22,34,.28);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body:    "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #070b12;
+      --surface:     #0e1622;
+      --surface-2:   #16202e;
+      --ink:         #e8eef6;
+      --ink-2:       #b9c7d8;
+      --muted:       #7f90a5;
+      --line:        #223042;
+      --line-soft:   #1a2634;
+
+      --accent:      #38d6ee;
+      --accent-soft: #0d2b33;
+      --accent-ink:  #8ce9f8;
+      --violet:      #a482ff;
+      --violet-soft: #1e1638;
+
+      --ok:          #4bcf9a;
+      --warn:        #e0ad4d;
+      --crit:        #f0736d;
+      --ok-bg:       #0d2a20;
+      --warn-bg:     #2c2210;
+      --crit-bg:     #2e1516;
+
+      --code-bg:     #101a27;
+      --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #070b12;
+    --surface:     #0e1622;
+    --surface-2:   #16202e;
+    --ink:         #e8eef6;
+    --ink-2:       #b9c7d8;
+    --muted:       #7f90a5;
+    --line:        #223042;
+    --line-soft:   #1a2634;
+
+    --accent:      #38d6ee;
+    --accent-soft: #0d2b33;
+    --accent-ink:  #8ce9f8;
+    --violet:      #a482ff;
+    --violet-soft: #1e1638;
+
+    --ok:          #4bcf9a;
+    --warn:        #e0ad4d;
+    --crit:        #f0736d;
+    --ok-bg:       #0d2a20;
+    --warn-bg:     #2c2210;
+    --crit-bg:     #2e1516;
+
+    --code-bg:     #101a27;
+    --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+
+  /* ── Base ─────────────────────────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink-2);
+    font-family: var(--body);
+    font-size: 16.5px;
+    line-height: 1.62;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+  h1, h2, h3, h4 { font-family: var(--display); color: var(--ink); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+  h2 { font-size: 1.72rem; font-weight: 700; line-height: 1.18; }
+  h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: 0.004em; }
+  h4 { font-size: .93rem; font-weight: 600; }
+  p  { margin: 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  em { font-style: italic; }
+  code {
+    font-family: var(--mono); font-size: .855em; background: var(--code-bg);
+    border: 1px solid var(--line-soft); border-radius: 4px; padding: .08em .34em;
+    color: var(--ink); word-break: break-word;
+  }
+  kbd {
+    font-family: var(--mono); font-size: .78em; background: var(--surface-2);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: .06em .38em; color: var(--ink);
+  }
+
+  /* ── Shell ────────────────────────────────────────────────────────────── */
+  .shell { max-width: 1220px; margin: 0 auto; padding: 0 24px 120px; }
+  .cols { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 56px; align-items: start; }
+  @media (max-width: 940px) { .cols { grid-template-columns: minmax(0,1fr); gap: 0; } .toc { display: none; } }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+  .mast { padding: 64px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 44px; }
+  .mast .kicker {
+    font-family: var(--mono); font-size: .705rem; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .mast .kicker::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--line), transparent); }
+  .mast h1 {
+    font-size: clamp(2.3rem, 5.4vw, 3.5rem); font-weight: 700; line-height: 1.02;
+    letter-spacing: -0.032em; margin-bottom: 20px;
+  }
+  .mast .lede { font-size: 1.11rem; max-width: 66ch; color: var(--ink-2); }
+  .mast .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .fact {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .04em;
+    padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--muted);
+  }
+  .fact b { color: var(--ink); font-weight: 600; }
+
+  /* ── TOC ──────────────────────────────────────────────────────────────── */
+  .toc { position: sticky; top: 28px; padding-top: 6px; }
+  .toc .lbl {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; counter-reset: t; }
+  .toc a {
+    display: flex; gap: 9px; font-size: .795rem; line-height: 1.35; color: var(--muted);
+    text-decoration: none; padding: 4px 8px 4px 6px; border-radius: 5px; border-left: 2px solid transparent;
+  }
+  .toc a::before {
+    counter-increment: t; content: counter(t, decimal-leading-zero);
+    font-family: var(--mono); font-size: .66rem; color: var(--line); padding-top: 1px;
+  }
+  .toc a:hover { color: var(--ink); background: var(--surface); border-left-color: var(--accent); }
+  .toc a:hover::before { color: var(--accent); }
+  .toc .grp {
+    font-family: var(--mono); font-size: .6rem; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--line); margin: 14px 0 5px 6px;
+  }
+
+  /* ── Sections ─────────────────────────────────────────────────────────── */
+  section { scroll-margin-top: 24px; padding-bottom: 54px; }
+  .sec-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .sec-num {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: baseline; gap: 12px;
+  }
+  .sec-num span { color: var(--muted); letter-spacing: .11em; }
+  .sec-head p { color: var(--muted); font-size: .96rem; max-width: 70ch; }
+  .prose { display: flex; flex-direction: column; gap: 17px; max-width: 74ch; }
+  .prose > h3 { margin-top: 16px; }
+  .prose > h4 { margin-top: 10px; color: var(--muted); font-family: var(--mono);
+                font-size: .69rem; letter-spacing: .14em; text-transform: uppercase; }
+
+  /* ── Cards, tables, callouts ──────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(198px, 1fr)); }
+
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; min-width: 520px; }
+  thead th {
+    text-align: left; font-family: var(--mono); font-weight: 600; font-size: .655rem;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--muted);
+    padding: 11px 15px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody td { padding: 11px 15px; border-bottom: 1px solid var(--line-soft); vertical-align: top; color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; font-size: .93rem; color: var(--ink-2);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .note.crit { border-left-color: var(--crit); background: var(--crit-bg); }
+  .note .t { font-family: var(--display); font-weight: 600; color: var(--ink); font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; }
+  .note ul.clean li::marker { color: currentColor; }
+
+  pre {
+    font-family: var(--mono); font-size: .78rem; line-height: 1.62; background: var(--code-bg);
+    border: 1px solid var(--line); border-radius: 9px; padding: 16px 18px; overflow-x: auto;
+    color: var(--ink-2); margin: 0;
+  }
+  pre b { color: var(--accent); font-weight: 600; }
+  pre i { color: var(--muted); font-style: normal; }
+
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: .655rem; letter-spacing: .06em;
+    padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap;
+  }
+  .p-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .p-warn { background: var(--warn-bg); color: var(--warn); }
+  .p-crit { background: var(--crit-bg); color: var(--crit); }
+  .p-acc  { background: var(--accent-soft); color: var(--accent-ink); }
+  .p-vio  { background: var(--violet-soft); color: var(--violet); }
+
+  ul.clean, ol.clean { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ul.clean li::marker { color: var(--accent); }
+  ol.clean li::marker { color: var(--muted); font-family: var(--mono); font-size: .85em; }
+  ul.tight, ol.tight { gap: 5px; }
+
+  .stat { display: flex; flex-direction: column; gap: 3px; }
+  .stat .v { font-family: var(--display); font-size: 1.65rem; font-weight: 700; color: var(--ink); line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .k { font-family: var(--mono); font-size: .66rem; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); }
+  .stat .d { font-size: .82rem; color: var(--muted); }
+
+  figure { margin: 0; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: .79rem; color: var(--muted); margin-top: 10px; font-family: var(--mono); letter-spacing: .02em; }
+
+  .path { font-family: var(--mono); font-size: .78rem; color: var(--accent); }
+
+  hr.rule { border: none; border-top: 1px solid var(--line); margin: 0; }
+
+  /* ── Phase header strip ───────────────────────────────────────────────── */
+  .phase-bar {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 20px;
+  }
+  .phase-bar h2 { font-size: 1.5rem; }
+  .phase-bar .when {
+    font-family: var(--mono); font-size: .69rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-left: auto; white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="shell">
+
+  <header class="mast">
+    <div class="kicker">Build plan · Figma + web repo → Flutter app</div>
+    <h1>BanterClips Mobile Roadmap</h1>
+    <p class="lede">
+      You are not building BanterClips again. The product already exists — it lives in FastAPI on the
+      droplet, and the React site is one client of it. The Flutter app is a second client. That reframe
+      is the whole roadmap: this is a <strong>UI project against a finished API</strong>, plus four
+      platform problems the web never had to solve.
+    </p>
+    <div class="facts">
+      <span class="fact"><b>Flutter</b> · Dart 3</span>
+      <span class="fact"><b>Android first</b> · iOS needs a Mac</span>
+      <span class="fact">Backend <b>reused as-is</b></span>
+      <span class="fact"><b>~16 weeks</b> at 15–20 h/wk</span>
+      <span class="fact">Target · <b>mobile/</b></span>
+    </div>
+  </header>
+
+  <div class="cols">
+
+    <nav class="toc">
+      <div class="lbl">Contents</div>
+      <div class="grp">Before you start</div>
+      <ol>
+        <li><a href="#reframe">The reframe</a></li>
+        <li><a href="#inventory">What ports, what doesn't</a></li>
+        <li><a href="#scope">Scope for v1</a></li>
+        <li><a href="#blockers">Four hard blockers</a></li>
+        <li><a href="#timeline">The timeline</a></li>
+      </ol>
+      <div class="grp">The phases</div>
+      <ol start="6" style="counter-reset: t 5;">
+        <li><a href="#p1">Machine &amp; repo</a></li>
+        <li><a href="#p2">Dart &amp; Flutter</a></li>
+        <li><a href="#p3">Figma → design system</a></li>
+        <li><a href="#p4">API client &amp; auth</a></li>
+        <li><a href="#p5">The screens</a></li>
+        <li><a href="#p6">Platform integrations</a></li>
+        <li><a href="#p7">Test &amp; store prep</a></li>
+        <li><a href="#p8">Release &amp; iterate</a></li>
+      </ol>
+      <div class="grp">Reference</div>
+      <ol start="14" style="counter-reset: t 13;">
+        <li><a href="#deps">Dependencies</a></li>
+        <li><a href="#structure">Project structure</a></li>
+        <li><a href="#week1">Do this week</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+    <!-- ═══ 01 ═══════════════════════════════════════════════════════════ -->
+    <section id="reframe">
+      <div class="sec-head">
+        <div class="sec-num">01 <span>· The reframe</span></div>
+        <h2>The product is the API, not the website</h2>
+        <p>Get this straight before anything else, because it determines how much work there is.</p>
+      </div>
+      <div class="prose">
+        <p>
+          <code>backend/app/</code> holds the entire product: accounts, plans, the durable job queue,
+          the video pipeline, Instagram publishing, spend caps, billing. <code>frontend/src/</code>
+          holds a React SPA that calls it over HTTP and draws pictures.
+        </p>
+        <p>
+          A Flutter app is <em>a second thing that calls it over HTTP and draws pictures.</em> Nothing
+          in the backend needs rewriting. Roughly four small additions land there over the whole
+          project — a deep-link redirect, a device-token endpoint, optional push hooks, optional IAP
+          receipt verification — and that is all.
+        </p>
+        <div class="note">
+          <p class="t">The consequence</p>
+          <p>
+            If you had to build the API too, this would be a year of work. Because it exists, sixteen
+            weeks to a shipped Android app is realistic for a beginner. Almost everything below is
+            about UI, platform configuration, and store policy — not architecture.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 02 ═══════════════════════════════════════════════════════════ -->
+    <section id="inventory">
+      <div class="sec-head">
+        <div class="sec-num">02 <span>· Inventory</span></div>
+        <h2>What ports, what doesn't</h2>
+        <p>Be precise about which parts of the repo are reusable. Beginners lose weeks re-solving problems that were already solved server-side.</p>
+      </div>
+
+      <div class="tw" style="margin-bottom:20px">
+        <table>
+          <thead><tr><th>Layer</th><th>Lives in</th><th>Fate</th><th>What you do with it</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Backend</td>
+              <td><span class="path">backend/app/</span></td>
+              <td><span class="pill p-ok">REUSE AS-IS</span></td>
+              <td>The app calls <code>api.banterclips.com</code> exactly like the site does. Four small additions across the whole project.</td>
+            </tr>
+            <tr>
+              <td>API contract</td>
+              <td><span class="path">frontend/src/lib/api.js</span></td>
+              <td><span class="pill p-acc">TRANSLATE</span></td>
+              <td>Your specification. Every method becomes a method on a Dart <code>ApiClient</code>. Read it end to end before phase 09.</td>
+            </tr>
+            <tr>
+              <td>Screen behaviour</td>
+              <td><span class="path">frontend/src/pages/</span></td>
+              <td><span class="pill p-warn">READ ONLY</span></td>
+              <td>Don't port the JSX. Do read it for <em>behaviour</em>: what loads when, what the error states are, what the poll interval is.</td>
+            </tr>
+            <tr>
+              <td>Visual design</td>
+              <td>Figma</td>
+              <td><span class="pill p-vio">REBUILD</span></td>
+              <td>Tailwind classes don't cross over. You extract tokens from Figma into a Flutter <code>ThemeData</code>. See phase 08.</td>
+            </tr>
+            <tr>
+              <td>Admin console</td>
+              <td><span class="path">frontend/src/admin/</span></td>
+              <td><span class="pill p-crit">DROP</span></td>
+              <td>Ops tooling belongs on a desktop browser forever. Never port it.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="prose">
+        <div class="note">
+          <p class="t">Free win</p>
+          <p>
+            FastAPI publishes an OpenAPI schema at <code>api.banterclips.com/openapi.json</code>, with
+            every endpoint, body and response type. Keep <code>/docs</code> open in a browser tab the
+            entire time you build the Dart client — it is the authoritative answer to "what does this
+            endpoint actually return".
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 03 ═══════════════════════════════════════════════════════════ -->
+    <section id="scope">
+      <div class="sec-head">
+        <div class="sec-num">03 <span>· Scope</span></div>
+        <h2>Cut the app down before you build it</h2>
+        <p>The site has 11 public pages plus a 10-screen admin console. A first mobile release should be about half. This is the highest-leverage decision in the document.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Web screen</th><th>v1 mobile</th><th>Reasoning</th></tr></thead>
+          <tbody>
+            <tr><td>SignIn · ResetPassword</td><td><span class="pill p-ok">SHIP</span></td><td>Nothing works without it. Build first.</td></tr>
+            <tr><td>Onboarding</td><td><span class="pill p-ok">SHIP</span></td><td>Small, skippable, sets preferences. An easy early win.</td></tr>
+            <tr><td>Studio</td><td><span class="pill p-ok">SHIP</span></td><td>The core loop: take → sport/tone/length → script review → generate → preview. This alone is ~40% of the app.</td></tr>
+            <tr><td>Clips</td><td><span class="pill p-ok">SHIP</span></td><td>Library, play, share, delete.</td></tr>
+            <tr><td>Account</td><td><span class="pill p-ok">SHIP</span></td><td>Usage counter, plan, Instagram connect, sign out, delete account.</td></tr>
+            <tr><td>Pricing</td><td><span class="pill p-warn">RESHAPE</span></td><td>Becomes a native paywall on store billing — or a "manage your plan on the web" line. See blocker 2.</td></tr>
+            <tr><td>Legal (privacy, terms)</td><td><span class="pill p-warn">WEBVIEW</span></td><td>Both stores require reachable links. Open the live URLs; don't rebuild. Saves a day.</td></tr>
+            <tr><td>Landing · Showcase</td><td><span class="pill p-crit">CUT</span></td><td>Marketing and SEO surfaces. Someone who installed the app has already converted.</td></tr>
+            <tr><td>admin/* · AdminCatalog</td><td><span class="pill p-crit">CUT</span></td><td>Ops tooling. Desktop browser, forever.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 04 ═══════════════════════════════════════════════════════════ -->
+    <section id="blockers">
+      <div class="sec-head">
+        <div class="sec-num">04 <span>· Blockers</span></div>
+        <h2>Four problems the web version never had</h2>
+        <p>Read these before planning anything. Each has bitten real projects late, when it was expensive. Two are business decisions, not code.</p>
+      </div>
+
+      <div class="prose">
+
+        <div class="note crit">
+          <p class="t">Blocker 1 · You cannot build iOS on Windows</p>
+          <p>
+            Compiling for iOS requires Xcode, which is macOS-only. You are on Windows 11, so plan
+            around it explicitly rather than discovering it in month three.
+          </p>
+          <ul class="clean tight">
+            <li><strong>Now:</strong> develop on Windows, target Android only. The Dart code is identical either way.</li>
+            <li><strong>For iOS, pick one:</strong> a Mac mini (~$599, the cheapest real option); a cloud CI service like <strong>Codemagic</strong> or a GitHub Actions <code>macos-latest</code> runner, which can build and ship to TestFlight without you owning a Mac; or a rented cloud Mac.</li>
+            <li><strong>Honest caveat:</strong> CI-only iOS works for building and releasing, but debugging an iOS-specific layout or permission bug with no Mac in front of you is miserable. Budget for a Mac before iOS launch — not before Android launch.</li>
+          </ul>
+          <p>
+            Apple Developer Program is <strong>$99/year</strong>. Google Play is <strong>$25 once</strong> —
+            register that one early, because new Play accounts face a closed-testing requirement
+            (12 testers for 14 days) before public release, and that clock is worth starting now.
+          </p>
+        </div>
+
+        <div class="note crit">
+          <p class="t">Blocker 2 · Your Stripe checkout will get the app rejected</p>
+          <p>
+            Creator at $9.99/mo is a digital subscription consumed inside the app. Apple
+            (Guideline 3.1.1) and Google both require that to run through their billing, which takes
+            <strong>15–30%</strong>. A Stripe Checkout page opened in the app is a straightforward rejection.
+          </p>
+          <p>
+            <code>UNIT-ECONOMICS.md</code> already flags Creator as margin-negative above four videos
+            a month. A store cut on top of that is a <em>pricing decision to make before you build the
+            paywall</em>, not a surprise to absorb after. Three legitimate paths:
+          </p>
+          <ul class="clean tight">
+            <li><strong>Native IAP</strong> — implement <code>in_app_purchase</code>, raise the mobile price to absorb the cut, reconcile store receipts with <code>users.plan</code> server-side. Best UX, most work, worst margin.</li>
+            <li><strong>Reader-style split</strong> — the app ships free-tier only and upgrading happens on the website. Safe and cheap, but conversion drops, since you can't freely advertise it in-app on iOS.</li>
+            <li><strong>Free-tier-first launch</strong> — v1 is a companion app for existing users, with a "manage your plan on banterclips.com" line in Account. Ships fastest and defers the whole problem to v2. <strong>For a first app, this is the one I'd pick.</strong></li>
+          </ul>
+        </div>
+
+        <div class="note crit">
+          <p class="t">Blocker 3 · Instagram OAuth needs a backend change</p>
+          <p>
+            <code>GET /socials/instagram/oauth-url</code> mints a state JWT holding a <code>next</code>
+            path and rejects anything not starting with <code>/</code>. Correct for a website; wrong for
+            an app, because a phone has no browser tab to return to.
+          </p>
+          <p>
+            The mobile flow opens Meta's consent page in a system browser sheet
+            (<code>flutter_web_auth_2</code>, which wraps <code>ASWebAuthenticationSession</code> on iOS
+            and Custom Tabs on Android), then regains control through a redirect your app owns:
+          </p>
+          <ul class="clean tight">
+            <li>Register a custom scheme — <code>banterclips://oauth/instagram</code> — with an Android intent filter and an iOS <code>CFBundleURLTypes</code> entry.</li>
+            <li>Add that URI to the Meta app's valid OAuth redirect list, alongside the web one.</li>
+            <li>Backend: allow that specific scheme in <code>next</code>, <strong>allowlisted explicitly</strong>. Do not loosen the check to accept arbitrary URLs — that is an open-redirect hole.</li>
+          </ul>
+          <p>
+            Google sign-in has the same shape of problem: it needs its own Android OAuth client keyed
+            to your signing SHA-1 and an iOS client keyed to your bundle ID. Neither reuses the web client.
+          </p>
+        </div>
+
+        <div class="note crit">
+          <p class="t">Blocker 4 · Long jobs don't survive backgrounding</p>
+          <p>
+            <code>Studio.jsx</code> polls every second while a video renders; <code>Clips.jsx</code> every
+            1.5s. A browser tab can do that forever. A phone cannot — iOS suspends your process seconds
+            after the user leaves, and Android kills it under memory pressure. Generation takes minutes.
+          </p>
+          <ul class="clean tight">
+            <li><strong>Foreground:</strong> keep polling but slow it to 2–3s, and stop it when the app backgrounds. Use <code>WidgetsBindingObserver</code> for lifecycle events, or you will drain batteries and leak timers.</li>
+            <li><strong>Background:</strong> the real answer is a push notification when the job completes — Firebase Cloud Messaging reaches Android directly and iOS via APNs. Needs a <code>POST /me/devices</code> endpoint and a hook in the worker.</li>
+            <li><strong>v1 shortcut:</strong> ship without push. Refetch on resume and say "this takes a couple of minutes — we'll have it ready when you come back". Honest, and it works.</li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 05 ═══════════════════════════════════════════════════════════ -->
+    <section id="timeline">
+      <div class="sec-head">
+        <div class="sec-num">05 <span>· Timeline</span></div>
+        <h2>Sixteen weeks, eight phases</h2>
+        <p>Assumes a beginner at 15–20 hours a week, with the backend already done. Phases are ordered by dependency — each is genuinely blocked by the one before it.</p>
+      </div>
+
+      <div class="card">
+        <figure>
+          <svg viewBox="0 0 900 300" role="img" aria-label="Gantt chart of eight phases across sixteen weeks: setup week 1, learning weeks 1 to 3, design system week 4, API and auth weeks 5 to 6, screens weeks 7 to 10, platform integrations weeks 11 to 12, testing and store prep weeks 13 to 15, release week 16.">
+            <!-- week gridlines -->
+            <g stroke="var(--line-soft)" stroke-width="1">
+              <line x1="150" y1="34" x2="150" y2="272"/>
+              <line x1="330" y1="34" x2="330" y2="272"/>
+              <line x1="510" y1="34" x2="510" y2="272"/>
+              <line x1="690" y1="34" x2="690" y2="272"/>
+              <line x1="870" y1="34" x2="870" y2="272"/>
+            </g>
+            <!-- week labels -->
+            <g font-family="JetBrains Mono, monospace" font-size="10" fill="var(--muted)" text-anchor="middle">
+              <text x="150" y="24">wk 0</text>
+              <text x="330" y="24">wk 4</text>
+              <text x="510" y="24">wk 8</text>
+              <text x="690" y="24">wk 12</text>
+              <text x="870" y="24">wk 16</text>
+            </g>
+
+            <!-- rows -->
+            <g font-family="Source Sans 3, sans-serif" font-size="12.5" fill="var(--ink-2)">
+              <text x="140" y="52" text-anchor="end">Machine &amp; repo</text>
+              <text x="140" y="80" text-anchor="end">Dart &amp; Flutter</text>
+              <text x="140" y="108" text-anchor="end">Design system</text>
+              <text x="140" y="136" text-anchor="end">API &amp; auth</text>
+              <text x="140" y="164" text-anchor="end">Screens</text>
+              <text x="140" y="192" text-anchor="end">Platform config</text>
+              <text x="140" y="220" text-anchor="end">Test &amp; store</text>
+              <text x="140" y="248" text-anchor="end">Release</text>
+            </g>
+
+            <!-- bars: violet = study, accent = build, warn = native/store, ok = ship -->
+            <g>
+              <rect x="150"   y="41"  width="45"    height="15" rx="4" fill="var(--violet)"/>
+              <rect x="172.5" y="69"  width="112.5" height="15" rx="4" fill="var(--violet)"/>
+              <rect x="285"   y="97"  width="45"    height="15" rx="4" fill="var(--accent)"/>
+              <rect x="330"   y="125" width="90"    height="15" rx="4" fill="var(--accent)"/>
+              <rect x="420"   y="153" width="180"   height="15" rx="4" fill="var(--accent)"/>
+              <rect x="600"   y="181" width="90"    height="15" rx="4" fill="var(--warn)"/>
+              <rect x="690"   y="209" width="135"   height="15" rx="4" fill="var(--warn)"/>
+              <rect x="825"   y="237" width="45"    height="15" rx="4" fill="var(--ok)"/>
+            </g>
+
+            <!-- legend -->
+            <g font-family="JetBrains Mono, monospace" font-size="9.5" fill="var(--muted)">
+              <rect x="150" y="278" width="9" height="9" rx="2" fill="var(--violet)"/>
+              <text x="164" y="286">study</text>
+              <rect x="225" y="278" width="9" height="9" rx="2" fill="var(--accent)"/>
+              <text x="239" y="286">build in Dart</text>
+              <rect x="345" y="278" width="9" height="9" rx="2" fill="var(--warn)"/>
+              <text x="359" y="286">native config &amp; store policy</text>
+              <rect x="560" y="278" width="9" height="9" rx="2" fill="var(--ok)"/>
+              <text x="574" y="286">ship</text>
+            </g>
+          </svg>
+          <figcaption>iOS adds 2–4 weeks and a Mac on top of this. The warn-coloured bars are where beginners overrun — they are configuration and policy, not code.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 06 ═══════════════════════════════════════════════════════════ -->
+    <section id="p1">
+      <div class="sec-num" style="margin-bottom:10px">06 <span>· Phase 1</span></div>
+      <div class="phase-bar">
+        <h2>Set up the machine and the repo</h2>
+        <span class="when">Week 1 · mostly downloads</span>
+      </div>
+
+      <div class="prose">
+        <h4>Toolchain</h4>
+        <ol class="clean">
+          <li>Install the <strong>Flutter SDK</strong> (stable channel) and put it on your PATH.</li>
+          <li>Install <strong>Android Studio</strong> — you need it even if you write code in VS Code, because it owns the Android SDK, the emulator and the platform tools.</li>
+          <li>In its SDK Manager, install the latest SDK platform and the <strong>command-line tools</strong>. Create one emulator (a Pixel image).</li>
+          <li>Run <code>flutter doctor</code> and fix every line until only the iOS/Xcode entries stay red. Accept licences with <code>flutter doctor --android-licenses</code>.</li>
+          <li>In VS Code, install the <strong>Flutter</strong> and <strong>Dart</strong> extensions. That is the whole editor setup.</li>
+          <li>Verify the loop: <code>flutter create hello</code>, <code>flutter run</code>, press <kbd>r</kbd> to hot-reload. If that works, your environment is done.</li>
+        </ol>
+
+        <h4>Repo</h4>
+        <p>
+          Your folder is <code>banter-clips-main</code> — an unzipped GitHub download with no git
+          history, so you currently cannot branch or revert. Fix that before writing any code:
+        </p>
+<pre><i># clone properly, then work on a branch</i>
+git clone https://github.com/&lt;you&gt;/banter-clips.git
+cd banter-clips
+git checkout -b <b>mobile-app</b></pre>
+        <p>
+          The repo already has a clean convention: <code>frontend/</code> and <code>backend/</code> are
+          independent projects with their own dependencies and <code>.env</code>. Follow it exactly and
+          add a sibling:
+        </p>
+<pre>banter-clips/
+├── frontend/   React SPA        → Vercel
+├── backend/    FastAPI          → droplet
+├── <b>mobile/</b>     Flutter app      → Play Store / App Store   <i>← new</i>
+└── deploy/</pre>
+        <p>Create it with:</p>
+<pre>flutter create --org <b>com.banterclips</b> --project-name banterclips mobile</pre>
+        <div class="note warn">
+          <p class="t">Get the org string right now</p>
+          <p>
+            <code>--org</code> becomes your iOS bundle ID and Android package name. Changing it after a
+            store submission means a new listing and losing your users. Decide once, here.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 07 ═══════════════════════════════════════════════════════════ -->
+    <section id="p2">
+      <div class="sec-num" style="margin-bottom:10px">07 <span>· Phase 2</span></div>
+      <div class="phase-bar">
+        <h2>Learn enough Dart and Flutter</h2>
+        <span class="when">Weeks 1–3 · the only pure-study phase</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          React transfers more than you'd expect: widgets are components, <code>setState</code> is
+          <code>setState</code>, and composition beats inheritance in both. Don't take a 40-hour course.
+          Learn this specific list, then start building and look things up as you hit them.
+        </p>
+
+        <h4>Dart — about a week</h4>
+        <ul class="clean">
+          <li><strong>Null safety.</strong> <code>String</code> vs <code>String?</code>, and the <code>?.</code> <code>??</code> <code>!</code> operators. The biggest difference from JavaScript, and 80% of your early compiler errors.</li>
+          <li><strong><code>async</code> / <code>await</code> and <code>Future</code>.</strong> Nearly identical to JS promises. Your whole app is API calls, so this must become automatic.</li>
+          <li><strong><code>Stream</code>.</strong> The thing JS doesn't really have. Used for auth state and anything emitting over time.</li>
+          <li><strong>Classes, named and factory constructors, <code>final</code>.</strong> Dart is class-based in a way React isn't.</li>
+          <li>Skip for now: isolates, mixins, generics beyond basic use.</li>
+        </ul>
+        <p>Best source: the official <a href="https://dart.dev/language">Dart language tour</a>. Short and unusually well written.</p>
+
+        <h4>Flutter — about two weeks</h4>
+        <ul class="clean">
+          <li><strong>Widget tree fundamentals</strong> — <code>StatelessWidget</code> vs <code>StatefulWidget</code>, and what <code>build()</code> actually does.</li>
+          <li><strong>Layout</strong> — <code>Column</code>, <code>Row</code>, <code>Expanded</code>, <code>Flexible</code>, <code>Stack</code>, <code>Padding</code>, <code>SizedBox</code>. It's flexbox with different names. Learn to read <em>"RenderFlex overflowed by 37 pixels"</em>; you'll see it daily.</li>
+          <li><strong>Scrolling</strong> — <code>ListView.builder</code>, <code>SingleChildScrollView</code>, <code>CustomScrollView</code>.</li>
+          <li><strong>Navigation</strong> — learn <code>Navigator.push</code> to understand the model, then move to <a href="https://pub.dev/packages/go_router"><code>go_router</code></a> and stay there. It's the closest thing to the <code>react-router</code> you already use.</li>
+          <li><strong>Theming</strong> — <code>ThemeData</code>, <code>ColorScheme</code>, <code>TextTheme</code>. Phase 08 depends entirely on this.</li>
+          <li><strong>State</strong> — start with <code>setState</code>. When you outgrow it, adopt <a href="https://pub.dev/packages/flutter_riverpod">Riverpod</a>. Your <code>AppContext.jsx</code> maps almost one-to-one onto a set of providers.</li>
+        </ul>
+        <p>
+          Best sources: the official <a href="https://docs.flutter.dev/get-started/codelab">Flutter codelab</a>,
+          then <em>Flutter Widget of the Week</em> on YouTube — each video is 60 seconds; watch them while eating.
+        </p>
+
+        <div class="note">
+          <p class="t">On "getting good at Android and iOS"</p>
+          <p>
+            Flutter deliberately hides the platforms — that is the point of it. To actually learn them,
+            spend real time in <code>mobile/android/</code> and <code>mobile/ios/</code> instead of
+            treating them as generated noise. You'll meet <code>AndroidManifest.xml</code>, Gradle,
+            <code>Info.plist</code>, signing keys, permission strings and provisioning profiles for real
+            in phases 11 and 12. That is where the native knowledge is, and it's the part that
+            transfers when you later pick up Kotlin or Swift.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 08 ═══════════════════════════════════════════════════════════ -->
+    <section id="p3">
+      <div class="sec-num" style="margin-bottom:10px">08 <span>· Phase 3</span></div>
+      <div class="phase-bar">
+        <h2>Turn the Figma file into a design system</h2>
+        <span class="when">Week 4 · one focused week</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          The instinct is to open the first screen and start building it. Don't. Extract the
+          <em>system</em> first — colours, type, spacing, components — so that screens become assembly
+          rather than invention. This is the difference between an app that looks designed and one that
+          looks like eleven separate afternoons.
+        </p>
+
+        <div class="note crit">
+          <p class="t">Avoid Figma-to-Flutter export plugins</p>
+          <p>
+            They emit thousands of lines of absolutely-positioned, unnamed widgets that no human can
+            maintain and that break on every screen size but the artboard's. You'll spend longer
+            untangling the output than writing it yourself, and learn nothing in the process.
+          </p>
+        </div>
+
+        <h4>The method</h4>
+        <ol class="clean">
+          <li><strong>Open Figma in Dev Mode.</strong> It gives exact hex values, font sizes, weights, line heights and spacing per element. Figma px map 1:1 onto Flutter logical pixels, so a 16px gap is <code>SizedBox(height: 16)</code> — no conversion maths.</li>
+          <li><strong>Audit the tokens.</strong> Walk the whole file and write down every distinct colour, text style, corner radius and spacing value. Expect near-duplicates (<code>#1F1F1F</code> and <code>#202020</code>). Collapse them — six greys beat nineteen.</li>
+          <li><strong>Write <code>lib/theme/</code>.</strong> Three files: <code>colors.dart</code> (a <code>ThemeExtension</code> holding brand colours), <code>typography.dart</code> (a <code>TextTheme</code>), <code>app_theme.dart</code> (the <code>ThemeData</code> assembling them). Fonts live in <code>assets/fonts/</code>, declared in <code>pubspec.yaml</code>.</li>
+          <li><strong>Build the component catalog.</strong> Every Figma component becomes one widget in <code>lib/widgets/</code> — primary button, secondary button, text field, chip selector, clip card, loading state, empty state, error banner, bottom sheet — each with <em>all</em> its states: default, pressed, disabled, loading.</li>
+          <li><strong>Make a gallery screen.</strong> A throwaway route rendering every widget in every state on one page, compared side by side with Figma. Catches in an hour the inconsistency you'd otherwise notice in week nine.</li>
+          <li><strong>Then build screens.</strong> Each should be mostly composition of things that already exist.</li>
+        </ol>
+
+        <h4>Two things Figma won't tell you</h4>
+        <ul class="clean">
+          <li><strong>Safe areas.</strong> Figma artboards are flat rectangles; real phones have notches, Dynamic Islands and gesture bars. Wrap screen bodies in <code>SafeArea</code> and test on a notched device.</li>
+          <li><strong>The keyboard.</strong> Studio is a big text field, and the keyboard eats half the screen when it opens. <code>Scaffold(resizeToAvoidBottomInset: true)</code> plus a scrollable body is the fix — a bug you only find by typing on a real device.</li>
+        </ul>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 09 ═══════════════════════════════════════════════════════════ -->
+    <section id="p4">
+      <div class="sec-num" style="margin-bottom:10px">09 <span>· Phase 4</span></div>
+      <div class="phase-bar">
+        <h2>The API client and authentication</h2>
+        <span class="when">Weeks 5–6 · the true foundation</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          Everything else sits on this layer. Build it properly and screens are easy; build it badly and
+          you fight it for months. Your reference is <code>frontend/src/lib/api.js</code> — port it
+          method for method.
+        </p>
+
+        <h4>Models first</h4>
+        <p>
+          Unlike JavaScript, Dart wants typed objects. Write a class per API entity —
+          <code>User</code>, <code>Clip</code>, <code>ScriptLine</code>, <code>SocialAccount</code>,
+          <code>Usage</code>, <code>Publish</code> — each with a <code>fromJson</code> factory. Use
+          <code>freezed</code> and <code>json_serializable</code> to generate the boilerplate, checking
+          each response shape in <code>/docs</code> as you go. Tedious for two days, then permanently
+          valuable: the compiler starts catching your typos.
+        </p>
+
+        <h4>The client</h4>
+        <p>
+          Use <code>dio</code> rather than bare <code>http</code>, because interceptors let you attach
+          the bearer token and translate errors in one place — mirroring the <code>request()</code>
+          helper in api.js:
+        </p>
+<pre><i>// lib/api/client.dart — the shape to aim for</i>
+class ApiClient {
+  final Dio _dio;
+
+  ApiClient(this._dio) {
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final token = await TokenStore.read();
+        if (token != null) options.headers['Authorization'] = 'Bearer $token';
+        handler.next(options);
+      },
+      onError: (e, handler) {
+        <i>// 401 → clear token, bounce to sign-in</i>
+        <i>// backend sends {detail: {code, message}} — surface `message` to the UI</i>
+        handler.next(e);
+      },
+    ));
+  }
+
+  Future&lt;List&lt;Clip&gt;&gt; <b>listClips</b>() async { ... }
+  Future&lt;Clip&gt; <b>createClip</b>({required String take, required String sport,
+      required String tone, int duration = 15, String resolution = '720p'}) async { ... }
+}</pre>
+        <p>
+          Match the error contract exactly. The backend returns
+          <code>{"detail": {"code": ..., "message": ...}}</code> and api.js unwraps that into an
+          <code>ApiError</code>. Do the same in Dart, so the UI can switch on <code>code</code> — that
+          is how you show <em>"you've used all 5 clips this month"</em> instead of
+          <em>"Request failed (403)"</em>.
+        </p>
+
+        <h4>Auth — mirror the web flow exactly</h4>
+        <p>The site does a two-step dance, and mobile does the identical one:</p>
+        <ol class="clean tight">
+          <li>Sign in against Supabase with <code>supabase_flutter</code> (email+password, Google, or magic link).</li>
+          <li><code>POST /auth/supabase</code> with the Supabase access token. The backend verifies it against Supabase Auth, finds or creates the user row, and returns <strong>its own 30-day session JWT</strong>.</li>
+          <li>Every later request carries that backend JWT — not the Supabase one.</li>
+        </ol>
+
+        <div class="note crit">
+          <p class="t">Do not use SharedPreferences for the token</p>
+          <p>
+            The web keeps that JWT in <code>localStorage</code>. The mobile equivalent is
+            <strong><code>flutter_secure_storage</code></strong>, which uses the iOS Keychain and
+            Android Keystore. <code>shared_preferences</code> is plaintext on disk and readable on a
+            rooted device. A 30-day session token belongs in the secure store.
+          </p>
+        </div>
+
+        <h4>Environment config</h4>
+        <p>
+          Mirror the <code>.env.example</code> convention. Flutter's version is compile-time:
+          <code>flutter run --dart-define=API_URL=http://10.0.2.2:8000</code>, read back via
+          <code>String.fromEnvironment</code>.
+        </p>
+        <div class="note warn">
+          <p class="t">10.0.2.2, not localhost</p>
+          <p>
+            <code>10.0.2.2</code> is how the Android emulator reaches your host machine's
+            <code>localhost</code>. Inside the emulator, <code>localhost</code> means the emulator
+            itself. This confuses everyone exactly once.
+          </p>
+        </div>
+
+        <h4>Prove it before building any UI</h4>
+        <p>
+          Write one ugly debug screen with four buttons: sign in, fetch <code>/me</code>, list clips,
+          create a clip. No styling at all. When all four work against your local backend, the
+          foundation is real and phase 10 is mostly layout.
+        </p>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 10 ═══════════════════════════════════════════════════════════ -->
+    <section id="p5">
+      <div class="sec-num" style="margin-bottom:10px">10 <span>· Phase 5</span></div>
+      <div class="phase-bar">
+        <h2>Build the screens</h2>
+        <span class="when">Weeks 7–10 · the bulk of the work</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          Build in this order. Each screen unblocks the next, and the sequence keeps you always able to
+          demo something end to end — which matters more than you think when motivation dips in week eight.
+        </p>
+        <ol class="clean">
+          <li><strong>Sign in / sign up / reset password.</strong> Wire up the phase-09 auth flow with real error states. Add an auth gate at the router level: <code>go_router</code>'s <code>redirect</code> sends signed-out users to <code>/sign-in</code>, replacing the route guards in <code>App.jsx</code>.</li>
+          <li><strong>App shell.</strong> A <code>BottomNavigationBar</code> with three tabs — Create, Clips, Account. This replaces the web's header nav in <code>AppShell.jsx</code>; phones use bottom tabs because thumbs live at the bottom of the screen.</li>
+          <li><strong>Onboarding.</strong> Small, skippable, <code>PATCH /me/preferences</code>. A gentle warm-up before the hard screen.</li>
+          <li><strong>Studio, part one — the take.</strong> Text field, sport/tone/duration/resolution pickers, the ✨ variations button (<code>POST /clips/enhance-take</code>, with <code>round</code> incrementing on each press), and the trending feed (<code>GET /clips/trending?sport=</code>). Gate 1080p and 30s behind Creator, exactly as the web does.</li>
+          <li><strong>Studio, part two — script review.</strong> Port the <em>behaviour</em> of <code>ScriptView.jsx</code> and <code>ReviewStep.jsx</code>: edit lines, regenerate with feedback, approve. Nothing renders or costs money until approval — preserve that rule precisely.</li>
+          <li><strong>Studio, part three — generation.</strong> Staged progress with elapsed time, polling <code>GET /clips/{id}</code>. Apply the lifecycle handling from blocker 4 here.</li>
+          <li><strong>Clip preview and publish.</strong> <code>video_player</code> plus <code>chewie</code> for controls. Vertical 9:16 wants a full-bleed player, not a letterboxed rectangle. Then caption suggestions and the Instagram publish flow with live status.</li>
+          <li><strong>Clips library.</strong> <code>ListView.builder</code> of clip cards, pull-to-refresh via <code>RefreshIndicator</code>, delete with confirmation, and <code>share_plus</code> for the native share sheet — the one genuinely better-than-web moment in the app.</li>
+          <li><strong>Account.</strong> Usage counter from <code>/me/usage</code>, plan display, Instagram connect/disconnect, preferences, legal links, sign out, delete account.</li>
+        </ol>
+
+        <h4>Habits worth forming now</h4>
+        <ul class="clean">
+          <li><strong>Every async screen has four states</strong> — loading, empty, error, content. Build all four. The web version already has them; read the JSX.</li>
+          <li><strong>Never leave a screen blank while loading.</strong> Skeleton placeholders read as fast; spinners read as broken.</li>
+          <li><strong>Test on a real device weekly.</strong> Emulator performance and touch feel both lie to you.</li>
+          <li><strong>Commit per screen.</strong> Small commits on <code>mobile-app</code> mean a bad afternoon costs an afternoon.</li>
+        </ul>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 11 ═══════════════════════════════════════════════════════════ -->
+    <section id="p6">
+      <div class="sec-num" style="margin-bottom:10px">11 <span>· Phase 6</span></div>
+      <div class="phase-bar">
+        <h2>Platform integrations</h2>
+        <span class="when">Weeks 11–12 · where you learn Android and iOS</span>
+      </div>
+
+      <div class="prose">
+        <p>
+          Everything so far was Dart. This phase is native configuration — the part that makes you a
+          mobile developer rather than a Flutter user. Expect it to feel slow, because it always does.
+        </p>
+        <ul class="clean">
+          <li><strong>Deep links.</strong> Register <code>banterclips://</code> in <code>AndroidManifest.xml</code> (an <code>intent-filter</code>) and <code>Info.plist</code> (<code>CFBundleURLTypes</code>), then wire the Instagram OAuth return from blocker 3. Optionally add App Links / Universal Links so <code>banterclips.com/clips/123</code> opens the app — that needs a verification file served from your domain.</li>
+          <li><strong>Google sign-in.</strong> Create the Android OAuth client with your debug <em>and</em> release SHA-1 fingerprints, plus an iOS client with the bundle ID.</li>
+          <li><strong>Permissions and privacy strings.</strong> Saving a video to the camera roll needs <code>NSPhotoLibraryAddUsageDescription</code> in <code>Info.plist</code>, written as a human sentence, and scoped-storage handling on Android. Apple rejects missing or lazy usage strings.</li>
+          <li><strong>Icon and splash.</strong> <code>flutter_launcher_icons</code> and <code>flutter_native_splash</code> generate every required size from one source image. Export a 1024×1024 icon from Figma.</li>
+          <li><strong>Push notifications</strong> <span class="pill p-warn">v2 OK</span> — a Firebase project, <code>google-services.json</code> for Android, an APNs key uploaded to Firebase for iOS, plus <code>POST /me/devices</code> and a worker hook.</li>
+        </ul>
+
+        <div class="note crit">
+          <p class="t">Two mistakes that cost a whole release</p>
+          <ul class="clean tight">
+            <li><strong>Forgetting the release SHA-1</strong> for Google sign-in. It works perfectly in testing and fails for every real user, because the release build is signed with a different key.</li>
+            <li><strong>Losing the Android upload keystore.</strong> Generate it, then back it up somewhere outside the repo. Lose it and you can never update that Play listing again — ever. Add it to <code>.gitignore</code> and never commit it.</li>
+          </ul>
+        </div>
+
+        <h4>Then: billing, per your blocker-2 decision</h4>
+        <p>
+          If you chose native IAP: create the subscription product in App Store Connect and Play
+          Console, integrate <code>in_app_purchase</code>, and — critically — <strong>verify receipts
+          server-side</strong> before flipping <code>users.plan</code>. Never trust the client's word
+          that a purchase succeeded. Budget two weeks; it is fiddly and the sandbox environments are
+          unpleasant. If you chose free-tier-first, this is one line of copy in Account and you skip
+          the whole thing.
+        </p>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 12 ═══════════════════════════════════════════════════════════ -->
+    <section id="p7">
+      <div class="sec-num" style="margin-bottom:10px">12 <span>· Phase 7</span></div>
+      <div class="phase-bar">
+        <h2>Test, harden, and prepare the stores</h2>
+        <span class="when">Weeks 13–15</span>
+      </div>
+
+      <div class="prose">
+        <h4>Testing that's worth your time as a beginner</h4>
+        <ul class="clean">
+          <li><strong>Unit tests</strong> on the API client and any parsing or formatting logic — port the cases from <code>frontend/src/lib/format.js</code>.</li>
+          <li><strong>Widget tests</strong> on the component catalog. Cheap, fast, and they catch regressions when you refactor the theme.</li>
+          <li><strong>A manual matrix</strong>, which matters far more than coverage at this stage: small phone, large phone, notched phone, airplane mode mid-generation, backgrounding during a render, an expired session, a free user hitting the monthly cap, and a device with system font size at maximum.</li>
+          <li>Skip integration tests for v1. The return isn't there yet.</li>
+        </ul>
+
+        <h4>Store assets — start early, they take longer than you think</h4>
+        <ul class="clean">
+          <li>App icon; Play feature graphic (1024×500); screenshots at every required size for both stores — build these in Figma from real app captures.</li>
+          <li>App name, subtitle, description, keywords. <code>SEO.md</code> already has the positioning language; adapt it.</li>
+          <li>Privacy policy URL (you have one), plus a <strong>data safety form</strong> (Play) and <strong>privacy nutrition label</strong> (App Store). Answer honestly — you collect email, and you generate and store user content.</li>
+          <li><strong>A working account for the reviewer.</strong> Both stores require test credentials for a login-gated app. Omitting this is the single most common cause of a first rejection.</li>
+        </ul>
+
+        <div class="note crit">
+          <p class="t">Two review risks specific to this app</p>
+          <p>
+            <strong>User-generated content.</strong> Your app generates AI videos of public figures.
+            Apple's Guideline 1.2 requires UGC apps to have a content filter, a report mechanism, a
+            block mechanism, and published terms. The AI-parody disclosure helps; a "report this clip"
+            path and a stated moderation policy help more. Sort this before submitting, not after a rejection.
+          </p>
+          <p>
+            <strong>Minimum functionality.</strong> Guideline 4.2 rejects thin wrappers around a
+            website. Yours won't be — it's native, with a real share sheet and video player — but keep
+            webviews to the legal pages only.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 13 ═══════════════════════════════════════════════════════════ -->
+    <section id="p8">
+      <div class="sec-num" style="margin-bottom:10px">13 <span>· Phase 8</span></div>
+      <div class="phase-bar">
+        <h2>Release and iterate</h2>
+        <span class="when">Week 16 onward</span>
+      </div>
+
+      <div class="prose">
+        <ol class="clean">
+          <li><strong>Android internal testing</strong> first — instant, no review. Get the build onto your own phone through Play.</li>
+          <li><strong>Closed testing</strong> — if your Play account is new, this satisfies the 12-testers-for-14-days requirement. Start it as soon as you have a usable build.</li>
+          <li><strong>TestFlight</strong> for iOS. Its review is lighter and faster than App Store review; use it to catch iOS-only issues before the real submission.</li>
+          <li><strong>Submit.</strong> Expect a rejection on the first attempt. It is routine, not failure — read the citation, fix precisely that, resubmit.</li>
+          <li><strong>Add crash reporting before launch</strong>, not after — Crashlytics or Sentry. Without it, a user's crash report is unactionable.</li>
+          <li><strong>Ship the deferred work</strong>: push notifications, then IAP if you deferred it, then whatever the first fifty users complain about.</li>
+        </ol>
+
+        <div class="note warn">
+          <p class="t">One permanent consequence for the backend</p>
+          <p>
+            Your backend and frontend auto-deploy from <code>main</code>, but mobile releases are gated
+            by store review and users update on their own schedule. So <strong>the API can no longer
+            make breaking changes freely</strong> — old app versions stay in the wild for months.
+            Version your endpoints, or keep every change additive.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 14 ═══════════════════════════════════════════════════════════ -->
+    <section id="deps">
+      <div class="sec-head">
+        <div class="sec-num">14 <span>· Reference</span></div>
+        <h2>The dependency list</h2>
+        <p>Keep it small. Every package is code you didn't write, in a language you're learning, that can break on the next Flutter release. These are the mainstream choices for exactly this app.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Package</th><th>Job</th><th>Replaces (web)</th><th class="num">Phase</th></tr></thead>
+          <tbody>
+            <tr><td><code>go_router</code></td><td>Routing and the auth redirect</td><td><code>react-router-dom</code></td><td class="num">07</td></tr>
+            <tr><td><code>flutter_riverpod</code></td><td>App state, dependency injection</td><td><code>AppContext.jsx</code></td><td class="num">07</td></tr>
+            <tr><td><code>dio</code></td><td>HTTP with auth + error interceptors</td><td><code>fetch</code> in api.js</td><td class="num">09</td></tr>
+            <tr><td><code>freezed</code> · <code>json_serializable</code></td><td>Typed models from JSON</td><td>— <span style="color:var(--muted)">(JS was untyped)</span></td><td class="num">09</td></tr>
+            <tr><td><code>supabase_flutter</code></td><td>Sign-in, Google OAuth, magic link</td><td><code>@supabase/supabase-js</code></td><td class="num">09</td></tr>
+            <tr><td><code>flutter_secure_storage</code></td><td>Session JWT in Keychain / Keystore</td><td><code>localStorage</code></td><td class="num">09</td></tr>
+            <tr><td><code>video_player</code> · <code>chewie</code></td><td>Vertical clip playback</td><td><code>&lt;video&gt;</code></td><td class="num">10</td></tr>
+            <tr><td><code>share_plus</code></td><td>Native share sheet</td><td>— <span style="color:var(--muted)">(no web equivalent)</span></td><td class="num">10</td></tr>
+            <tr><td><code>cached_network_image</code></td><td>Thumbnails without re-fetching</td><td>browser cache</td><td class="num">10</td></tr>
+            <tr><td><code>flutter_web_auth_2</code></td><td>Instagram OAuth browser sheet</td><td>full-page redirect</td><td class="num">11</td></tr>
+            <tr><td><code>flutter_launcher_icons</code> · <code>flutter_native_splash</code></td><td>Icons and splash, every size</td><td>favicon</td><td class="num">11</td></tr>
+            <tr><td><code>in_app_purchase</code></td><td>Store billing <em>— only if not deferred</em></td><td>Stripe Checkout</td><td class="num">11</td></tr>
+            <tr><td><code>firebase_messaging</code></td><td>Job-complete push <em>— v2</em></td><td>polling</td><td class="num">11</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 15 ═══════════════════════════════════════════════════════════ -->
+    <section id="structure">
+      <div class="sec-head">
+        <div class="sec-num">15 <span>· Reference</span></div>
+        <h2>Project structure</h2>
+        <p>Feature-first, which scales better than type-first once you pass a dozen screens.</p>
+      </div>
+      <div class="prose">
+<pre>mobile/lib/
+├── main.dart
+├── app/            router, root widget, provider scope
+├── theme/          colors.dart · typography.dart · app_theme.dart
+├── api/            client.dart · endpoints.dart · errors.dart
+├── models/         clip.dart · user.dart · script.dart · social.dart
+├── widgets/        the Figma component catalog
+└── features/
+    ├── auth/       screens + state
+    ├── studio/     take → script → generate
+    ├── clips/      library, preview, publish
+    └── account/    plan, socials, preferences</pre>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 16 ═══════════════════════════════════════════════════════════ -->
+    <section id="week1">
+      <div class="sec-head">
+        <div class="sec-num">16 <span>· Start here</span></div>
+        <h2>What to do this week</h2>
+        <p>The plan above is sixteen weeks. Only the next five days are actually actionable, so here they are.</p>
+      </div>
+
+      <div class="prose">
+        <ol class="clean">
+          <li><strong>Clone the repo properly</strong> and create the <code>mobile-app</code> branch. Your current folder has no git history, so you can't branch or revert today.</li>
+          <li><strong>Install Flutter and Android Studio.</strong> Get <code>flutter doctor</code> clean and run the counter app on an emulator with hot reload working.</li>
+          <li><strong>Register a Google Play developer account</strong> ($25). New accounts face the 14-day closed-testing requirement — start that clock now, in the background, while you learn.</li>
+          <li><strong>Read <code>frontend/src/lib/api.js</code> end to end</strong> and write out, on paper, the endpoints your v1 screens actually need. That list is your phase-09 checklist.</li>
+          <li><strong>Make the billing decision</strong> from blocker 2. It changes phase-11 scope by two weeks and your pricing by up to 30%, and it is far easier to decide now than to discover during a rejection.</li>
+        </ol>
+
+        <div class="note">
+          <p class="t">The honest timeline</p>
+          <p>
+            Sixteen weeks to a shipped Android app is realistic for a beginner at 15–20 hours a week,
+            <em>given that the backend already exists</em>. iOS adds two to four weeks and a Mac. If you
+            had to build the API too, this would be a year. That is how much of this project is already done.
+          </p>
+        </div>
+
+        <p style="color:var(--muted); font-size:.88rem; border-top:1px solid var(--line); padding-top:16px; margin-top:8px">
+          Built from this repo — README, BRD, ROADMAP, UNIT-ECONOMICS, <code>frontend/src/lib/api.js</code>,
+          <code>backend/app/routers/</code>. Store policies (Apple Guidelines 1.2, 3.1.1, 4.2; Play
+          closed-testing rules) change periodically — verify the current wording before you submit.
+          Companion document to <a href="CODEBASE-ATLAS.html">CODEBASE-ATLAS.html</a>.
+        </p>
+      </div>
+    </section>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>

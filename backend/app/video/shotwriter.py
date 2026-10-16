@@ -28,6 +28,7 @@ import json
 import logging
 import re
 
+from ..services import content_safety
 from .types import VideoPlan, _clean
 
 log = logging.getLogger("banter.video.shotwriter")
@@ -69,6 +70,9 @@ Sound: one or two diegetic sounds that exist in that room. Never music.
   never "then", never "cut to". A second camera position inside one prompt
   makes the model render a split screen.
 - Everything is live action photographed on a real camera.
+- Never describe hugging, kissing, cuddling, embracing, holding hands,
+  romantic contact, sexual contact, or other intimate contact. Keep people
+  physically separate except for ordinary on-field sports play.
 - Keep every character's appearance and wardrobe phrased IDENTICALLY across
   shots. Rewording them makes the model render a different-looking person.
   Copy the wardrobe text you are given, word for word.
@@ -147,7 +151,11 @@ def write(plan: VideoPlan, client=None) -> dict[int, str]:
         except (TypeError, ValueError):
             continue
         body = _clean(shot.get("prompt"))
-        if index in valid and body:
+        if (
+            index in valid
+            and body
+            and not content_safety.contains_intimate_contact(body)
+        ):
             out[index] = _cap(body)
     if len(out) != len(plan.scenes):
         log.warning("shot writer returned %d of %d shots", len(out), len(plan.scenes))

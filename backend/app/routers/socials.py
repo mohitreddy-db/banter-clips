@@ -39,6 +39,39 @@ ig_oauth_configured = lambda: bool(settings.META_APP_ID and settings.META_APP_SE
 MOCK_TOKEN = "mock-oauth-token"
 REFRESH_WINDOW = timedelta(days=15)
 
+# Where the mobile app wants the consent flow to hand control back. A phone
+# has no browser tab to return to, so the target is a scheme the app owns
+# (registered in its AndroidManifest.xml and Info.plist) rather than a path on
+# the website. The scheme is registered under the host "oauth", so
+# `banterclips://oauth/<platform>` all land in the app. See mobile/README.md.
+MOBILE_RETURNS = frozenset(
+    {
+        "banterclips://oauth/instagram",
+        "banterclips://oauth/tiktok",
+        "banterclips://oauth/youtube",
+    }
+)
+
+
+def _safe_next(next: str) -> str:
+    """Where the browser is allowed to be sent after consent.
+
+    Two shapes only: a path on our own site, or one of the mobile URIs above,
+    matched in full. Do not relax this to "any custom scheme" or to a prefix
+    check — `next` is attacker-controllable, and a laxer rule here is an
+    open-redirect hole with a valid-looking BanterClips URL in front of it.
+
+    "//host" is rejected as well as "http://host": a protocol-relative URL is
+    a redirect to someone else's site the moment a caller stops prefixing
+    FRONTEND_URL, and this function is named as though it guarantees
+    otherwise.
+    """
+    if next in MOBILE_RETURNS:
+        return next
+    if next.startswith("/") and not next.startswith("//"):
+        return next
+    return "/account"
+
 
 def _revoke_with_platform(account: SocialAccount) -> None:
     """Tell the platform the grant is over before we forget the token.
@@ -156,7 +189,7 @@ def _oauth_state(user: User, purpose: str, next: str) -> str:
         {
             "sub": str(user.id),
             "purpose": purpose,
-            "next": next if next.startswith("/") else "/account",
+            "next": _safe_next(next),
             "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
         },
         settings.JWT_SECRET,
@@ -200,13 +233,18 @@ def instagram_callback(
 
     def bounce(next_path: str, **params) -> RedirectResponse:
         separator = "&" if "?" in next_path else "?"
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
         assert claims.get("purpose") == "ig_oauth"
         user_id = claims["sub"]
-        next_path = claims.get("next", "/account")
+        next_path = _safe_next(str(claims.get("next", "/account")))
     except Exception:
         return bounce("/account", ig="error", reason="invalid_state")
 
@@ -321,13 +359,18 @@ def tiktok_callback(
 
     def bounce(next_path: str, **params) -> RedirectResponse:
         separator = "&" if "?" in next_path else "?"
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
         assert claims.get("purpose") == "tt_oauth"
         user_id = claims["sub"]
-        next_path = claims.get("next", "/account")
+        next_path = _safe_next(str(claims.get("next", "/account")))
     except Exception:
         return bounce("/account", tt="error", reason="invalid_state")
 
@@ -371,13 +414,18 @@ def youtube_callback(
 ):
     def bounce(next_path: str, **params) -> RedirectResponse:
         separator = "&" if "?" in next_path else "?"
-        return RedirectResponse(f"{settings.FRONTEND_URL}{next_path}{separator}{urlencode(params)}")
+        # The mobile return is an absolute URI the app owns; everything else
+        # is a path on the website. Prefixing FRONTEND_URL onto the former
+        # would produce https://www.banterclips.combanterclips://… — a dead
+        # link that strands the user in a browser with no way back.
+        base = "" if next_path in MOBILE_RETURNS else settings.FRONTEND_URL
+        return RedirectResponse(f"{base}{next_path}{separator}{urlencode(params)}")
 
     try:
         claims = pyjwt.decode(state, settings.JWT_SECRET, algorithms=["HS256"])
         assert claims.get("purpose") == "yt_oauth"
         user_id = claims["sub"]
-        next_path = claims.get("next", "/account")
+        next_path = _safe_next(str(claims.get("next", "/account")))
     except Exception:
         return bounce("/account", yt="error", reason="invalid_state")
     if error or not code:

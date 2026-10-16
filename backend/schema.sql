@@ -160,6 +160,21 @@ CREATE TABLE store_subscriptions (
 );
 CREATE INDEX store_subscriptions_user ON store_subscriptions (user_id, expires_at);
 
+-- Credit packs bought through Apple or Google. The store is the ledger; this
+-- records that a purchase token has been granted, so a retried verify
+-- converges instead of granting twice.
+CREATE TABLE store_purchases (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform        text NOT NULL CHECK (platform IN ('ios', 'android')),
+    product_id      text NOT NULL,
+    purchase_token  text NOT NULL UNIQUE,
+    pack            text NOT NULL,
+    credits         integer NOT NULL,
+    granted_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX store_purchases_user ON store_purchases (user_id);
+
 CREATE TABLE events (
     id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id     uuid REFERENCES users(id) ON DELETE SET NULL,

@@ -236,6 +236,9 @@ class Settings(BaseSettings):
     GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: str = ""
     ANDROID_PACKAGE_NAME: str = "com.banterclips.app"
     STORE_PRODUCT_CREATOR: str = "creator_monthly"
+    # Credit packs are sold as `<prefix><pack key>` — credits_starter,
+    # credits_pro — in both consoles, so a new pack needs no code change.
+    STORE_CREDIT_PACK_PREFIX: str = "credits_"
     # Re-check active store subscriptions periodically while users are active.
     # Expiry is always checked immediately even when this window has not elapsed.
     STORE_REVERIFY_HOURS: int = 24

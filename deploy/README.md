@@ -43,6 +43,7 @@ YOUTUBE_CLIENT_ID=<Google Cloud OAuth web client>
 YOUTUBE_CLIENT_SECRET=<secret manager>
 YOUTUBE_REDIRECT_URI=https://api.banterclips.com/socials/youtube/callback
 STRIPE_SECRET_KEY=<infra/stripe.md>
+STRIPE_PUBLISHABLE_KEY=<infra/stripe.md>
 STRIPE_PRICE_CREATOR=<infra/stripe.md>
 STRIPE_WEBHOOK_SECRET=<infra/stripe.md>
 FRONTEND_URL=https://www.banterclips.com

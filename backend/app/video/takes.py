@@ -19,6 +19,7 @@ import json
 import logging
 import re
 
+from ..services import content_safety
 from .types import _clean
 
 log = logging.getLogger("banter.video.takes")
@@ -70,6 +71,9 @@ argues with is a take nobody spreads.
 - Never state a real score, result, injury, trade or quote as fact.
 - Never insult a person's appearance, family, race, or intelligence. Mock
   performance, decisions and situations only.
+- Sports-only safety rule: never add or retain hugging, kissing, cuddling,
+  embracing, romantic contact, sexual contact, or other intimate contact.
+  People may celebrate without touching.
 </rules>
 
 <variation_strategy>
@@ -144,6 +148,8 @@ def variations(take: str, sport: str, tone: str, client=None, round_index: int =
     for item in parsed[:VARIATIONS]:
         text = _clean(item.get("take"))[:max_chars]
         if not text or text.lower() == take.lower():
+            continue
+        if content_safety.contains_intimate_contact(text):
             continue
         if direction and not _DIRECTION_MARKERS.search(text):
             # The model wrote pure banter anyway: put the direction back,

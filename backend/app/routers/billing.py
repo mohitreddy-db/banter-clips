@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user, record_event
-from ..models import Event, StripeEvent, User
+from ..models import Event, StorePurchase, StripeEvent, User
 from ..schemas import PlanChangeResponse
 from ..services import entitlements, store_billing
 
@@ -529,13 +529,184 @@ class StorePurchaseBody(BaseModel):
     transaction_id: str | None = Field(default=None, max_length=128)
 
 
-@router.post("/mobile/verify", response_model=PlanChangeResponse)
+def _pack_for_product(product_id: str, db: Session) -> str | None:
+    """`credits_starter` → `starter`, or None when it is not a pack.
+
+    The store product ids follow the pack keys by convention so that adding a
+    pack means adding it in one place (the price config) plus the two store
+    consoles — not here.
+    """
+    from ..services import credits
+
+    prefix = settings.STORE_CREDIT_PACK_PREFIX
+    if not product_id.startswith(prefix):
+        return None
+    key = product_id[len(prefix):]
+    return key if credits.pack(db, key) else None
+
+
+def _verify_credit_pack(body: StorePurchaseBody, pack: str, user: User, db: Session) -> dict:
+    """Grant a credit pack bought in a store, exactly once per purchase token."""
+    from ..services import credits
+
+    if not store_billing.configured(body.platform):
+        raise HTTPException(
+            503,
+            detail={
+                "code": "store_not_configured",
+                "message": "In-app purchases are not configured on this server.",
+            },
+        )
+    token = body.purchase_token or body.transaction_id or ""
+    if not token:
+        raise HTTPException(400, detail={"code": "purchase_token_required"})
+
+    # Already granted? Answer the same thing again — the app retries after a
+    # dropped connection, and must converge rather than double-grant.
+    existing = db.scalar(select(StorePurchase).where(StorePurchase.purchase_token == token))
+    if existing is not None:
+        if existing.user_id != user.id:
+            record_event(db, "store_receipt_reuse_blocked", user, platform=body.platform)
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "receipt_already_used",
+                    "message": "That purchase is already linked to another BanterClips account.",
+                },
+            )
+        return {
+            "plan": user.plan,
+            "cancel_at_period_end": user.cancel_at_period_end,
+            "credits": user.credits,
+            "credits_granted": existing.credits,
+            "message": f"{existing.credits} credits are already in your wallet.",
+        }
+
+    try:
+        purchase = store_billing.verify_product(
+            body.platform,
+            purchase_token=token,
+            product_id=body.product_id,
+            transaction_id=body.transaction_id,
+        )
+    except store_billing.StoreError as exc:
+        log.warning("store product verification failed for user %s: %s", user.id, exc)
+        raise HTTPException(
+            502,
+            detail={
+                "code": "store_unreachable",
+                "message": "We couldn't confirm the purchase with the store. "
+                "Your purchase is safe; retry in a moment.",
+            },
+        ) from exc
+
+    # Same rule as the subscription path: a receipt only counts for the
+    # account it was bought for. Unlike a subscription, a refusal here leaves
+    # the purchase unconsumed on purpose, so Google's three-day rule refunds
+    # it rather than the customer paying for nothing.
+    if purchase.account_token and purchase.account_token != str(user.id):
+        record_event(db, "store_account_token_mismatch", user, platform=body.platform)
+        raise HTTPException(
+            409,
+            detail={
+                "code": "purchase_account_mismatch",
+                "message": "This purchase was not created for the signed-in BanterClips account.",
+            },
+        )
+    if not purchase.is_paid:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "purchase_not_active",
+                "message": "That purchase is still pending or was cancelled."
+                if purchase.status == "pending"
+                else "That purchase is not valid.",
+            },
+        )
+    if _pack_for_product(purchase.product_id, db) != pack:
+        raise HTTPException(
+            400,
+            detail={
+                "code": "wrong_store_product",
+                "message": "The verified purchase is not for that credit pack.",
+            },
+        )
+    if purchase.consumed:
+        # Consumed by the store already but never recorded here — granted
+        # before a crash, or a replay. Either way, not again.
+        raise HTTPException(
+            409,
+            detail={
+                "code": "purchase_already_consumed",
+                "message": "That purchase has already been used.",
+            },
+        )
+
+    chosen = credits.pack(db, pack)
+    granted = int(chosen["credits"])
+    db.add(
+        StorePurchase(
+            user_id=user.id,
+            platform=body.platform,
+            product_id=purchase.product_id,
+            purchase_token=purchase.purchase_token,
+            pack=pack,
+            credits=granted,
+        )
+    )
+    try:
+        db.flush()
+    except IntegrityError:
+        # Two devices, one purchase, at the same moment. The other request
+        # granted it; converge on its answer instead of granting twice.
+        db.rollback()
+        return {
+            "plan": user.plan,
+            "cancel_at_period_end": user.cancel_at_period_end,
+            "credits": user.credits,
+            "credits_granted": granted,
+            "message": f"{granted} credits are already in your wallet.",
+        }
+    credits.apply(db, user, granted, "topup", note=f"pack {pack} ({body.platform})", commit=False)
+    db.commit()
+    record_event(db, "topup_completed", user, provider=body.platform, pack=pack, credits=granted)
+
+    # Consume store-side too. The app consumes after we answer, but a phone
+    # that loses connectivity right then would leave the purchase behind —
+    # and an unconsumed one cannot be bought again.
+    try:
+        store_billing.consume_product(
+            body.platform, purchase_token=purchase.purchase_token, product_id=purchase.product_id
+        )
+    except store_billing.StoreError as exc:
+        log.warning("could not consume store purchase %s: %s", purchase.purchase_token[:12], exc)
+
+    return {
+        "plan": user.plan,
+        "cancel_at_period_end": user.cancel_at_period_end,
+        "credits": user.credits,
+        "credits_granted": granted,
+        "message": f"{granted} credits added to your wallet.",
+    }
+
+
+@router.post("/mobile/verify")
 def verify_store_purchase(
     body: StorePurchaseBody,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Verify an Apple/Google subscription and apply Creator to the account."""
+    """Verify an Apple/Google purchase: Creator for the subscription, credits
+    for a pack.
+
+    No `response_model`: a pack answer carries `credits` and `credits_granted`
+    on top of the plan fields, and declaring the narrower model would strip
+    them on the way out.
+    """
+    pack = _pack_for_product(body.product_id, db)
+    if pack is not None:
+        return _verify_credit_pack(body, pack, user, db)
+
     if body.product_id != settings.STORE_PRODUCT_CREATOR:
         raise HTTPException(
             400,
@@ -618,7 +789,7 @@ def verify_store_purchase(
         plan=user.plan,
         cancel_at_period_end=user.cancel_at_period_end,
         message="Welcome to Creator — access is unlocked on mobile and web.",
-    )
+    ).model_dump()
 
 
 @router.get("/status")

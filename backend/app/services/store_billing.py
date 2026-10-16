@@ -61,6 +61,29 @@ class Entitlement:
         )
 
 
+@dataclass(frozen=True)
+class ProductPurchase:
+    """What a store said about one *consumable* purchase — a credit pack.
+
+    Unlike a subscription there is no expiry to track: the purchase is either
+    paid for (and not yet consumed) or it is not. `consumed` is the store's
+    own flag; once the credits are granted the purchase is consumed so it can
+    never be replayed and so the same pack can be bought again.
+    """
+
+    purchase_token: str
+    product_id: str
+    #: "purchased" | "pending" | "cancelled" — only "purchased" grants.
+    status: str
+    consumed: bool
+    acknowledged: bool
+    account_token: str | None = None
+
+    @property
+    def is_paid(self) -> bool:
+        return self.status == "purchased"
+
+
 # --------------------------------------------------------------------- Google
 
 
@@ -208,6 +231,78 @@ def verify_google(purchase_token: str, requested_product_id: str) -> Entitlement
 # ---------------------------------------------------------------------- Apple
 
 
+def verify_google_product(purchase_token: str, product_id: str) -> ProductPurchase:
+    """Ask the Play Developer API about one *one-time product* purchase.
+
+    This is `purchases.products.get`, the consumable counterpart of
+    `verify_google`. A credit pack is paid for once, granted once, then
+    consumed so the same product can be bought again.
+    """
+    if not google_configured():
+        raise StoreError("Google Play billing is not configured on this server")
+
+    token = _google_access_token()
+    url = (
+        f"{GOOGLE_PLAY_API}/applications/{settings.ANDROID_PACKAGE_NAME}"
+        f"/purchases/products/{product_id}/tokens/{purchase_token}"
+    )
+    try:
+        resp = httpx.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        raise StoreError("could not reach the Play Developer API") from exc
+
+    if resp.status_code == 404:
+        # Google does not know this token for this product. An answer, not an
+        # outage — and not a grant.
+        return ProductPurchase(purchase_token, product_id, "cancelled", False, False)
+    if resp.status_code != 200:
+        raise StoreError(f"Play Developer API returned {resp.status_code}")
+
+    body = resp.json()
+    response_package = body.get("packageName")
+    if response_package and response_package != settings.ANDROID_PACKAGE_NAME:
+        raise StoreError("Google returned a purchase for another Android package")
+
+    # purchaseState: 0 purchased, 1 cancelled, 2 pending.
+    # consumptionState: 0 yet to be consumed, 1 consumed.
+    # acknowledgementState: 0 yet to be acknowledged, 1 acknowledged.
+    state = {0: "purchased", 1: "cancelled", 2: "pending"}.get(
+        body.get("purchaseState"), "cancelled"
+    )
+    return ProductPurchase(
+        purchase_token=purchase_token,
+        product_id=body.get("productId") or product_id,
+        status=state,
+        consumed=body.get("consumptionState") == 1,
+        acknowledged=body.get("acknowledgementState") == 1,
+        account_token=body.get("obfuscatedExternalAccountId") or None,
+    )
+
+
+def consume_google_product(purchase_token: str, product_id: str) -> None:
+    """Mark a one-time product as consumed.
+
+    The app consumes it too, after we answer — but Google refunds any
+    purchase left unacknowledged for three days, and a phone that loses
+    connectivity right after our 200 would leave one behind. Consuming here
+    makes the grant final regardless.
+    """
+    token = _google_access_token()
+    url = (
+        f"{GOOGLE_PLAY_API}/applications/{settings.ANDROID_PACKAGE_NAME}"
+        f"/purchases/products/{product_id}/tokens/{purchase_token}:consume"
+    )
+    try:
+        resp = httpx.post(url, headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        raise StoreError("could not reach the Play Developer API") from exc
+    if resp.status_code not in (200, 204):
+        raise StoreError(f"Play Developer API refused the consume ({resp.status_code})")
+
+
+# ---------------------------------------------------------------------- Apple
+
+
 def apple_configured() -> bool:
     return bool(
         settings.APPLE_KEY_ID
@@ -268,7 +363,13 @@ def verify_apple(transaction_id: str, requested_product_id: str) -> Entitlement:
                 raise StoreError("App Store Server API returned an unusable subscription")
             body = decoded
             break
-        if response.status_code == 404:
+        # 404 = this environment does not know the transaction.
+        # 401 = Apple rejects the production endpoint for an app that has never
+        #       shipped. Every TestFlight and App Review purchase is a sandbox
+        #       transaction, so neither status can be fatal here - it only means
+        #       "ask the other environment". A real outage (5xx) still raises,
+        #       so the client keeps its "reopen in a minute" retry behaviour.
+        if response.status_code in (401, 404):
             continue
         raise StoreError(f"App Store Server API returned {response.status_code}")
 
@@ -384,6 +485,35 @@ def verify(
         return verify_google(purchase_token, product_id)
     if platform == "ios":
         return verify_apple(transaction_id or "", product_id)
+    raise StoreError(f"unknown platform {platform!r}")
+
+
+def verify_product(
+    platform: str,
+    *,
+    purchase_token: str,
+    product_id: str,
+    transaction_id: str | None,
+) -> ProductPurchase:
+    """Verify a consumable (credit pack) purchase with whichever store sold it."""
+    if platform == "android":
+        return verify_google_product(purchase_token, product_id)
+    if platform == "ios":
+        # Not wired yet: the App Store Server API call is
+        # /inApps/v1/transactions/{transactionId}. Until it exists, say so
+        # honestly rather than granting on the client's word — which is why
+        # the app does not offer credit packs on iOS.
+        raise StoreError("App Store credit packs are not verified on this server yet")
+    raise StoreError(f"unknown platform {platform!r}")
+
+
+def consume_product(platform: str, *, purchase_token: str, product_id: str) -> None:
+    """Tell the store the consumable has been handed over."""
+    if platform == "android":
+        consume_google_product(purchase_token, product_id)
+        return
+    if platform == "ios":
+        return  # StoreKit consumables are finished by the app, not the server
     raise StoreError(f"unknown platform {platform!r}")
 
 

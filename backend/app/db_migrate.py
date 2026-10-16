@@ -92,6 +92,18 @@ def _statements() -> tuple[str, ...]:
         "ON store_subscriptions (platform, purchase_token)",
         "CREATE INDEX IF NOT EXISTS store_subscriptions_user "
         "ON store_subscriptions (user_id, expires_at)",
+        # Credit packs bought in a store. One row per purchase token is what
+        # makes /billing/mobile/verify idempotent, so the app can retry a
+        # dropped connection without granting the pack twice.
+        "CREATE TABLE IF NOT EXISTS store_purchases ("
+        "id uuid PRIMARY KEY DEFAULT gen_random_uuid(), "
+        "user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, "
+        "platform text NOT NULL CHECK (platform IN ('ios','android')), "
+        "product_id text NOT NULL, purchase_token text NOT NULL UNIQUE, "
+        "pack text NOT NULL, credits integer NOT NULL, "
+        "granted_at timestamptz NOT NULL DEFAULT now())",
+        "CREATE INDEX IF NOT EXISTS store_purchases_user "
+        "ON store_purchases (user_id)",
         # Existing main rows only carry subscription_id. That id was written by
         # a successful Stripe sync, so preserve it as active until the next
         # webhook/API sync supplies the current status.

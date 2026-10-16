@@ -1,0 +1,1852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BanterClips Codebase Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  /* ── Tokens: light is the base set; dark redefines only values ────────── */
+  :root {
+    --ground:      #f4f6f9;
+    --surface:     #ffffff;
+    --surface-2:   #eceff4;
+    --ink:         #0e1622;
+    --ink-2:       #35455a;
+    --muted:       #64748b;
+    --line:        #dbe1ea;
+    --line-soft:   #e7ecf2;
+
+    --accent:      #0b7f95;   /* cyan, darkened for light ground */
+    --accent-soft: #e0f4f8;
+    --accent-ink:  #06555f;
+    --violet:      #6d28d9;
+    --violet-soft: #efe8fe;
+
+    --ok:          #17795a;
+    --warn:        #9a6206;
+    --crit:        #b1332f;
+    --ok-bg:       #e2f4ec;
+    --warn-bg:     #fbf0da;
+    --crit-bg:     #fbe6e5;
+
+    --code-bg:     #f1f4f8;
+    --shadow:      0 1px 2px rgba(14,22,34,.06), 0 8px 24px -16px rgba(14,22,34,.28);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body:    "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #070b12;
+      --surface:     #0e1622;
+      --surface-2:   #16202e;
+      --ink:         #e8eef6;
+      --ink-2:       #b9c7d8;
+      --muted:       #7f90a5;
+      --line:        #22304200;
+      --line:        #223042;
+      --line-soft:   #1a2634;
+
+      --accent:      #38d6ee;
+      --accent-soft: #0d2b33;
+      --accent-ink:  #8ce9f8;
+      --violet:      #a482ff;
+      --violet-soft: #1e1638;
+
+      --ok:          #4bcf9a;
+      --warn:        #e0ad4d;
+      --crit:        #f0736d;
+      --ok-bg:       #0d2a20;
+      --warn-bg:     #2c2210;
+      --crit-bg:     #2e1516;
+
+      --code-bg:     #101a27;
+      --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #070b12;
+    --surface:     #0e1622;
+    --surface-2:   #16202e;
+    --ink:         #e8eef6;
+    --ink-2:       #b9c7d8;
+    --muted:       #7f90a5;
+    --line:        #223042;
+    --line-soft:   #1a2634;
+
+    --accent:      #38d6ee;
+    --accent-soft: #0d2b33;
+    --accent-ink:  #8ce9f8;
+    --violet:      #a482ff;
+    --violet-soft: #1e1638;
+
+    --ok:          #4bcf9a;
+    --warn:        #e0ad4d;
+    --crit:        #f0736d;
+    --ok-bg:       #0d2a20;
+    --warn-bg:     #2c2210;
+    --crit-bg:     #2e1516;
+
+    --code-bg:     #101a27;
+    --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+
+  /* ── Base ─────────────────────────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground);
+    color: var(--ink-2);
+    font-family: var(--body);
+    font-size: 16.5px;
+    line-height: 1.62;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+  h1, h2, h3, h4 { font-family: var(--display); color: var(--ink); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+  h2 { font-size: 1.72rem; font-weight: 700; line-height: 1.18; }
+  h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: 0.004em; }
+  h4 { font-size: .93rem; font-weight: 600; }
+  p  { margin: 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: var(--mono); font-size: .855em; background: var(--code-bg);
+    border: 1px solid var(--line-soft); border-radius: 4px; padding: .08em .34em;
+    color: var(--ink); word-break: break-word;
+  }
+
+  /* ── Shell ────────────────────────────────────────────────────────────── */
+  .shell { max-width: 1220px; margin: 0 auto; padding: 0 24px 120px; }
+  .cols { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 56px; align-items: start; }
+  @media (max-width: 940px) { .cols { grid-template-columns: minmax(0,1fr); gap: 0; } .toc { display: none; } }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+  .mast { padding: 64px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 44px; }
+  .mast .kicker {
+    font-family: var(--mono); font-size: .705rem; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .mast .kicker::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--line), transparent); }
+  .mast h1 {
+    font-size: clamp(2.3rem, 5.4vw, 3.5rem); font-weight: 700; line-height: 1.02;
+    letter-spacing: -0.032em; margin-bottom: 20px;
+  }
+  .mast .lede { font-size: 1.11rem; max-width: 66ch; color: var(--ink-2); }
+  .mast .facts {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px;
+  }
+  .fact {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .04em;
+    padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--muted);
+  }
+  .fact b { color: var(--ink); font-weight: 600; }
+
+  /* ── TOC ──────────────────────────────────────────────────────────────── */
+  .toc { position: sticky; top: 28px; padding-top: 6px; }
+  .toc .lbl {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; counter-reset: t; }
+  .toc a {
+    display: flex; gap: 9px; font-size: .795rem; line-height: 1.35; color: var(--muted);
+    text-decoration: none; padding: 4px 8px 4px 6px; border-radius: 5px; border-left: 2px solid transparent;
+  }
+  .toc a::before {
+    counter-increment: t; content: counter(t, decimal-leading-zero);
+    font-family: var(--mono); font-size: .66rem; color: var(--line); padding-top: 1px;
+  }
+  .toc a:hover { color: var(--ink); background: var(--surface); border-left-color: var(--accent); }
+  .toc a:hover::before { color: var(--accent); }
+
+  /* ── Sections ─────────────────────────────────────────────────────────── */
+  section { scroll-margin-top: 24px; padding-bottom: 54px; }
+  .sec-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .sec-num {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: baseline; gap: 12px;
+  }
+  .sec-num span { color: var(--muted); letter-spacing: .11em; }
+  .sec-head p { color: var(--muted); font-size: .96rem; max-width: 70ch; }
+  .prose { display: flex; flex-direction: column; gap: 17px; max-width: 74ch; }
+  .prose > h3 { margin-top: 16px; }
+
+  /* ── Cards, tables, callouts ──────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(198px, 1fr)); }
+
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; min-width: 520px; }
+  thead th {
+    text-align: left; font-family: var(--mono); font-weight: 600; font-size: .655rem;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--muted);
+    padding: 11px 15px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody td { padding: 11px 15px; border-bottom: 1px solid var(--line-soft); vertical-align: top; color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; font-size: .93rem; color: var(--ink-2);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .note.crit { border-left-color: var(--crit); background: var(--crit-bg); }
+  .note .t { font-family: var(--display); font-weight: 600; color: var(--ink); font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; }
+
+  pre {
+    font-family: var(--mono); font-size: .78rem; line-height: 1.62; background: var(--code-bg);
+    border: 1px solid var(--line); border-radius: 9px; padding: 16px 18px; overflow-x: auto;
+    color: var(--ink-2); margin: 0;
+  }
+  pre b { color: var(--accent); font-weight: 600; }
+  pre i { color: var(--muted); font-style: normal; }
+
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: .655rem; letter-spacing: .06em;
+    padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap;
+  }
+  .p-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .p-warn { background: var(--warn-bg); color: var(--warn); }
+  .p-crit { background: var(--crit-bg); color: var(--crit); }
+  .p-acc  { background: var(--accent-soft); color: var(--accent-ink); }
+  .p-vio  { background: var(--violet-soft); color: var(--violet); }
+
+  ul.clean { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ul.clean li::marker { color: var(--accent); }
+
+  .stat { display: flex; flex-direction: column; gap: 3px; }
+  .stat .v { font-family: var(--display); font-size: 1.65rem; font-weight: 700; color: var(--ink); line-height: 1; font-variant-numeric: tabular-nums; }
+  .stat .k { font-family: var(--mono); font-size: .66rem; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); }
+  .stat .d { font-size: .82rem; color: var(--muted); }
+
+  figure { margin: 0; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: .79rem; color: var(--muted); margin-top: 10px; font-family: var(--mono); letter-spacing: .02em; }
+
+  .path { font-family: var(--mono); font-size: .78rem; color: var(--accent); }
+
+  hr.rule { border: none; border-top: 1px solid var(--line); margin: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="shell">
+
+  <header class="mast">
+    <div class="kicker">Engineering reference · read top to bottom</div>
+    <h1>BanterClips Codebase Atlas</h1>
+    <p class="lede">
+      A sports take goes in; a finished, captioned, 9:16 vertical video comes out and gets published
+      straight to Instagram. This is every moving part of that machine — the stack, every external API,
+      the generation pipeline stage by stage, and the reasoning baked into the code.
+    </p>
+    <div class="facts">
+      <span class="fact"><b>FastAPI</b> · Python 3.12</span>
+      <span class="fact"><b>React 18</b> · Vite 6 · Tailwind 4</span>
+      <span class="fact"><b>Postgres</b> via Supabase</span>
+      <span class="fact"><b>~13.6k</b> lines backend</span>
+      <span class="fact"><b>~8.4k</b> lines frontend</span>
+      <span class="fact">Live · <b>banterclips.com</b></span>
+    </div>
+  </header>
+
+  <div class="cols">
+
+    <nav class="toc">
+      <div class="lbl">Contents</div>
+      <ol>
+        <li><a href="#product">The product</a></li>
+        <li><a href="#shape">Repo shape</a></li>
+        <li><a href="#arch">Architecture</a></li>
+        <li><a href="#stack">Full tech stack</a></li>
+        <li><a href="#apis">Every external API</a></li>
+        <li><a href="#auth">Auth model</a></li>
+        <li><a href="#data">Data model</a></li>
+        <li><a href="#endpoints">API surface</a></li>
+        <li><a href="#pipeline">The video pipeline</a></li>
+        <li><a href="#catalog">Character catalog</a></li>
+        <li><a href="#prompts">Prompt engineering</a></li>
+        <li><a href="#queue">Queue &amp; worker</a></li>
+        <li><a href="#storage">Storage &amp; retention</a></li>
+        <li><a href="#money">Spend controls</a></li>
+        <li><a href="#billing">Billing</a></li>
+        <li><a href="#publish">Instagram publishing</a></li>
+        <li><a href="#admin">Admin console</a></li>
+        <li><a href="#frontend">Frontend</a></li>
+        <li><a href="#config">Config reference</a></li>
+        <li><a href="#modes">Modes &amp; demo markers</a></li>
+        <li><a href="#economics">Unit economics</a></li>
+        <li><a href="#tests">Tests</a></li>
+        <li><a href="#deploy">Deployment</a></li>
+        <li><a href="#gaps">Gaps &amp; drift</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+    <!-- 1 ───────────────────────────────────────────────────────────────── -->
+    <section id="product">
+      <div class="sec-head">
+        <div class="sec-num">01 <span>The product</span></div>
+        <h2>What BanterClips actually is</h2>
+      </div>
+      <div class="prose">
+        <p>
+          A user types a sports opinion (10–280 characters), picks a sport, a tone and a length.
+          The system writes a shot-by-shot comedy script, casts real athletes, generates a photoreal
+          keyframe for each shot, animates each keyframe into a talking clip, joins them, burns in
+          captions, and hands back a 9:16 MP4 they can publish to Instagram — without leaving the app.
+        </p>
+        <p>
+          The one-line promise from <code>BRD.md</code>: <em>any sports take becomes a post-ready video,
+          no editing.</em> Phase 1 is a private beta with two plans.
+        </p>
+      </div>
+
+      <div class="grid g2" style="margin-top:22px">
+        <div class="card">
+          <h3>The four inputs</h3>
+          <ul class="clean" style="margin-top:10px; font-size:.9rem">
+            <li><strong>Take</strong> — 10–280 chars, the user's opinion</li>
+            <li><strong>Sport</strong> — NBA / NFL / Soccer / MLB</li>
+            <li><strong>Tone</strong> — Funny / Savage / Hype / Bold</li>
+            <li><strong>Length</strong> — 10s / 15s / 30s <span class="pill p-vio">&gt;15s = Creator</span></li>
+          </ul>
+          <p style="font-size:.86rem;color:var(--muted);margin-top:12px">
+            Plus resolution: 720p everyone, 1080p Creator-only.
+          </p>
+        </div>
+        <div class="card">
+          <h3>The two plans <span class="pill p-acc">BR-15</span></h3>
+          <div class="tw" style="border:none;box-shadow:none;margin-top:10px">
+            <table style="min-width:0">
+              <thead><tr><th></th><th>Free</th><th>Creator $9.99</th></tr></thead>
+              <tbody>
+                <tr><td>Videos/mo</td><td class="num">5</td><td class="num">30</td></tr>
+                <tr><td>Max length</td><td class="num">15s</td><td class="num">30s</td></tr>
+                <tr><td>Resolution</td><td>720p</td><td>1080p</td></tr>
+                <tr><td>Download</td><td><span class="pill p-crit">locked</span></td><td><span class="pill p-ok">yes</span></td></tr>
+                <tr><td>Watermark</td><td>always</td><td>removed</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">The rule that shapes everything</span>
+        <p style="font-size:.91rem">
+          Free is deliberately <strong>publish-only</strong>. Every free clip that lands on Instagram carries
+          the watermark and markets the product. The locked download button <em>is</em> the upgrade prompt —
+          it isn't hidden, it's the sales surface.
+        </p>
+      </div>
+    </section>
+
+    <!-- 2 ───────────────────────────────────────────────────────────────── -->
+    <section id="shape">
+      <div class="sec-head">
+        <div class="sec-num">02 <span>Repo shape</span></div>
+        <h2>Two independent apps in one repo</h2>
+        <p><code>frontend/</code> and <code>backend/</code> have separate dependencies, separate <code>.env</code> files, and separate deploy targets. Neither imports from the other.</p>
+      </div>
+
+<pre>banter-clips/
+├── <b>frontend/</b>    React SPA → Vercel            <i>package.json, .env</i>
+├── <b>backend/</b>     FastAPI → DigitalOcean droplet <i>requirements.txt, .env</i>
+│   └── app/
+│       ├── routers/    <i>HTTP layer — 8 routers</i>
+│       ├── services/   <i>queue, storage, billing glue, spend, publishing</i>
+│       ├── <b>video/</b>      <i>the generation workflow — 20 modules, the heart</i>
+│       └── pipeline/   <i>legacy experiments, superseded by video/</i>
+├── <b>deploy/</b>      setup script, systemd units, Caddyfile, email templates
+├── <b>artifacts/</b>   real captured runs (plan.json, keyframes, result.json)
+└── <b>*.md</b>         BRD · PRICING · ADMIN · ROADMAP · SEO · UNIT-ECONOMICS
+                 <i>infra/ holds prod secrets and is gitignored</i></pre>
+
+      <div class="grid g3" style="margin-top:20px">
+        <div class="card stat"><span class="k">Backend python</span><span class="v">13,632</span><span class="d">lines across 55 modules</span></div>
+        <div class="card stat"><span class="k">Frontend JS/JSX</span><span class="v">8,439</span><span class="d">lines across 37 files</span></div>
+        <div class="card stat"><span class="k">Largest module</span><span class="v">1,078</span><span class="d"><span class="path">admin_console.py</span></span></div>
+      </div>
+
+      <p class="prose" style="margin-top:18px">
+        The documentation is unusually load-bearing here. <code>BRD.md</code> is the product source of
+        truth and the code cites its requirement IDs (BR-07, BR-09, BR-13…) in comments. When code and
+        a doc disagree, the code wins — see <a href="#gaps">§24</a> for the places they've drifted.
+      </p>
+    </section>
+
+    <!-- 3 ───────────────────────────────────────────────────────────────── -->
+    <section id="arch">
+      <div class="sec-head">
+        <div class="sec-num">03 <span>Architecture</span></div>
+        <h2>How the pieces connect</h2>
+      </div>
+
+      <figure class="card" style="padding:26px 20px; color: var(--ink-2)">
+        <svg viewBox="0 0 900 448" style="max-width:100%; height:auto" role="img"
+             aria-label="The API and the worker are separate processes that never talk to each other; they communicate only through rows in Postgres, which is also what the browser polls for progress.">
+          <defs>
+            <marker id="ar-n" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--ink-2)"/>
+            </marker>
+            <marker id="ar-a" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <!-- nodes -->
+          <rect x="24"  y="60"  width="146" height="56" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="38" y="84"  font-family="var(--display)" font-size="13" font-weight="600" fill="var(--ink)">Browser</text>
+          <text x="38" y="100" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">React SPA · Vercel</text>
+
+          <rect x="220" y="60"  width="112" height="56" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="234" y="84"  font-family="var(--display)" font-size="13" font-weight="600" fill="var(--ink)">Caddy</text>
+          <text x="234" y="100" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">TLS · :443</text>
+
+          <rect x="380" y="60"  width="160" height="56" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="394" y="84"  font-family="var(--display)" font-size="13" font-weight="600" fill="var(--ink)">FastAPI</text>
+          <text x="394" y="100" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">uvicorn ×2 · droplet</text>
+
+          <rect x="352" y="190" width="216" height="84" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="368" y="214" font-family="var(--display)" font-size="13" font-weight="600" fill="var(--ink)">Postgres</text>
+          <text x="368" y="230" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">Supabase</text>
+          <rect x="368" y="240" width="82" height="20" rx="4" fill="var(--surface)" stroke="var(--line)" stroke-width="1"/>
+          <text x="380" y="254" font-family="var(--mono)" font-size="9.5" fill="var(--ink)">jobs</text>
+          <rect x="462" y="240" width="90" height="20" rx="4" fill="var(--surface)" stroke="var(--line)" stroke-width="1"/>
+          <text x="474" y="254" font-family="var(--mono)" font-size="9.5" fill="var(--ink)">clips</text>
+
+          <rect x="380" y="326" width="160" height="56" rx="7" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.4"/>
+          <text x="394" y="350" font-family="var(--display)" font-size="13" font-weight="600" fill="var(--ink)">Worker</text>
+          <text x="394" y="366" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">own process · ffmpeg</text>
+
+          <rect x="640" y="52"  width="220" height="32" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.1"/>
+          <text x="654" y="72" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">Stripe</text>
+          <rect x="640" y="92"  width="220" height="32" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.1"/>
+          <text x="654" y="112" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">Instagram Graph</text>
+
+          <rect x="640" y="300" width="220" height="30" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.1"/>
+          <text x="654" y="319" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">OpenAI</text>
+          <rect x="640" y="336" width="220" height="30" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.1"/>
+          <text x="654" y="355" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">OpenRouter</text>
+          <rect x="640" y="372" width="220" height="30" rx="6" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.1"/>
+          <text x="654" y="391" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">Supabase Storage</text>
+
+          <!-- browser path -->
+          <line x1="170" y1="88" x2="212" y2="88" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#ar-n)"/>
+          <text x="191" y="80" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">https</text>
+          <line x1="332" y1="88" x2="372" y2="88" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#ar-n)"/>
+          <text x="352" y="72" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">poll</text>
+          <text x="352" y="108" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">2s</text>
+
+          <!-- the four DB edges: the mechanism -->
+          <line x1="400" y1="118" x2="400" y2="184" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar-a)"/>
+          <text x="392" y="146" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--accent)">INSERT jobs row</text>
+          <text x="392" y="160" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--muted)">on POST /clips</text>
+
+          <line x1="520" y1="184" x2="520" y2="118" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar-a)"/>
+          <text x="530" y="146" font-family="var(--mono)" font-size="9" fill="var(--accent)">SELECT clips row</text>
+          <text x="530" y="160" font-family="var(--mono)" font-size="9" fill="var(--muted)">answers the poll</text>
+
+          <line x1="400" y1="276" x2="400" y2="320" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar-a)"/>
+          <text x="392" y="294" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--accent)">claim job</text>
+          <text x="392" y="308" text-anchor="end" font-family="var(--mono)" font-size="9" fill="var(--muted)">FOR UPDATE SKIP LOCKED</text>
+
+          <line x1="520" y1="320" x2="520" y2="276" stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ar-a)"/>
+          <text x="530" y="294" font-family="var(--mono)" font-size="9" fill="var(--accent)">UPDATE status</text>
+          <text x="530" y="308" font-family="var(--mono)" font-size="9" fill="var(--muted)">+ current_step</text>
+
+          <!-- who calls which external -->
+          <path d="M544,76 L634,68" fill="none" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#ar-n)"/>
+          <path d="M544,100 L634,108" fill="none" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#ar-n)"/>
+          <text x="588" y="146" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">checkout · publish</text>
+
+          <path d="M544,340 L634,315" fill="none" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#ar-n)"/>
+          <path d="M544,352 L634,351" fill="none" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#ar-n)"/>
+          <path d="M544,364 L634,387" fill="none" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#ar-n)"/>
+          <text x="588" y="424" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">plan · keyframe · animate · upload</text>
+
+          <!-- the absent edge -->
+          <path d="M196,116 C196,340 230,384 386,384" fill="none" stroke="var(--crit)" stroke-width="1.3" stroke-dasharray="5 4"/>
+          <line x1="262" y1="354" x2="292" y2="384" stroke="var(--crit)" stroke-width="1.6"/>
+          <line x1="292" y1="354" x2="262" y2="384" stroke="var(--crit)" stroke-width="1.6"/>
+          <text x="104" y="252" font-family="var(--mono)" font-size="9" fill="var(--crit)">no path exists</text>
+          <text x="104" y="266" font-family="var(--mono)" font-size="9" fill="var(--crit)">browser ⇥ worker</text>
+        </svg>
+        <figcaption>
+          The worker has no channel to the browser. Progress reaches the user only because the worker
+          writes <code>clips.current_step</code> and the API reads it back on the next poll — which is why
+          that is a column and not a variable in process memory.
+        </figcaption>
+      </figure>
+
+      <div class="tw" style="margin-top:22px">
+        <table>
+          <thead><tr><th>Piece</th><th>Local dev</th><th>Production</th></tr></thead>
+          <tbody>
+            <tr><td>Frontend</td><td>Vite dev server <code>:5173</code></td><td>Vercel — <code>www.banterclips.com</code>, auto-deploys <code>main</code></td></tr>
+            <tr><td>API</td><td>uvicorn <code>:8000</code></td><td>Droplet behind Caddy — <code>api.banterclips.com</code></td></tr>
+            <tr><td>Worker</td><td>often none (<code>QUEUE_MODE=thread</code>)</td><td><code>banterclips-worker.service</code>, <code>QUEUE_MODE=postgres</code></td></tr>
+            <tr><td>Database</td><td>Postgres 16 in Docker <code>:5433</code></td><td>Supabase Postgres (session pooler, IPv4)</td></tr>
+            <tr><td>Auth</td><td>Supabase, or offline dev magic-link</td><td>Supabase Auth + Resend SMTP</td></tr>
+            <tr><td>Media</td><td><code>data/media/</code> served at <code>/media</code></td><td>Supabase Storage bucket <code>clips</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4 ───────────────────────────────────────────────────────────────── -->
+    <section id="stack">
+      <div class="sec-head">
+        <div class="sec-num">04 <span>Tech stack</span></div>
+        <h2>Every technology and what it's doing</h2>
+      </div>
+
+      <h3 style="margin-bottom:12px">Backend</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Technology</th><th>Version</th><th>Role in this codebase</th></tr></thead>
+          <tbody>
+            <tr><td>Python</td><td>3.12</td><td>Everything server-side.</td></tr>
+            <tr><td>FastAPI</td><td>0.115.6</td><td>HTTP layer, dependency injection (<code>Depends</code>), auto <code>/docs</code>. 8 routers mounted in <span class="path">main.py</span>.</td></tr>
+            <tr><td>uvicorn</td><td>0.34.0</td><td>ASGI server, 2 workers in prod.</td></tr>
+            <tr><td>SQLAlchemy</td><td>2.0.36</td><td>ORM with typed <code>Mapped[]</code> declarative models. <span class="path">models.py</span> is the runtime schema truth.</td></tr>
+            <tr><td>psycopg</td><td>3.2.3 (binary)</td><td>Postgres driver. DSN prefix is <code>postgresql+psycopg://</code>.</td></tr>
+            <tr><td>Pydantic + pydantic-settings</td><td>2.7</td><td>Request/response schemas (<span class="path">schemas.py</span>) and typed env loading (<span class="path">config.py</span>).</td></tr>
+            <tr><td>PyJWT</td><td>2.10.1</td><td>Signs the API's own 30-day HS256 session tokens, and the short-lived OAuth <code>state</code> token.</td></tr>
+            <tr><td>httpx</td><td>0.28.1</td><td>Every outbound HTTP call — OpenAI, OpenRouter, Instagram, Supabase Storage, OpenRouter credits.</td></tr>
+            <tr><td>stripe</td><td>≥11.0</td><td>Checkout sessions, billing portal, webhook signature verification, subscription sync.</td></tr>
+            <tr><td>ffmpeg / ffprobe</td><td>system</td><td>Not a Python dep — a hard runtime requirement. Ken Burns, loudness, concat, caption burn-in, poster frames, end card.</td></tr>
+            <tr><td>Pillow, openai SDK</td><td>optional</td><td><span class="path">requirements-pipeline.txt</span> — for the legacy <code>app/pipeline/</code> experiments only. The live pipeline calls OpenAI over raw httpx.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:28px 0 12px">Frontend</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Technology</th><th>Version</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td>React</td><td>18.3</td><td>SPA. No SSR — which drives the whole SEO strategy in <code>SEO.md</code>.</td></tr>
+            <tr><td>react-router-dom</td><td>7.1</td><td><code>BrowserRouter</code>, clean URLs. Vercel rewrites everything to <code>index.html</code>.</td></tr>
+            <tr><td>Vite</td><td>6.0</td><td>Build + dev server. Env vars are inlined at <em>build</em> time.</td></tr>
+            <tr><td>Tailwind CSS</td><td>4.0 (<code>@tailwindcss/vite</code>)</td><td>Used alongside CSS variables. Much of the app actually uses inline styles keyed to CSS custom properties (<code>--app-cyan</code>, <code>--app-border</code>).</td></tr>
+            <tr><td>@supabase/supabase-js</td><td>2.112</td><td>All auth flows in the browser: password, Google OAuth, magic link, password recovery.</td></tr>
+            <tr><td>puppeteer-core</td><td>25.5 (dev)</td><td>Dev-only E2E driving system Chrome.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">Notably absent</span>
+        <p style="font-size:.91rem">
+          No Redis, no Celery, no S3, no Alembic, no state library (Redux/Zustand), no component library.
+          The queue is a Postgres table, state is one React context, migrations are an idempotent
+          <code>ADD COLUMN IF NOT EXISTS</code> list. Each of those is a deliberate, commented decision —
+          <em>"the database is already here, already backed up, and <code>SELECT … FOR UPDATE SKIP LOCKED</code>
+          is exactly the primitive a queue needs."</em>
+        </p>
+      </div>
+    </section>
+
+    <!-- 5 ───────────────────────────────────────────────────────────────── -->
+    <section id="apis">
+      <div class="sec-head">
+        <div class="sec-num">05 <span>External APIs</span></div>
+        <h2>Every third-party API and its exact role</h2>
+        <p>Nine external services. Every one of them has a defined failure behaviour — most degrade rather than fail the job.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>Service · endpoint</th><th>Used for</th><th>Where</th><th>Cost</th><th>If it fails</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>OpenAI Chat Completions<br><code>/v1/chat/completions</code></td>
+              <td>Script planning (<code>gpt-4.1</code>), keyframe review (<code>gpt-4o-mini</code> vision), take enhancement, take variations, caption suggestions, shot writing</td>
+              <td><span class="path">video/providers.py</span></td>
+              <td class="num">&lt;$0.01<br>per call</td>
+              <td>Falls back to a deterministic template plan; review is skipped and the frame passes</td>
+            </tr>
+            <tr>
+              <td>OpenAI Responses API<br><code>/v1/responses</code> + <code>web_search</code> tool</td>
+              <td>Three separate jobs: <strong>Storyline Packs</strong> (current squad, storylines, kit), <strong>character research</strong> (off-catalog cast look/kit/number), <strong>trending feed</strong> (create-page suggestions)</td>
+              <td><span class="path">context.py</span> <span class="path">research.py</span> <span class="path">trending.py</span></td>
+              <td class="num">~$0.01<br>cached</td>
+              <td>Returns <code>None</code>; plan proceeds without real-world context</td>
+            </tr>
+            <tr>
+              <td>OpenRouter Images<br><code>POST /api/v1/images</code></td>
+              <td>Scene keyframes and catalog reference stills. Model <code>x-ai/grok-imagine-image-quality</code>. Accepts up to 3 reference images as identity anchors.</td>
+              <td><span class="path">providers.ImageProvider</span></td>
+              <td class="num">~$0.05<br>each</td>
+              <td>Retries once without references, then a placeholder still</td>
+            </tr>
+            <tr>
+              <td>OpenRouter Videos<br><code>POST /api/v1/videos</code> (async + poll)</td>
+              <td>Animating an approved keyframe into a clip with native audio. Model <code>x-ai/grok-imagine-video-1.5</code>, first-frame conditioned, 9:16.</td>
+              <td><span class="path">providers.VideoProvider</span></td>
+              <td class="num">~$0.148<br>/sec @720p</td>
+              <td>Ken Burns push-in on the keyframe; scene dropped only if that also fails</td>
+            </tr>
+            <tr>
+              <td>OpenRouter Credits<br><code>GET /api/v1/credits</code></td>
+              <td>Provider balance card + low-balance alert on the admin dashboard</td>
+              <td><span class="path">services/provider_balance.py</span></td>
+              <td class="num">free</td>
+              <td>Serves the stale cached value</td>
+            </tr>
+            <tr>
+              <td>Supabase Auth<br><code>/auth/v1/user</code> + supabase-js</td>
+              <td>Identity. Browser authenticates against Supabase; backend verifies the access token and issues its own JWT.</td>
+              <td><span class="path">routers/auth.py</span></td>
+              <td class="num">included</td>
+              <td>502 "could not reach the auth server"</td>
+            </tr>
+            <tr>
+              <td>Supabase Storage<br><code>/storage/v1/object/…</code></td>
+              <td>Final MP4, poster JPEG, per-scene keyframes. Uses the <strong>service-role key</strong> — the anon key cannot write.</td>
+              <td><span class="path">services/storage.py</span></td>
+              <td class="num">included</td>
+              <td>Retries, then copies the MP4 to local disk and serves from <code>/media</code></td>
+            </tr>
+            <tr>
+              <td>Instagram Graph API<br><code>graph.instagram.com/v23.0</code></td>
+              <td>Business Login OAuth, long-lived token exchange + refresh, Reels container create → poll → publish → permalink</td>
+              <td><span class="path">routers/socials.py</span> <span class="path">services/publishing.py</span></td>
+              <td class="num">free</td>
+              <td>Honest failure on the publish row; retry is free and never regenerates</td>
+            </tr>
+            <tr>
+              <td>Stripe<br>Checkout · Portal · Webhooks</td>
+              <td>Creator subscription. Stripe is the ledger; the DB stores only derived entitlement.</td>
+              <td><span class="path">routers/billing.py</span></td>
+              <td class="num">2.9%+30¢</td>
+              <td>503 <code>stripe_not_configured</code> → frontend uses the mock upgrade path</td>
+            </tr>
+            <tr>
+              <td>Resend (SMTP)</td>
+              <td>Supabase auth emails — confirm signup, magic link, reset password. Branded templates in <span class="path">deploy/email-templates/</span>.</td>
+              <td>configured in Supabase dashboard</td>
+              <td class="num">low</td>
+              <td>Supabase's built-in mailer (rate-limited)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">Provider split, and why</span>
+        <p style="font-size:.91rem">
+          Text goes to <strong>OpenAI directly</strong>; images and video go through <strong>OpenRouter</strong>.
+          OpenRouter is the aggregation layer that gives access to Grok Imagine without a separate xAI
+          contract, and it reports per-call <code>usage.cost</code> in the response — which is exactly what
+          the pipeline's spend ledger reads. Every provider has a <strong>stub twin</strong>
+          (<code>StubImageProvider</code>, <code>StubVideoProvider</code>, <code>NullTextClient</code>) so
+          the entire pipeline runs end-to-end offline with zero keys and zero spend.
+        </p>
+      </div>
+    </section>
+
+    <!-- 6 ───────────────────────────────────────────────────────────────── -->
+    <section id="auth">
+      <div class="sec-head">
+        <div class="sec-num">06 <span>Auth</span></div>
+        <h2>Two identity systems, bridged once</h2>
+      </div>
+
+<pre>browser ──<b> email+password / Google / magic link </b>──▶  <b>Supabase Auth</b>
+browser ──<b> supabase access_token </b>──────────────────▶  <b>POST /auth/supabase</b>
+                                                        │
+   backend verifies the token at {SUPABASE_URL}/auth/v1/user
+   finds-or-creates the local <b>users</b> row (linked by supabase_uid)
+                                                        │
+                              └─▶ issues <b>OUR own 30-day HS256 JWT</b>
+                                  used as Bearer on every other endpoint</pre>
+
+      <div class="prose" style="margin-top:18px">
+        <p>
+          Sessions are <strong>stateless</strong> — nothing is stored server-side. The token payload is just
+          <code>{sub, iat, exp}</code>; <code>get_current_user</code> in <span class="path">deps.py</span>
+          decodes it and loads the user. Rotating <code>JWT_SECRET</code> signs everyone out globally.
+        </p>
+        <h3>Details worth knowing</h3>
+        <ul class="clean">
+          <li><strong>Blocked users learn nothing.</strong> A blocked account gets the <em>identical</em> generic 401 that a bad token gets, at both sign-in and on every request. From outside it looks like a login that won't stick.</li>
+          <li><strong>Admin is an email allow-list</strong>, unioned from the <code>ADMIN_EMAILS</code> env bootstrap (never removable) and a DB-managed list cached 30s in-process. Non-admins get <strong>404, not 403</strong> — they shouldn't learn the admin surface exists.</li>
+          <li><strong>Dev magic-link.</strong> With <code>DEV_MODE=true</code>, <code>POST /auth/request-link</code> returns the token in the response body — sign in as any email, no mailbox, no Supabase. Returns 404 when <code>DEV_MODE=false</code>.</li>
+          <li><strong>Google prompts for account selection</strong> every time (<code>prompt: "select_account"</code>) — without it, Google silently reuses the last account with no way to switch.</li>
+          <li><strong>Password recovery</strong> is detected from the URL hash <em>before</em> supabase-js consumes it, so a recovery link always lands on <code>/reset-password</code> regardless of where the redirect allow-list dropped the browser.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 7 ───────────────────────────────────────────────────────────────── -->
+    <section id="data">
+      <div class="sec-head">
+        <div class="sec-num">07 <span>Data model</span></div>
+        <h2>Fifteen tables</h2>
+        <p><span class="path">app/models.py</span> is the runtime source of truth; <span class="path">schema.sql</span> mirrors it as DDL for Supabase.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Table</th><th>Holds</th><th>Notes worth knowing</th></tr></thead>
+          <tbody>
+            <tr><td>users</td><td>identity, plan, Stripe pointers</td><td><code>is_blocked</code> kills live sessions. <code>plan</code> is derived from Stripe, never authored locally.</td></tr>
+            <tr><td>user_preferences</td><td>sports, teams, players, role, onboarding flag</td><td>Postgres <code>text[]</code> arrays. 1:1 with users, cascade delete.</td></tr>
+            <tr><td>login_tokens</td><td>dev magic-link tokens</td><td>Only the SHA-256 hash is stored. 15-minute expiry, single-use.</td></tr>
+            <tr><td><strong>clips</strong></td><td>the take, status, stage, output, cost, provenance, script</td><td>The central table. CHECK constraints enforce take length 10–280, sport, tone, and the status enum.</td></tr>
+            <tr><td><strong>jobs</strong></td><td>durable work queue</td><td><code>status</code>, <code>attempts</code>, <code>run_after</code>, <code>locked_by</code>, <code>locked_at</code>. Index <code>jobs_claimable</code> on (status, run_after).</td></tr>
+            <tr><td>social_accounts</td><td>one connected account per platform per user</td><td>Holds the Instagram long-lived token + expiry. Unique on (user_id, platform).</td></tr>
+            <tr><td>publishes</td><td>one row per publish attempt</td><td>Honest status machine: queued → uploading → published/failed. Stores the permalink.</td></tr>
+            <tr><td>stripe_events</td><td>processed webhook delivery IDs</td><td>Idempotency marker + audit. Written <em>after</em> successful processing so a crash lets Stripe retry.</td></tr>
+            <tr><td>events</td><td>product analytics (BR-11)</td><td>Name + JSONB props. No dashboard — the admin console queries it directly for funnels and cohorts.</td></tr>
+            <tr><td>catalog_characters</td><td>runtime character overrides</td><td>DB layer that <em>overrides</em> the shipped JSON by id. Written by auto-research and the admin page.</td></tr>
+            <tr><td>catalog_stills</td><td>every reference still ever generated</td><td>History, so an admin can roll back a look or mix batches. "Active" = key present in the character's <code>reference_images</code>.</td></tr>
+            <tr><td>admin_actions</td><td>append-only admin audit log</td><td>who · action · target · reason · when. Never updated or deleted from the app.</td></tr>
+            <tr><td>runtime_settings</td><td>operator-editable key/value</td><td>Spend caps, the generation kill switch, the worker heartbeat, the DB admin list. Env is the fallback.</td></tr>
+            <tr><td>storyline_packs</td><td>cached web-search context</td><td>Unique on (topic_key, day) — one search per topic per day.</td></tr>
+            <tr><td>trending_packs</td><td>cached create-page feed</td><td>One row per sport, 20-minute TTL, shared by all users.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:26px 0 12px">The clip status machine</h3>
+<pre>queued
+  ├─▶ planning_story ─▶ <b>script_ready</b>  <i>◀── generation PAUSES here</i>
+  │                          │              <i>no video money spent yet</i>
+  │                          ├─ approve  ──▶ back to queued (script_approved=true)
+  │                          ├─ edit     ──▶ patch lines/actions in place
+  │                          └─ regenerate ─▶ old draft to script_history, replan
+  │
+  └─▶ planning_story ▸ creating_voice ▸ designing_characters ▸ generating_scenes
+      ▸ animating_scenes ▸ assembling_video ▸ validating ──▶ <b>ready</b>
+                                                       └──▶ <b>failed</b>  <i>(free retry)</i></pre>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">Schema migrations</span>
+        <p style="font-size:.91rem">
+          There is no Alembic. <span class="path">db_migrate.py</span> runs on every API <em>and</em> worker
+          boot: a hardcoded list of <code>ALTER TABLE … ADD COLUMN IF NOT EXISTS</code> plus a rebuild of the
+          <code>clips_status_check</code> constraint from <code>CLIP_STATUSES</code>. Strictly additive, never
+          raises. The file itself states the exit condition: <em>"when something here stops being expressible
+          as ADD COLUMN IF NOT EXISTS, that is the signal to adopt Alembic."</em>
+        </p>
+      </div>
+    </section>
+
+    <!-- 8 ───────────────────────────────────────────────────────────────── -->
+    <section id="endpoints">
+      <div class="sec-head">
+        <div class="sec-num">08 <span>API surface</span></div>
+        <h2>Every endpoint</h2>
+        <p>Interactive docs live at <code>/docs</code> on any running instance.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Router</th><th>Endpoints</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>ops</td>
+              <td><code>GET /health</code> dependency-free liveness · <code>GET /health/ready</code> DB + <strong>queue depth</strong> — the number to alert on, because rising <code>queued</code> with flat <code>running</code> means no worker is alive while the API looks perfectly healthy</td>
+            </tr>
+            <tr>
+              <td>/auth</td>
+              <td><code>POST /supabase</code> token exchange · <code>POST /request-link</code>, <code>POST /verify</code> <span class="pill p-warn">DEV_MODE only</span></td>
+            </tr>
+            <tr>
+              <td>/me</td>
+              <td><code>GET /me</code> · <code>GET /me/usage</code> plan+allowance+gating flags · <code>PATCH /me/preferences</code></td>
+            </tr>
+            <tr>
+              <td>/clips</td>
+              <td>
+                <code>GET /</code> · <code>POST /</code> create+enqueue · <code>GET /{id}</code> poll ·
+                <code>DELETE /{id}</code> (deletes the bytes too) ·<br>
+                <code>POST /enhance</code> sharpen + ask gaps · <code>POST /enhance-take</code> two variations ·
+                <code>GET /trending</code> ·<br>
+                <code>PATCH /{id}/script</code> · <code>POST /{id}/script/approve</code> · <code>POST /{id}/script/regenerate</code> ·<br>
+                <code>POST /{id}/retry</code> free · <code>GET /{id}/download</code> <span class="pill p-vio">Creator</span> ·
+                <code>GET /{id}/captions</code> ·<br>
+                <code>POST /{id}/publish</code> · <code>GET /{id}/publishes/{pid}</code>
+              </td>
+            </tr>
+            <tr>
+              <td>/socials</td>
+              <td><code>GET /instagram/oauth-url</code> · <code>GET /instagram/callback</code> · <code>GET /</code> (refreshes tokens on read) · <code>POST /connect</code> mock · <code>DELETE /{platform}</code></td>
+            </tr>
+            <tr>
+              <td>/billing</td>
+              <td><code>POST /checkout</code> · <code>POST /portal</code> · <code>POST /webhook</code> · <code>POST /upgrade</code> <span class="pill p-warn">mock only</span> · <code>POST /cancel</code></td>
+            </tr>
+            <tr>
+              <td>/events</td>
+              <td><code>POST /events</code> — client analytics, name must be in a 6-entry allow-list, returns 202</td>
+            </tr>
+            <tr>
+              <td>/admin (catalog)</td>
+              <td><code>GET|POST /catalog</code> · <code>PATCH /catalog/{id}</code> · <code>GET /catalog/{id}/stills</code> · <code>POST /catalog/{id}/references</code> generate ~$0.10 · <code>PUT …/references</code> approve · <code>POST /catalog/{id}/research</code> · image serving</td>
+            </tr>
+            <tr>
+              <td>/admin (console)</td>
+              <td>24 endpoints: <code>/overview</code> <code>/users</code> <code>/users/{id}</code> block/delete <code>/retention</code> <code>/videos</code> retry/delete <code>/jobs</code> retry/cancel <code>/settings/spend</code> <code>/costs</code> <code>/revenue</code> <code>/publishing</code> <code>/audit</code> <code>/admins</code> <code>/credits</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:26px 0 12px">Error codes the frontend keys off</h3>
+      <div class="grid g2">
+        <div class="card"><code>402 limit_reached</code><p style="font-size:.87rem;color:var(--muted);margin-top:6px">Monthly allowance exhausted → upgrade modal.</p></div>
+        <div class="card"><code>403 upgrade_required</code><p style="font-size:.87rem;color:var(--muted);margin-top:6px">Download, &gt;15s, or 1080p on Free.</p></div>
+        <div class="card"><code>503 stripe_not_configured</code><p style="font-size:.87rem;color:var(--muted);margin-top:6px">Client silently falls back to the mock upgrade.</p></div>
+        <div class="card"><code>503 oauth_not_configured</code><p style="font-size:.87rem;color:var(--muted);margin-top:6px">Client falls back to the mock Instagram connector.</p></div>
+      </div>
+    </section>
+
+    <!-- 9 ───────────────────────────────────────────────────────────────── -->
+    <section id="pipeline">
+      <div class="sec-head">
+        <div class="sec-num">09 <span>The pipeline</span></div>
+        <h2>Take → MP4, stage by stage</h2>
+        <p>This is <span class="path">app/video/</span> — twenty modules and the most interesting code in the repo. Entry points: <code>generate_video()</code> (pure, no DB) and <code>run_clip_job(clip_id)</code> (drives a Clip row).</p>
+      </div>
+
+      <div class="note">
+        <span class="t">The one rule</span>
+        <p style="font-size:.94rem">
+          <strong>A job always produces a video.</strong> Missing take, unknown sport, no API keys, a model
+          returning garbage, a scene that won't render — each <em>degrades</em> rather than failing the job.
+          Only two things are fatal: no <code>ffmpeg</code>, or not a single usable scene.
+          <code>generate_video</code> never raises; it returns a <code>Result</code> with warnings attached.
+        </p>
+      </div>
+
+      <figure class="card" style="margin-top:22px; padding:26px 20px; color: var(--ink-2)">
+        <svg viewBox="0 0 880 296" style="max-width:100%; height:auto" role="img"
+             aria-label="Per scene, the review gate sits on the five-cent still and retries there up to three times, so the dollar-plus animation call is only ever made on a frame that already passed.">
+          <defs>
+            <marker id="kf-n" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--ink-2)"/>
+            </marker>
+            <marker id="kf-c" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--crit)"/>
+            </marker>
+            <marker id="kf-a" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <rect x="16"  y="110" width="106" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="30" y="133" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">prompt</text>
+          <text x="30" y="149" font-family="var(--mono)" font-size="9" fill="var(--muted)">scene + refs</text>
+
+          <rect x="162" y="110" width="152" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="176" y="133" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">keyframe</text>
+          <text x="176" y="149" font-family="var(--mono)" font-size="9" fill="var(--muted)">OpenRouter image</text>
+          <text x="238" y="180" text-anchor="middle" font-family="var(--display)" font-size="15" font-weight="700" fill="var(--ink)">$0.05</text>
+
+          <rect x="354" y="110" width="140" height="52" rx="7" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="368" y="133" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">review gate</text>
+          <text x="368" y="149" font-family="var(--mono)" font-size="9" fill="var(--muted)">vision · hard/soft</text>
+          <text x="424" y="180" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--accent)">~$0.01</text>
+
+          <rect x="534" y="110" width="152" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="548" y="133" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">animate</text>
+          <text x="548" y="149" font-family="var(--mono)" font-size="9" fill="var(--muted)">first-frame · audio</text>
+          <text x="610" y="180" text-anchor="middle" font-family="var(--display)" font-size="15" font-weight="700" fill="var(--ink)">$1.12</text>
+          <text x="610" y="194" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">per 8s · ≈22× the still</text>
+
+          <rect x="722" y="110" width="132" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="736" y="133" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">scene clip</text>
+          <text x="736" y="149" font-family="var(--mono)" font-size="9" fill="var(--muted)">into the cut</text>
+
+          <rect x="534" y="228" width="152" height="46" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2" stroke-dasharray="5 4"/>
+          <text x="548" y="249" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">Ken Burns</text>
+          <text x="548" y="264" font-family="var(--mono)" font-size="9" fill="var(--muted)">ffmpeg push-in · $0</text>
+
+          <!-- happy path -->
+          <line x1="122" y1="136" x2="156" y2="136" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#kf-n)"/>
+          <line x1="314" y1="136" x2="348" y2="136" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#kf-n)"/>
+          <line x1="494" y1="136" x2="528" y2="136" stroke="var(--accent)" stroke-width="1.7" marker-end="url(#kf-a)"/>
+          <text x="511" y="128" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--accent)">pass</text>
+          <line x1="686" y1="136" x2="716" y2="136" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#kf-n)"/>
+
+          <!-- retry loop, back onto the cheap artifact -->
+          <path d="M410,110 L410,64 L244,64 L244,104" fill="none" stroke="var(--crit)" stroke-width="1.5" marker-end="url(#kf-c)"/>
+          <text x="327" y="56" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--crit)">hard fail → escalate the prompt → up to 3 attempts</text>
+
+          <!-- animation fallback -->
+          <line x1="610" y1="162" x2="610" y2="224" stroke="var(--ink-2)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#kf-n)"/>
+          <text x="620" y="200" font-family="var(--mono)" font-size="9" fill="var(--muted)">fails, or budget spent</text>
+          <path d="M686,251 L780,251 L780,168" fill="none" stroke="var(--ink-2)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#kf-n)"/>
+        </svg>
+        <figcaption>
+          Every retry lands on the $0.05 artifact, never the $1.12 one — the whole reason the gate reviews
+          a still rather than a clip. Three rejections ship a placeholder still instead, which then follows
+          the same animate path.
+        </figcaption>
+      </figure>
+
+      <h3 style="margin:30px 0 14px">Stage by stage</h3>
+      <div class="prose" style="max-width:none">
+
+        <div class="card">
+          <h4><span class="pill p-acc">0</span> &nbsp;Enhance — <span class="path">enhancer.py</span></h4>
+          <p style="font-size:.93rem;margin-top:9px">
+            Quality is decided <em>before</em> money is spent. One LLM call sharpens the take while keeping
+            the user's stance ("lakers bad" → "Every time the Lakers throw up a brick you can hear Shaq
+            groaning"), extracts subjects and teams, and flags genuine ambiguity. Then it returns
+            <code>Question</code> objects only for gaps that <em>measurably</em> change output: a take too
+            thin to build beats from, an unknown cast name, two teams with no clear lead, unstated
+            tone/length/look. Every question carries a default, so silence is always a valid answer and
+            nothing ever blocks.
+          </p>
+          <p style="font-size:.93rem;margin-top:9px">
+            <strong>Style is a fixed preset, never model-authored.</strong> Three photographic looks —
+            <code>broadcast</code>, <code>cinematic</code>, <code>gritty</code>. A free-form style line per
+            job is not repeatable; allowing one is how a video once came out half photoreal, half cartoon.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-acc">1–2</span> &nbsp;Resolve &amp; focus — <span class="path">defaults.py</span> <span class="path">focus.py</span></h4>
+          <p style="font-size:.93rem;margin-top:9px">
+            <code>defaults.resolve()</code> fills every missing input — infers the sport, snaps duration,
+            replaces a too-short take. Nothing downstream ever sees a null. <code>focus.py</code> then
+            classifies the take as <strong>player / team / matchup / generic</strong> from catalog mentions,
+            and that classification drives the colour palette, the venue list, and the casting order.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-acc">3</span> &nbsp;Plan — <span class="path">planner.py</span></h4>
+          <p style="font-size:.93rem;margin-top:9px">Three layers, tried in order, so a plan always comes back:</p>
+          <ol style="font-size:.92rem;margin:10px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:6px">
+            <li>Ask the model for structured JSON (<code>gpt-4.1</code>, JSON mode, 16k token ceiling).</li>
+            <li><strong>Repair</strong> whatever came back — fill missing fields, force the scene count, scale shot lengths to hit the target duration, enforce one-speaker-per-scene, trim over-long lines, force one shared venue across every shot.</li>
+            <li>If the model is unreachable or unparseable, build a deterministic template plan instead.</li>
+          </ol>
+          <p style="font-size:.93rem;margin-top:10px">
+            Layer 2 is the important one: <em>"models return nearly-right JSON far more often than they
+            return nothing, and rejecting a nearly-right plan wastes a call and fails a job for no reason."</em>
+            The plan then gets team identity stamped onto it — cast members belonging to a focused team are
+            re-dressed in that team's kit, overriding whatever the model said.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-acc">4–5</span> &nbsp;Shot writer &amp; casting — <span class="path">shotwriter.py</span> <span class="path">catalog.py</span> <span class="path">research.py</span></h4>
+          <p style="font-size:.93rem;margin-top:9px">
+            The shot writer turns each scene's fields into cinematography prose — one call per job, a
+            fraction of a cent, and it reads better to a video model than labelled fields. Guardrails are
+            appended deterministically afterwards, <em>"because a model that can delete a guardrail
+            eventually does."</em>
+          </p>
+          <p style="font-size:.93rem;margin-top:9px">
+            Casting resolves each cast member against the catalog. If someone is off-catalog <em>and</em>
+            their name reads like a real person, one web-search call fetches their real look, club, squad
+            number and kit before any image money is spent — then the character is persisted, and (with
+            <code>CATALOG_AUTOGEN_REFS=on</code>) two reference stills are generated on the spot so they
+            render consistently in this job and every future one.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-acc">6</span> &nbsp;Keyframes — the cheap gate</h4>
+          <p style="font-size:.93rem;margin-top:9px">
+            <strong>The economic argument:</strong> a still costs ~$0.05, a clip costs 20×+ more. So every
+            quality decision happens on the still. Up to 3 attempts per scene; each rejected attempt
+            escalates the prompt with a correction targeting what actually failed.
+          </p>
+          <p style="font-size:.93rem;margin-top:9px">
+            <strong>Scene 0 renders first, alone</strong> — its keyframe becomes the "world anchor"
+            reference attached to every later scene, on top of identity stills for each visible cast
+            member. Before that, reviewed clips drifted between scenes (a kit changing clubs, a crowd
+            changing colours) because scenes shared only prompt text. The rest render concurrently, capped
+            at <code>max(2, min(4, cpus×2))</code>.
+          </p>
+          <p style="font-size:.93rem;margin-top:9px">
+            <strong>The review gate</strong> (<span class="path">review.py</span>, cheap vision model) splits
+            verdicts into <em>hard</em> and <em>soft</em>. An early binary version failed <em>every</em>
+            frame, because near-perfect hands are rare and it treated odd fingers the same as a brand logo.
+          </p>
+          <div class="tw" style="margin-top:12px">
+            <table>
+              <thead><tr><th>Verdict</th><th>Triggers</th><th>Effect</th></tr></thead>
+              <tbody>
+                <tr><td><span class="pill p-crit">hard</span></td><td>garbled lettering · collage/split-screen · not photoreal · severe anatomy</td><td>Regenerate with an escalated prompt</td></tr>
+                <tr><td><span class="pill p-warn">soft</span></td><td>odd hands · minor anatomy · busy lower quarter · reviewer doubts the subject</td><td>Note it and move on</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="font-size:.93rem;margin-top:12px">
+            Note what is <em>no longer</em> a failure: <strong>visible text and real logos</strong>. A measured
+            A/B found the model renders "SPURS 1" cleanly when asked for the real kit, and jersey-shaped
+            gibberish when told a jersey must carry no lettering. Banning text <em>caused</em> the garbling it
+            was meant to prevent. The gate now judges the <em>quality</em> of lettering, not its presence.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-vio">7</span> &nbsp;Animate — the expensive stage</h4>
+          <p style="font-size:.93rem;margin-top:9px">
+            Each approved keyframe is submitted to OpenRouter's async video endpoint as the first frame,
+            with the motion prompt and the scene's duration. Audio is generated natively in the same pass —
+            there is no separate TTS step. Poll every 8s, up to 900s. Scenes animate concurrently.
+          </p>
+          <p style="font-size:.93rem;margin-top:9px">
+            If it fails or the budget is exhausted: <strong>Ken Burns push-in on the still</strong>. If that
+            fails too, the scene is dropped and the job continues with what's left.
+          </p>
+        </div>
+
+        <div class="card">
+          <h4><span class="pill p-acc">8–9</span> &nbsp;Assemble &amp; validate — <span class="path">media.py</span></h4>
+          <ul class="clean" style="font-size:.92rem;margin-top:10px">
+            <li>Give every clip an audio track (silent if needed), then ask whether they already agree. They usually do — same generator, same job — so the video streams are <strong>stream-copied</strong> instead of re-encoded. That's the expensive half of assembly skipped.</li>
+            <li>Caption windows come from each delivered clip's <em>real probed duration</em>, not the planned one — generated clips routinely run long or short.</li>
+            <li><code>concat</code> → <code>brand</code> (captions + watermark + optional AI disclosure burn-in) → <code>end_card</code>. Branding and the outro are cosmetic: on failure the video ships without them rather than not at all.</li>
+            <li>Validate probes the final file: duration &gt; 0, dimensions match the tier, audio present. Then a poster frame is extracted at the midpoint.</li>
+            <li>Delivery is at the generator's native size — <strong>720×1280</strong>, not upscaled to 1080×1920. Measured on the droplet: 4.9s → 3.0s per clip, and Instagram accepts 720×1280 Reels natively.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <h3 style="margin:28px 0 14px">Two-phase execution: script approval</h3>
+      <div class="prose">
+        <p>
+          With <code>SCRIPT_APPROVAL=on</code> (the default), <code>run_clip_job</code> runs in two distinct
+          phases. <strong>Phase 1</strong> fetches the Storyline Pack, writes the full script, stores it on
+          the clip row, and parks at <code>script_ready</code> — spending only text pennies. The user reads
+          every shot and every line, edits them, approves or regenerates. <strong>Phase 2</strong> renders
+          the approved plan verbatim, never re-planning.
+        </p>
+        <p>
+          The daily spend gate applies to <strong>Phase 2 only</strong> — writing a script costs pennies and
+          must never be refused by the video budget. Rejected drafts accumulate in
+          <code>script_history</code> (capped at 10) and the user's feedback is folded into the rewrite
+          prompt so the next attempt is genuinely different, not a rewording.
+        </p>
+      </div>
+    </section>
+
+    <!-- 10 ──────────────────────────────────────────────────────────────── -->
+    <section id="catalog">
+      <div class="sec-head">
+        <div class="sec-num">10 <span>Catalog</span></div>
+        <h2>How real athletes get rendered consistently</h2>
+      </div>
+
+      <div class="prose">
+        <p>The catalog is <strong>two layers</strong>, merged at read time:</p>
+        <ul class="clean">
+          <li><strong>Curated JSON</strong> in <span class="path">app/video/catalog/</span> — ships with the code. <code>characters.json</code> (look, wardrobe, voice, aliases, teams, reference images) and <code>teams.json</code> (colour palettes, jersey description, venues, associated players).</li>
+          <li><strong>DB rows</strong> in <code>catalog_characters</code> — written at runtime by auto-research and by the admin catalog page. These <em>override</em> the JSON entry with the same id, so an admin can edit or retire a curated character without a deploy.</li>
+        </ul>
+        <p>At runtime:</p>
+        <ol style="padding-left:22px;display:flex;flex-direction:column;gap:7px">
+          <li>Focus detection scans the take for names and aliases (with surname matching and near-misspelling tolerance).</li>
+          <li>The planner receives the roster with focused players first — it reliably leans on whoever is listed first — plus the focused team's palette and venues.</li>
+          <li>Cast on a focused team get re-dressed in that team's <code>jersey_description</code>.</li>
+          <li><code>select_references</code> picks up to two stills per person — a face reference for close-ups, full-body otherwise — attached as identity anchors to the image call.</li>
+        </ol>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">The identity insight</span>
+        <p style="font-size:.91rem">
+          Reference stills are <strong>AI-generated by the same image model</strong> that renders keyframes —
+          never real photos. That's legal simplicity, wardrobe control, and visual consistency in one
+          decision. And no stills is fine: a famous name renders accurately from text alone. The stills
+          exist to pin the <em>less</em> famous and to keep a person identical across shots.
+        </p>
+      </div>
+    </section>
+
+    <!-- 11 ──────────────────────────────────────────────────────────────── -->
+    <section id="prompts">
+      <div class="sec-head">
+        <div class="sec-num">11 <span>Prompting</span></div>
+        <h2>Four rules learned from real renders</h2>
+        <p>Every one of these was a shipped defect first. All four are guarded by tests, and every prompt in the system is catalogued in <span class="path">prompt_registry.py</span> (run <code>python -m app.video.prompt_registry</code>).</p>
+      </div>
+
+      <div class="grid g2">
+        <div class="card">
+          <h4>1 · Name the person, and demand legible lettering</h4>
+          <p style="font-size:.9rem;margin-top:9px;color:var(--ink-2)">
+            Removing the name to suppress on-screen text also removes the <em>likeness</em> — an early render
+            replaced a recognisable player with a generic stand-in that way. And telling a model a jersey
+            must carry no lettering doesn't remove lettering, it degrades it into gibberish ("RUACIS" where
+            "SPURS" belonged). Ask for the authentic kit, by team, with name and number spelled out.
+          </p>
+        </div>
+        <div class="card">
+          <h4>2 · Job style may only <em>add</em> to the bible</h4>
+          <p style="font-size:.9rem;margin-top:9px;color:var(--ink-2)">
+            <code>style_for()</code> used to read <code>plan.style or STYLE_BIBLE</code> — so a model-authored
+            style line silently <em>replaced</em> the bible, and with it the only mention of "photoreal".
+            A scene rendered as an isometric cartoon inside an otherwise photographic video. The
+            <code>PHOTOREAL</code> clause is now separate, non-overridable, and opens <em>and</em> closes every
+            image and motion prompt.
+          </p>
+        </div>
+        <div class="card">
+          <h4>3 · No text-bearing props</h4>
+          <p style="font-size:.9rem;margin-top:9px;color:var(--ink-2)">
+            Newspapers, phones, screens, signs, whiteboards — anything a camera would show writing on forces
+            the model to render lettering nobody named, which comes back as alien script. Unnamed surfaces
+            (ad boards, scoreboards, signage) are explicitly required to stay plain or out of focus. This
+            cost two consecutive keyframe rejections in a real run.
+          </p>
+        </div>
+        <div class="card">
+          <h4>4 · Consecutive scenes never share a speaker</h4>
+          <p style="font-size:.9rem;margin-top:9px;color:var(--ink-2)">
+            The video generator gives the same character a different voice in every clip, and voice pinning
+            isn't available. Alternating speakers means no character is ever heard twice, so the drift has
+            nowhere to show. Enforced in <code>planner._repair</code>. <em>Load-bearing until voice pinning
+            exists.</em>
+          </p>
+        </div>
+      </div>
+
+      <h3 style="margin:26px 0 12px">The planner's system prompt, in brief</h3>
+      <div class="prose">
+        <p>
+          It opens by defining the role — <em>"an Instagram Sports Banter Reels specialist"</em> — then states
+          what makes Reels work: reach comes from retention and shares, both decided in the first second, so
+          the funniest visual must be <strong>on screen immediately</strong>; every later scene must
+          <em>raise</em> the premise rather than restate it; the last line is the one that gets quoted.
+          Comedy comes from a specific absurd <em>situation the camera can see</em>, never from wordplay.
+        </p>
+        <p>Then the hard rules, which are the interesting part:</p>
+        <ul class="clean">
+          <li><strong>Keep the user's stance.</strong> Sharpen and exaggerate; never reverse or soften. (This is BR-04 and business rule 3.)</li>
+          <li><strong>ONE WORLD.</strong> Every shot's venue is the same text word for word. Props that exist in one shot exist in all later shots, described identically. Light and weather never change.</li>
+          <li><strong>Varied shot lengths like a real edit</strong> — one 5–8s anchor carrying the dialogue, the rest 2.5–4s cutaways. Cutaways may be silent.</li>
+          <li><strong>At most 2.2 words per second</strong> of a shot's length, so a line is speakable inside its clip.</li>
+          <li><strong>If the take is a brief, it's requirements, not inspiration.</strong> Named people must appear as themselves; a requested ending becomes the payoff verbatim.</li>
+          <li><strong>The roster is not a limit.</strong> A named real figure who isn't on it gets cast anyway — never swapped for a lookalike ("Ronaldinho" is not "Ronaldo").</li>
+          <li><strong>Managers wear staff clothing</strong>, never a numbered player shirt. (A rendered Arteta-as-player was the bug that added this.)</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 12 ──────────────────────────────────────────────────────────────── -->
+    <section id="queue">
+      <div class="sec-head">
+        <div class="sec-num">12 <span>Queue</span></div>
+        <h2>A Postgres table is the job queue</h2>
+      </div>
+
+      <div class="prose">
+        <p>
+          Generation used to run on a daemon thread inside the API process, so a deploy or crash mid-job lost
+          the work silently: the clip stayed pinned in a generating status forever and the user's allowance
+          was gone. Now a job is a row.
+        </p>
+      </div>
+
+      <div class="grid g3" style="margin-top:18px">
+        <div class="card">
+          <h4 style="color:var(--accent)">Nothing is lost</h4>
+          <p style="font-size:.88rem;margin-top:8px">Deploying the API, restarting a worker or losing the box leaves the row <code>queued</code> or reclaimable.</p>
+        </div>
+        <div class="card">
+          <h4 style="color:var(--accent)">Nothing runs twice</h4>
+          <p style="font-size:.88rem;margin-top:8px"><code>enqueue</code> refuses a second live job for a clip. A double-click or retried POST cannot bill a render twice.</p>
+        </div>
+        <div class="card">
+          <h4 style="color:var(--accent)">Nothing gets stranded</h4>
+          <p style="font-size:.88rem;margin-top:8px">A heartbeat refreshes <code>locked_at</code> every 30s. A lock older than 10 min is reclaimed.</p>
+        </div>
+      </div>
+
+<pre style="margin-top:18px">SELECT * FROM jobs
+ WHERE status = 'queued' AND run_after &lt;= now()
+ ORDER BY run_after, created_at LIMIT 1
+   <b>FOR UPDATE SKIP LOCKED</b>;   <i>← several workers poll the same table,
+                                 each takes a different row, none block</i></pre>
+
+      <div class="prose" style="margin-top:18px">
+        <h3>The worker process</h3>
+        <p>
+          <code>python -m app.worker</code>, run by systemd. The loop is deliberately dull: claim one job, run
+          it, mark it, repeat, sweeping for stale locks every 60s. On <strong>SIGTERM</strong> it stops
+          claiming and puts the in-flight job back <em>without counting an attempt</em> — the interruption
+          was our doing, not the job's fault. systemd waits up to 180s for that.
+        </p>
+        <p>
+          The unit file is worth reading for the operational scars: <code>Nice=15</code>,
+          <code>CPUWeight=20</code>, <code>MemoryMax=600M</code>. One render pins a core for minutes; on a
+          single-vCPU droplet that made the API stop answering entirely — <em>measured at load 12 with 29 MB
+          of RAM free while a clip assembled.</em> The worker must always lose to request handling. And
+          <code>Environment=PATH=</code> lists the system directories explicitly, because systemd
+          <em>replaces</em> PATH rather than extending it, and without <code>/usr/bin</code> every render
+          fails immediately on the missing-ffmpeg check.
+        </p>
+        <h3>Housekeeping cron</h3>
+        <p>
+          <code>python -m app.services.housekeeping</code>, hourly. Purges expired scratch files and — crucially —
+          fails any clip stuck in a generating status past 45 minutes, with an honest message. Without it a
+          user watches a spinner forever with no way to retry, because the clip never reaches
+          <code>failed</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- 13 ──────────────────────────────────────────────────────────────── -->
+    <section id="storage">
+      <div class="sec-head">
+        <div class="sec-num">13 <span>Storage</span></div>
+        <h2>One interface, two backends, three retention tiers</h2>
+      </div>
+
+<pre>users/{user_id}/clips/{clip_id}/final.mp4
+users/{user_id}/clips/{clip_id}/poster.jpg
+users/{user_id}/clips/{clip_id}/scene0_keyframe.jpg   …</pre>
+
+      <div class="prose" style="margin-top:16px">
+        <p>
+          <code>user_id</code> isn't needed to find anything — the database has that — but it makes two
+          otherwise painful operations trivial: deleting everything belonging to one person, and
+          attributing storage per user.
+        </p>
+      </div>
+
+      <div class="tw" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Tier</th><th>Files</th><th>Retention</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td>Deliverable</td><td><code>final.mp4</code>, <code>poster.jpg</code></td><td>life of the clip</td><td>~14 MB per 15s clip</td></tr>
+            <tr><td>Evidence</td><td>approved keyframes</td><td>30 days</td><td>Cheapest answer to "why does this scene look like that"</td></tr>
+            <tr><td>Scratch</td><td>scene clips, normalised copies, joined cut, rejected frames</td><td>7 days</td><td>~38 MB per clip — the disk fills 3.6× faster without this</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn" style="margin-top:18px">
+        <span class="t">Two hard-won details</span>
+        <p style="font-size:.91rem">
+          <strong>The final MP4 must be publicly readable.</strong> Instagram fetches it by URL at publish
+          time and cannot present credentials. UUID-based unguessable keys are the protection.
+        </p>
+        <p style="font-size:.91rem">
+          <strong>Public cache TTL is 300 seconds, deliberately.</strong> Deleting an object removes it from
+          storage immediately, but Cloudflare keeps serving a cached copy until it expires — measured: after
+          <code>delete_prefix</code> the bucket listing was empty while the public URL still returned 200
+          with <code>cf-cache-status: HIT</code>. Supabase exposes no purge API, so the TTL <em>is</em> the
+          window in which a deleted video stays fetchable. Five minutes trades a little egress for a
+          deletion that means something.
+        </p>
+      </div>
+
+      <div class="prose" style="margin-top:16px">
+        <p>
+          <strong>Upload failure has a floor.</strong> If storage is unreachable even after retries, the
+          finished MP4 is copied into <code>MEDIA_DIR</code> and served from the droplet, with a loud
+          <code>log.error</code>. A <code>ready</code> clip with no URL renders as a phantom failure in the
+          UI — observed in production, hence the fallback.
+        </p>
+        <p>
+          <strong>Deleting a clip deletes the bytes.</strong> Dropping only the row would leave the video
+          publicly fetchable at its URL forever — a deletion that does not delete.
+        </p>
+      </div>
+    </section>
+
+    <!-- 14 ──────────────────────────────────────────────────────────────── -->
+    <section id="money">
+      <div class="sec-head">
+        <div class="sec-num">14 <span>Spend control</span></div>
+        <h2>Three independent ceilings</h2>
+        <p>This system spends real money per request. There are three separate brakes, and an operator kill switch.</p>
+      </div>
+
+      <div class="grid g3">
+        <div class="card">
+          <div class="stat"><span class="k">Per job</span><span class="v">$14.00</span><span class="d"><code>MAX_JOB_COST_USD</code></span></div>
+          <p style="font-size:.86rem;margin-top:12px;color:var(--muted)">
+            A shared thread-safe <code>_Ledger</code> — <code>charge()</code> is atomic, so two concurrent
+            scene workers can't both see room for the last dollar. Past it, the pipeline degrades to stills
+            rather than exceeding. Sized for the dearest legitimate job (30s at 1080p) so it only catches
+            runaways.
+          </p>
+        </div>
+        <div class="card">
+          <div class="stat"><span class="k">Rolling 24h</span><span class="v">$25.00</span><span class="d"><code>MAX_DAILY_SPEND_USD</code></span></div>
+          <p style="font-size:.86rem;margin-top:12px;color:var(--muted)">
+            Summed from <code>clips.cost_usd</code>. Checked <em>before</em> a render starts — refusing up
+            front is much kinder than dying halfway and leaving a half-paid-for clip. If the counting query
+            itself fails, it <em>allows</em> the job: refusing everything because a count broke is worse than
+            briefly overspending.
+          </p>
+        </div>
+        <div class="card">
+          <div class="stat"><span class="k">Kill switch</span><span class="v">off</span><span class="d"><code>generation_paused</code></span></div>
+          <p style="font-size:.86rem;margin-top:12px;color:var(--muted)">
+            A runtime setting the admin console flips. Refuses every new real generation outright, before
+            the cap arithmetic. Both caps are also DB-backed runtime settings now — changing them no longer
+            requires SSH and a restart.
+          </p>
+        </div>
+      </div>
+
+      <figure class="card" style="margin-top:20px; padding:26px 20px; color: var(--ink-2)">
+        <svg viewBox="0 0 900 268" style="max-width:100%; height:auto" role="img"
+             aria-label="A job runs in two phases separated by a gate: phase one writes the script for about a cent, and only after the user approves and the daily cap is checked does phase two spend on rendering.">
+          <defs>
+            <marker id="mn-n" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--ink-2)"/>
+            </marker>
+            <marker id="mn-a" markerWidth="9" markerHeight="9" refX="7.5" refY="3" orient="auto">
+              <path d="M0,0 L7.5,3 L0,6 z" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <!-- gate 1: allowance -->
+          <line x1="140" y1="58" x2="140" y2="176" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="4 4"/>
+          <text x="140" y="48" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">allowance</text>
+          <text x="140" y="192" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">402 limit_reached</text>
+
+          <!-- gate 2: the money line -->
+          <rect x="480" y="46" width="92" height="142" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+          <text x="526" y="66" text-anchor="middle" font-family="var(--display)" font-size="11" font-weight="600" fill="var(--ink)">the money</text>
+          <text x="526" y="79" text-anchor="middle" font-family="var(--display)" font-size="11" font-weight="600" fill="var(--ink)">line</text>
+          <text x="526" y="102" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--accent)">user approves</text>
+          <text x="526" y="118" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--accent)">daily cap $25</text>
+          <text x="526" y="134" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--accent)">kill switch</text>
+          <text x="526" y="158" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--muted)">all three</text>
+          <text x="526" y="171" text-anchor="middle" font-family="var(--mono)" font-size="8.5" fill="var(--muted)">must pass</text>
+
+          <!-- nodes -->
+          <rect x="16" y="92" width="108" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="30" y="115" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">POST /clips</text>
+          <text x="30" y="131" font-family="var(--mono)" font-size="9" fill="var(--muted)">the take</text>
+
+          <rect x="160" y="92" width="150" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="174" y="115" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">phase 1 · script</text>
+          <text x="174" y="131" font-family="var(--mono)" font-size="9" fill="var(--muted)">context + planner</text>
+
+          <rect x="336" y="92" width="126" height="52" rx="7" fill="var(--surface)" stroke="var(--muted)" stroke-width="1.3" stroke-dasharray="5 4"/>
+          <text x="350" y="115" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">script_ready</text>
+          <text x="350" y="131" font-family="var(--mono)" font-size="9" fill="var(--muted)">job parked</text>
+
+          <rect x="590" y="92" width="164" height="52" rx="7" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.4"/>
+          <text x="604" y="115" font-family="var(--display)" font-size="12.5" font-weight="600" fill="var(--ink)">phase 2 · render</text>
+          <text x="604" y="131" font-family="var(--mono)" font-size="9" fill="var(--muted)">stills → animation</text>
+
+          <rect x="782" y="92" width="102" height="52" rx="7" fill="var(--surface-2)" stroke="var(--line)" stroke-width="1.2"/>
+          <text x="796" y="115" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">ready</text>
+          <text x="796" y="131" font-family="var(--mono)" font-size="9" fill="var(--muted)">MP4 stored</text>
+
+          <!-- flow -->
+          <line x1="124" y1="118" x2="154" y2="118" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#mn-n)"/>
+          <line x1="310" y1="118" x2="330" y2="118" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#mn-n)"/>
+          <line x1="462" y1="118" x2="474" y2="118" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#mn-n)"/>
+          <line x1="572" y1="118" x2="584" y2="118" stroke="var(--accent)" stroke-width="1.7" marker-end="url(#mn-a)"/>
+          <line x1="754" y1="118" x2="776" y2="118" stroke="var(--ink-2)" stroke-width="1.4" marker-end="url(#mn-n)"/>
+
+          <!-- free rewrite loop -->
+          <path d="M399,144 L399,214 L235,214 L235,150" fill="none" stroke="var(--ink-2)" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#mn-n)"/>
+          <text x="317" y="230" text-anchor="middle" font-family="var(--mono)" font-size="9" fill="var(--muted)">regenerate or edit — free, unlimited</text>
+
+          <!-- spend rails -->
+          <line x1="16" y1="256" x2="474" y2="256" stroke="var(--muted)" stroke-width="3"/>
+          <text x="245" y="250" text-anchor="middle" font-family="var(--mono)" font-size="9.5" fill="var(--muted)">spent so far: ≈ $0.01</text>
+          <line x1="578" y1="256" x2="884" y2="256" stroke="var(--violet)" stroke-width="3"/>
+          <text x="731" y="250" text-anchor="middle" font-family="var(--mono)" font-size="9.5" fill="var(--violet)">$2.40 typical · $14 job ceiling</text>
+        </svg>
+        <figcaption>
+          Everything left of the money line is reversible and costs about a cent, which is what makes
+          unlimited free rewrites affordable. The daily cap is checked here and not at
+          <code>POST /clips</code> — a script must never be refused by the video budget.
+        </figcaption>
+      </figure>
+      <div class="note crit" style="margin-top:18px">
+        <span class="t">Why the daily cap exists</span>
+        <p style="font-size:.91rem">
+          <em>"<code>MAX_JOB_COST_USD</code> stops one runaway clip. It does nothing about the case that
+          actually empties an account: an ordinary day of ordinary users. At roughly $2.40 a clip, two
+          people using their free allowance costs more than $20."</em> There was a real August incident where
+          the OpenRouter balance went negative and the first symptom was every generation failing — which is
+          why the admin dashboard now has a provider-balance card and alert strip.
+        </p>
+      </div>
+    </section>
+
+    <!-- 15 ──────────────────────────────────────────────────────────────── -->
+    <section id="billing">
+      <div class="sec-head">
+        <div class="sec-num">15 <span>Billing</span></div>
+        <h2>Stripe is the ledger; we store entitlement</h2>
+      </div>
+
+      <div class="prose">
+        <p>Four design principles are written into <span class="path">routers/billing.py</span>:</p>
+        <ul class="clean">
+          <li><strong>Stripe is the ledger.</strong> Invoices and charges are never mirrored locally — the DB stores only <code>users.plan</code> + subscription pointers, plus an audit log of processed webhook deliveries.</li>
+          <li><strong>Webhooks are triggers, not truth.</strong> Stripe delivers at-least-once and in any order, so no handler trusts the event payload for state. Every billing event triggers a fetch of the customer's <em>current</em> subscriptions and convergence to that. Replays and reordering are harmless.</li>
+          <li><strong>Idempotent transitions.</strong> Analytics events fire only on actual plan transitions. The <code>stripe_events</code> row is written <em>after</em> processing, so a mid-processing crash lets Stripe's retry reprocess safely.</li>
+          <li><strong>One live subscription per user.</strong> If a checkout race ever produces two, <code>sync_subscription_state</code> cancels all but the newest. A user can never be double-billed.</li>
+        </ul>
+        <p>
+          Flow: <code>POST /billing/checkout</code> creates a hosted Checkout session and returns a URL the
+          browser redirects to. Webhooks at <code>{API_BASE_URL}/billing/webhook</code> drive plan state.
+          <code>POST /billing/portal</code> opens Stripe's own billing portal. Cancellation sets
+          <code>cancel_at_period_end</code> — downgrades apply at period end and <strong>videos are never
+          deleted for billing reasons</strong>.
+        </p>
+        <p>
+          With <code>STRIPE_*</code> unset, <code>/checkout</code> returns 503 and the frontend transparently
+          uses <code>/billing/upgrade</code>, a dev mock that just flips the plan. That mock refuses to run
+          once Stripe <em>is</em> configured.
+        </p>
+      </div>
+    </section>
+
+    <!-- 16 ──────────────────────────────────────────────────────────────── -->
+    <section id="publish">
+      <div class="sec-head">
+        <div class="sec-num">16 <span>Publishing</span></div>
+        <h2>Instagram Reels, four API calls deep</h2>
+      </div>
+
+<pre>1. POST /{ig_user_id}/media          <i>media_type=REELS, video_url, caption</i>  → container id
+2. GET  /{container}?fields=status_code   <i>poll every 3s, up to 60×</i>
+   FINISHED ─▶ continue   ·   ERROR|EXPIRED ─▶ honest failure   ·   timeout ─▶ retry later
+3. POST /{ig_user_id}/media_publish  <i>creation_id</i>                          → media id
+4. GET  /{media_id}?fields=permalink                                       → live post URL</pre>
+
+      <div class="prose" style="margin-top:18px">
+        <h3>OAuth and tokens</h3>
+        <p>
+          Instagram <strong>Business Login</strong> with scopes
+          <code>instagram_business_basic,instagram_business_content_publish</code>. The OAuth
+          <code>state</code> is itself a signed 15-minute JWT carrying the user id and the return path — so
+          the callback can't be forged and onboarding progress isn't lost across the redirect (BR-14).
+          Authorization code → short-lived token → long-lived 60-day token → identify the account.
+        </p>
+        <p>
+          Long-lived tokens <strong>do not renew themselves</strong>. <code>maybe_refresh_token</code> rolls
+          any token inside its last 15 days, and it's called on every socials read <em>and</em> before every
+          real publish — so any account used at least once in two months never lapses. An expired,
+          unrefreshable token flips the account to <code>revoked</code> so the UI prompts a clean reconnect
+          instead of failing publishes.
+        </p>
+        <h3>Two lessons in the code</h3>
+        <ul class="clean">
+          <li><strong>The public URL bug.</strong> An earlier version rebuilt the video URL as <code>{API_BASE_URL}/media/{filename}</code>, which worked only while every clip was the demo file. Once clips moved to object storage the real key became <code>users/{uid}/clips/{cid}/final.mp4</code>, so the rebuilt URL resolved to <code>/media/final.mp4</code> — a 404. Instagram fetched nothing and reported it as "could not process the video", which sent everyone looking at the encoding.</li>
+          <li><strong>Localhost always simulates.</strong> Meta downloads the video from a public URL; with a localhost <code>API_BASE_URL</code> that's unreachable, so local dev simulates even for genuinely connected accounts.</li>
+        </ul>
+        <p>
+          Publishing is always an <strong>explicit per-clip action</strong> with an editable caption —
+          nothing ever posts automatically (BR-13). A failed publish retries free and never regenerates the
+          video. Only Instagram is connectable; other platforms are visible but return
+          <code>platform_locked</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- 17 ──────────────────────────────────────────────────────────────── -->
+    <section id="admin">
+      <div class="sec-head">
+        <div class="sec-num">17 <span>Admin</span></div>
+        <h2>The console that replaced SSH</h2>
+        <p>Its stated purpose: <em>"Replace SSH, not Stripe."</em> Everything is computed live from tables that already exist — no analytics product.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Group</th><th>Page</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Overview</td><td>Dashboard</td><td>Alert strip (low provider balance, failure spike, cap tripped, worker down), KPI grid, activation funnel, AI economics.</td></tr>
+            <tr><td>Growth</td><td>Users</td><td>Search/filter, retention cohorts, per-user drawer: clips with costs, Stripe link, block/unblock, hard delete with typed-email confirmation.</td></tr>
+            <tr><td>Content</td><td>All Videos</td><td>Quality-triage surface. Per-clip: play, full provenance (per-scene costs, review verdicts, warnings), publish history, retry/delete.</td></tr>
+            <tr><td>AI Engine</td><td>Generation Jobs</td><td>Live queue, worker heartbeat, pause-queue button, retry/cancel.</td></tr>
+            <tr><td>AI Engine</td><td>AI Costs</td><td>Spend by day/stage, cost per video, margin.</td></tr>
+            <tr><td>Monetization</td><td>Revenue · Credits</td><td>Revenue from Stripe deep links. Credits reports <code>enabled: false</code> — a deliberate landing place for future ledger work.</td></tr>
+            <tr><td>Social</td><td>Publishing</td><td>Publish attempts and success rate; retry a failed publish.</td></tr>
+            <tr><td>System</td><td>Catalog</td><td>Add/edit characters, generate candidate reference stills (~$0.10), approve a selection, run research.</td></tr>
+            <tr><td>System</td><td>Audit Log · Admins</td><td>Append-only record of every mutating action; manage the admin allow-list.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="prose" style="margin-top:16px">
+        Every mutating endpoint writes an <code>AdminAction</code> row — who, action, target, reason,
+        timestamp. The audit log is simply the read view of those rows.
+      </p>
+    </section>
+
+    <!-- 18 ──────────────────────────────────────────────────────────────── -->
+    <section id="frontend">
+      <div class="sec-head">
+        <div class="sec-num">18 <span>Frontend</span></div>
+        <h2>One context, thin client, server enforces</h2>
+      </div>
+
+      <div class="prose">
+        <p>
+          State is a single React context (<span class="path">state/AppContext.jsx</span>) holding session,
+          user, usage, clips and socials, plus every action. There is no state library. Plan gating is
+          <em>derived</em> from the server's <code>/me/usage</code> — the server enforces, the client mirrors.
+        </p>
+      </div>
+
+      <div class="tw" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Route</th><th>Page</th><th>Gate</th></tr></thead>
+          <tbody>
+            <tr><td><code>/</code></td><td>Landing — the client's design ported verbatim, pre-rendered demo video</td><td>public</td></tr>
+            <tr><td><code>/signin</code> <code>/reset-password</code></td><td>Sign in / create account tabs, magic link, Google</td><td>public</td></tr>
+            <tr><td><code>/pricing</code></td><td>Two-plan comparison. <strong>Public on purpose</strong> — behind the auth gate a crawler only ever saw a redirect to /signin.</td><td>public</td></tr>
+            <tr><td><code>/showcase</code> <code>/showcase/:slug</code></td><td>Public clip pages, one URL per clip so each carries its own <code>VideoObject</code> structured data</td><td>public</td></tr>
+            <tr><td><code>/onboarding</code></td><td>Five skippable steps: sports → teams/players → role → connect → plan</td><td>auth</td></tr>
+            <tr><td><code>/studio</code></td><td>The create page. Take input → variations → review step → live stages → script approval → result. The largest file at 872 lines.</td><td>auth</td></tr>
+            <tr><td><code>/clips</code></td><td>Clip grid with live progress, retry, publish, download</td><td>auth</td></tr>
+            <tr><td><code>/account</code></td><td>Profile, plan/usage, connected accounts, preferences</td><td>auth</td></tr>
+            <tr><td><code>/admin/*</code></td><td>Eleven admin pages under their own shell</td><td>allow-list</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="prose" style="margin-top:18px">
+        <h3>Details that matter</h3>
+        <ul class="clean">
+          <li><strong>Download affordances are stripped</strong> on Free: <code>controlsList="nodownload"</code>, no picture-in-picture, no context menu. The locked download button is the upgrade prompt.</li>
+          <li><strong>Downloads go through fetch-as-blob</strong>, because the endpoint needs the Authorization header — a plain <code>&lt;a download&gt;</code> can't carry one.</li>
+          <li><strong>SEO is client-rendered.</strong> <span class="path">lib/seo.js</span> writes per-route title/description/canonical into <code>&lt;head&gt;</code>. Google executes JS, so those count. Social scrapers do <em>not</em>, which is why <code>index.html</code> carries a complete home-page-accurate default set rather than placeholders.</li>
+          <li><strong>Vercel rewrites everything to <code>index.html</code></strong> — that's the entire <code>vercel.json</code>.</li>
+          <li><strong>Env is inlined at build time.</strong> Changing <code>VITE_API_URL</code> needs a dev-server restart or a redeploy.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 19 ──────────────────────────────────────────────────────────────── -->
+    <section id="config">
+      <div class="sec-head">
+        <div class="sec-num">19 <span>Config</span></div>
+        <h2>The environment, annotated</h2>
+        <p>All of it lands in one typed <code>Settings</code> class in <span class="path">config.py</span>.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Variable</th><th>Default</th><th>What it controls</th></tr></thead>
+          <tbody>
+            <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Core</td></tr>
+            <tr><td><code>DATABASE_URL</code></td><td>local docker :5433</td><td>Postgres DSN. Prod uses the Supabase session pooler (IPv4).</td></tr>
+            <tr><td><code>JWT_SECRET</code></td><td><code>dev-only-secret</code></td><td>Signs session JWTs. Rotating it signs everyone out.</td></tr>
+            <tr><td><code>CORS_ORIGINS</code></td><td>localhost ports</td><td>Comma-separated browser origins.</td></tr>
+            <tr><td><code>DEV_MODE</code></td><td><code>true</code></td><td>Exposes the instant magic-link. <strong>Must be false in prod.</strong></td></tr>
+            <tr><td><code>API_BASE_URL</code></td><td>localhost:8000</td><td>Used to build clip URLs — Instagram fetches from here, so prod must be the public https domain.</td></tr>
+
+            <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Pipeline</td></tr>
+            <tr><td><code>PIPELINE_MODE</code></td><td><code>real</code></td><td><code>real</code> | <code>mock</code> | <code>dummy</code> — see §20.</td></tr>
+            <tr><td><code>QUEUE_MODE</code></td><td><code>thread</code></td><td><code>thread</code> (in-process) or <code>postgres</code> (durable). <strong>Prod must be postgres.</strong></td></tr>
+            <tr><td><code>SCRIPT_APPROVAL</code></td><td><code>on</code></td><td>Pause at <code>script_ready</code> until the user approves.</td></tr>
+            <tr><td><code>MOCK_SPEED</code></td><td><code>12.0</code></td><td>How much faster than real time mock mode runs.</td></tr>
+
+            <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Models</td></tr>
+            <tr><td><code>OPENAI_API_KEY</code></td><td>empty</td><td>Without it: template plan, no review, no research. A job still produces a video.</td></tr>
+            <tr><td><code>OPENAI_PLAN_MODEL</code></td><td><code>gpt-4.1</code></td><td>Script quality starts here — keep it capable.</td></tr>
+            <tr><td><code>OPENAI_REVIEW_MODEL</code></td><td><code>gpt-4o-mini</code></td><td>Only fills a yes/no rubric on an image; cheap vision is enough.</td></tr>
+            <tr><td><code>OPENAI_RESEARCH_MODEL</code></td><td><code>gpt-4.1-mini</code></td><td>Web-search calls: storyline packs, character research, trending.</td></tr>
+            <tr><td><code>SHOT_WRITER</code></td><td><code>openai</code></td><td><code>off</code> uses the deterministic template.</td></tr>
+            <tr><td><code>WEB_RESEARCH</code> · <code>STORYLINE_CONTEXT</code></td><td><code>openai</code> · <code>on</code></td><td>Off-catalog cast research; real-world context packs.</td></tr>
+            <tr><td><code>OPENROUTER_API_KEY</code></td><td>empty</td><td>Required for real images and video.</td></tr>
+            <tr><td><code>IMAGE_PROVIDER</code> · <code>IMAGE_MODEL</code></td><td><code>stub</code> · grok-imagine-image-quality</td><td><code>openrouter</code> → real keyframes, ~$0.05 each.</td></tr>
+            <tr><td><code>VIDEO_PROVIDER</code> · <code>VIDEO_MODEL</code></td><td><code>stub</code> · grok-imagine-video-1.5</td><td><code>openrouter</code> → real animation. <code>stub</code> = Ken Burns, free.</td></tr>
+            <tr><td><code>VIDEO_RESOLUTION</code></td><td><code>720p</code></td><td>Per-clip choice overrides this.</td></tr>
+            <tr><td><code>CATALOG_AUTOGEN_REFS</code></td><td><code>on</code></td><td>Generate reference stills for newly discovered real people (~$0.10, charged to the job).</td></tr>
+            <tr><td><code>VIDEO_DISCLOSURE</code></td><td>empty</td><td>Text burned across every frame. Empty means none.</td></tr>
+
+            <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Money &amp; storage</td></tr>
+            <tr><td><code>MAX_JOB_COST_USD</code></td><td class="num">14.0</td><td>Per-job ceiling. DB runtime setting wins over this.</td></tr>
+            <tr><td><code>MAX_DAILY_SPEND_USD</code></td><td class="num">25.0</td><td>Rolling 24h ceiling. 0 disables.</td></tr>
+            <tr><td><code>STORAGE_BACKEND</code> · <code>STORAGE_BUCKET</code></td><td><code>local</code> · <code>clips</code></td><td><code>supabase</code> for prod.</td></tr>
+            <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>empty</td><td>Server-only. Uploads and deletes need it; the anon key cannot do either.</td></tr>
+            <tr><td><code>SCRATCH_RETENTION_DAYS</code></td><td class="num">7</td><td>Working-file expiry.</td></tr>
+
+            <tr><td colspan="3" style="background:var(--surface-2);font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)">Integrations</td></tr>
+            <tr><td><code>SUPABASE_URL</code> · <code>SUPABASE_ANON_KEY</code></td><td>set</td><td>Same locally and in prod; the anon key is browser-safe.</td></tr>
+            <tr><td><code>STRIPE_SECRET_KEY</code> · <code>STRIPE_PRICE_CREATOR</code> · <code>STRIPE_WEBHOOK_SECRET</code></td><td>empty</td><td>Empty → mock upgrade path.</td></tr>
+            <tr><td><code>META_APP_ID</code> · <code>META_APP_SECRET</code> · <code>IG_REDIRECT_URI</code></td><td>empty</td><td>Empty → mock connector. Real local Instagram needs an https tunnel (cloudflared).</td></tr>
+            <tr><td><code>FRONTEND_URL</code></td><td>localhost:5173</td><td>Where OAuth flows return the browser.</td></tr>
+            <tr><td><code>ADMIN_EMAILS</code></td><td>empty</td><td>Comma-separated bootstrap admin list, never removable from the console.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="prose" style="margin-top:16px">
+        Frontend needs only three: <code>VITE_API_URL</code>, <code>VITE_SUPABASE_URL</code>,
+        <code>VITE_SUPABASE_ANON_KEY</code>. Leave both Supabase vars empty and the app falls back to the
+        dev magic-link.
+      </p>
+    </section>
+
+    <!-- 20 ──────────────────────────────────────────────────────────────── -->
+    <section id="modes">
+      <div class="sec-head">
+        <div class="sec-num">20 <span>Modes</span></div>
+        <h2>Three pipeline modes and two demo markers</h2>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Mode</th><th>What runs</th><th>Cost</th><th>Use it for</th></tr></thead>
+          <tbody>
+            <tr><td><code>real</code></td><td>The actual workflow. Free and offline while providers are <code>stub</code>; spends once they're <code>openrouter</code>.</td><td class="num">$0 – $8</td><td>Production, and local pipeline work</td></tr>
+            <tr><td><code>mock</code></td><td>Walks the <em>real</em> step sequence at real pacing, emitting the same live progress lines, generating nothing.</td><td class="num">$0</td><td>Reviewing the flow and the UI without paying for every iteration</td></tr>
+            <tr><td><code>dummy</code></td><td>Walks the stages on a timer and attaches the pre-rendered demo MP4.</td><td class="num">$0</td><td>The oldest fallback; state machine only</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:26px 0 12px">Demo markers</h3>
+      <div class="grid g2">
+        <div class="card">
+          <h4><code>[mock]</code> in the take</h4>
+          <p style="font-size:.9rem;margin-top:9px">Simulates a whole run — real stages, real pacing, nothing generated — <em>whatever</em> <code>PIPELINE_MODE</code> is set to. The one intended way to demo on production without spending.</p>
+        </div>
+        <div class="card">
+          <h4><code>[fail]</code> in the take or caption</h4>
+          <p style="font-size:.9rem;margin-top:9px">Forces a failure at the scene stage (or a failed publish). Demonstrates the free-retry path on demand.</p>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:18px">
+        <span class="t">Three rules that make markers safe in production</span>
+        <ul class="clean" style="font-size:.9rem">
+          <li>The marker is <strong>stripped from the stored take</strong>, so it can never surface in the video, the captions, or a published Instagram caption.</li>
+          <li>The clip is flagged <code>is_simulated</code>.</li>
+          <li>Simulated clips <strong>do not consume the monthly allowance</strong> — charging for a clip generated from someone else's footage would be indefensible.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 21 ──────────────────────────────────────────────────────────────── -->
+    <section id="economics">
+      <div class="sec-head">
+        <div class="sec-num">21 <span>Economics</span></div>
+        <h2>What a video actually costs</h2>
+        <p>Measured, not estimated: ~$0.148/sec at 720p and ~$0.256/sec at 1080p, all-in.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Output</th><th>Scenes</th><th>Images + review</th><th>Animation</th><th>Total</th></tr></thead>
+          <tbody>
+            <tr><td>15s @ 720p</td><td class="num">2</td><td class="num">~$0.15</td><td class="num">$2.24</td><td class="num"><strong>~$2.40</strong></td></tr>
+            <tr><td>30s @ 720p</td><td class="num">4</td><td class="num">~$0.30</td><td class="num">$4.48</td><td class="num"><strong>~$4.80</strong></td></tr>
+            <tr><td>30s @ 1080p</td><td class="num">4</td><td class="num">~$0.30</td><td class="num">$7.49</td><td class="num"><strong>~$7.79</strong></td></tr>
+            <tr><td>30s, no animation<br><span style="font-weight:400;color:var(--muted);font-size:.85em">keyframes + Ken Burns</span></td><td class="num">4</td><td class="num">~$0.35</td><td class="num">$0</td><td class="num"><strong>~$0.35</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="prose" style="margin-top:18px">
+        <p>Add ~25% for keyframe retries. Latency: roughly 4.5 minutes for a 15s clip.</p>
+        <p>
+          The still-vs-clip ratio is the whole economic argument for the architecture: <strong>a still costs
+          ~$0.05, a clip costs ~$1.12 for 8 seconds — about 22×.</strong> Every quality decision therefore
+          happens on the still, and motion is only bought for frames that already passed review.
+        </p>
+        <p>
+          <code>PRICING.md</code> describes a planned <strong>credits model</strong> (4 credits/sec at 720p,
+          7 at 1080p; ~$0.10 retail per credit against ~$0.04 cost, so ~60% margin) — but note this is a
+          <em>designed</em> system, not a shipped one: the admin console explicitly reports
+          <code>credits: enabled: false</code>, and the live product still counts whole videos per month.
+        </p>
+      </div>
+    </section>
+
+    <!-- 22 ──────────────────────────────────────────────────────────────── -->
+    <section id="tests">
+      <div class="sec-head">
+        <div class="sec-num">22 <span>Tests</span></div>
+        <h2>104 tests across three files</h2>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>File</th><th>Tests</th><th>Guards</th></tr></thead>
+          <tbody>
+            <tr><td><span class="path">test_video_workflow.py</span></td><td class="num">68</td><td>Robustness: feed the pipeline broken input and assert it still yields a valid plan. Plus the four prompt rules — <code>test_prompts_name_the_subject_and_forbid_lettering</code>, <code>test_model_style_can_never_replace_the_photoreal_anchor</code>, <code>test_consecutive_scenes_never_share_a_speaker</code>.</td></tr>
+            <tr><td><span class="path">test_production.py</span></td><td class="num">28</td><td>Markers never survive into the stored take · storage keys cannot escape the media root · deleting a clip removes every file · retention tiering · the cache window is short enough for deletion to matter · the spend ceiling is low enough to matter at real prices · the ledger is atomic under concurrency · research never guesses a squad number.</td></tr>
+            <tr><td><span class="path">test_queue.py</span></td><td class="num">8</td><td>Claim/finish/release/reclaim semantics.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="prose" style="margin-top:16px">
+        Run with pytest, or standalone:
+        <code>.venv/bin/python tests/test_video_workflow.py</code>. There is also a CLI for running the
+        whole pipeline with no API and no database:
+        <code>python -m app.video.cli "Wemby still can't find Brunson" --tone Funny</code>, with
+        <code>--brief-only</code>, <code>--plan-only</code>, <code>--raw</code> and <code>-i</code> variants.
+      </p>
+    </section>
+
+    <!-- 23 ──────────────────────────────────────────────────────────────── -->
+    <section id="deploy">
+      <div class="sec-head">
+        <div class="sec-num">23 <span>Deployment</span></div>
+        <h2>Getting it running</h2>
+      </div>
+
+      <h3 style="margin-bottom:12px">Local, from zero</h3>
+<pre><i># 1. database (one-time)</i>
+docker run -d --name banterclips-postgres \
+  -e POSTGRES_USER=banter -e POSTGRES_PASSWORD=banter_dev -e POSTGRES_DB=banterclips \
+  -p 5433:5432 -v banterclips_pgdata:/var/lib/postgresql/data \
+  --restart unless-stopped postgres:16-alpine
+
+<i># 2. backend → http://localhost:8000  (docs at /docs)</i>
+cd backend
+python3 -m venv .venv &amp;&amp; .venv/bin/pip install -r requirements.txt
+cp .env.example .env          <i># local defaults work as-is</i>
+.venv/bin/uvicorn app.main:app --reload --port 8000
+
+<i># 3. frontend → http://localhost:5173</i>
+cd frontend &amp;&amp; npm install &amp;&amp; cp .env.example .env &amp;&amp; npm run dev</pre>
+
+      <div class="prose" style="margin-top:18px">
+        <p>Tables are created automatically on first startup. <code>ffmpeg</code> is needed only for real generation.</p>
+        <h3>Production</h3>
+        <ul class="clean">
+          <li><strong>Frontend:</strong> <code>git push</code> → Vercel auto-deploys <code>main</code> from the <code>frontend/</code> root.</li>
+          <li><strong>Backend:</strong> <code>git pull</code> on the droplet, reinstall deps, <code>systemctl restart banterclips-api banterclips-worker</code>. Restarting the worker is safe at any time.</li>
+          <li><strong>The <code>chown</code> that matters:</strong> <code>git pull</code> runs as root, and any directory it creates is root-owned. The worker runs as <code>banterclips</code> and writes the dynamic-character overlay into <code>backend/app/video/catalog/</code> — a root-owned catalog dir silently disables that feature.</li>
+        </ul>
+        <h3>What to watch</h3>
+        <p>
+          Not CPU. <code>/health/ready</code> reports queue depth: <strong>a rising <code>queued</code> with a
+          flat <code>running</code> means no worker is alive</strong>, and the API stays perfectly healthy
+          while every clip waits forever. Alert on <code>queued &gt; 5 for 10 minutes</code>.
+        </p>
+      </div>
+
+      <div class="grid g3" style="margin-top:20px">
+        <div class="card stat"><span class="k">Vercel hobby</span><span class="v">$0</span></div>
+        <div class="card stat"><span class="k">DO droplet</span><span class="v">$6<span style="font-size:.6em">/mo</span></span></div>
+        <div class="card stat"><span class="k">Supabase</span><span class="v">$10<span style="font-size:.6em">/mo</span></span></div>
+      </div>
+    </section>
+
+    <!-- 24 ──────────────────────────────────────────────────────────────── -->
+    <section id="gaps">
+      <div class="sec-head">
+        <div class="sec-num">24 <span>Gaps</span></div>
+        <h2>Where the docs and the code disagree</h2>
+        <p>Worth knowing before you trust a markdown file over a module.</p>
+      </div>
+
+      <div class="grid g2">
+        <div class="card">
+          <h4><span class="pill p-crit">contradiction</span> &nbsp;Jersey lettering</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            <span class="path">catalog/README.md</span> and <span class="path">VIDEO-GENERATION-PLAN.md §5.5</span>
+            still state the old rule: <em>"wardrobes never carry lettering… every jersey string ends with
+            no logos, no numbers, no lettering."</em> The code and the data now do the exact opposite —
+            <code>characters.json</code> asks for <em>"the authentic Spurs jersey with the crest and the
+            number 1, crisp legible lettering"</em>, and <span class="path">prompts.py</span> documents the
+            A/B that reversed it. <strong>The code is current.</strong>
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-warn">stale</span> &nbsp;"Video generation is dummy"</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            The root <code>README.md</code>, <span class="path">backend/README.md</span> and
+            <span class="path">main.py</span>'s FastAPI description all say generation runs in dummy mode
+            pending a provider bake-off. It doesn't — <code>PIPELINE_MODE</code> defaults to <code>real</code>,
+            and <code>ROADMAP.md</code> lists the real pipeline as shipped.
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-warn">stale</span> &nbsp;"Not built yet" list</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            <span class="path">app/video/README.md</span> lists the durable queue, object storage, DB
+            provenance and parallel scenes as unbuilt. All four now exist
+            (<code>jobs</code> table, <code>SupabaseStorage</code>, <code>clips.provenance</code>,
+            <code>ThreadPoolExecutor</code>).
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-warn">stale</span> &nbsp;Tones and models</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            <span class="path">frontend/README.md</span> says tones are "exactly Funny / Savage / Hype" —
+            <strong>Bold</strong> was added (BRD v2.1). <span class="path">VIDEO-GENERATION-PLAN.md §3</span>
+            names <code>gpt-4o-mini</code> as the planner; the default is now <code>gpt-4.1</code>.
+            <code>MAX_JOB_COST_USD</code> is documented as 8.0 in three places and is 14.0 in
+            <code>config.py</code>.
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-acc">designed, not shipped</span> &nbsp;Credits</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            <code>PRICING.md</code> v2.0 describes a full credits economy as the pricing model.
+            <code>/admin/credits</code> returns <code>enabled: false</code> and nothing else in the codebase
+            assumes credits exist. Allowance is still whole videos per month.
+          </p>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-acc">known limit</span> &nbsp;Real open items</h4>
+          <p style="font-size:.89rem;margin-top:9px">
+            From the BRD's own §9 and the roadmap: <strong>Meta App Review</strong> is not complete, so
+            arbitrary users can't yet connect Instagram. Voice pinning is unavailable, which is why the
+            alternating-speaker rule is load-bearing. Multi-model routing (the biggest cost lever) is
+            October work.
+          </p>
+        </div>
+      </div>
+
+      <div class="note" style="margin-top:22px">
+        <span class="t">Reading order, if you're new</span>
+        <p style="font-size:.92rem">
+          <code>BRD.md</code> for what it must do → <span class="path">backend/app/models.py</span> for the
+          shape of the data → <span class="path">backend/app/routers/clips.py</span> for the main user flow →
+          <span class="path">backend/app/video/runner.py</span> for how a video is actually made →
+          <span class="path">frontend/src/state/AppContext.jsx</span> for how the client sees all of it.
+          The comments in <span class="path">video/</span> are unusually dense and unusually worth reading;
+          most of them record a specific bug that shipped.
+        </p>
+      </div>
+    </section>
+
+    </main>
+  </div>
+</div>
+
+</body>
+</html>

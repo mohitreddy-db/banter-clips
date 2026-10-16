@@ -18,7 +18,7 @@ from ..schemas import (
     ClipCreate, ClipOut, EnhanceOut, EnhanceRequest, PublishCreate, PublishOut,
     TakeEnhanceRequest, TakeEnhanceResponse, TakeVariation, Tone,
 )
-from ..services import markers, plans, storage
+from ..services import content_safety, markers, plans, storage
 from ..services.generation import start_generation
 from ..services.publishing import start_publish
 
@@ -28,6 +28,15 @@ router = APIRouter(prefix="/clips", tags=["clips"])
 
 REFERENCE_LIMIT = 15 * 1024 * 1024
 REFERENCE_TYPES = {"image/jpeg": ".jpg", "video/mp4": ".mp4"}
+
+
+def _require_sports_only(*values: object) -> None:
+    """Reject intimate-contact requests before spending credits or model time."""
+    if content_safety.contains_intimate_contact(values):
+        raise HTTPException(422, detail={
+            "code": "unsupported_content",
+            "message": content_safety.PUBLIC_MESSAGE,
+        })
 
 
 def reference_matches(payload: bytes, suffix: str) -> bool:
@@ -93,6 +102,8 @@ def enhance_take(
     """
     from ..video import enhancer, providers
 
+    _require_sports_only(body.take, body.answers)
+
     # enhance() already folds in `answers` and drops the questions they
     # resolved. Calling apply_answers() on top would seed every remaining
     # question with its own default and silently answer all of them.
@@ -119,6 +130,8 @@ def enhance_take_variations(
     An empty `variations` list is a valid answer: it means keep what you
     wrote, which is never the wrong outcome.
     """
+    _require_sports_only(body.take)
+
     from ..services import credits
     from ..video import providers, sports as sports_mod, takes
 
@@ -163,6 +176,8 @@ def trending(sport: str = "NBA", refresh: bool = False, user: User = Depends(get
 @router.post("", response_model=ClipOut, status_code=201)
 def create_clip(body: ClipCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     from ..services import credits
+
+    _require_sports_only(body.take, body.direction)
 
     # A demo run costs nothing and produces nothing publishable, so it must
     # not be charged credits or gated by the balance.
@@ -337,6 +352,8 @@ def edit_script(
     """The user's own words win: edit dialogue lines and shot actions before
     approving. Lines are trimmed to what fits the shot's seconds — an edit
     must not silently break the video's timing."""
+    _require_sports_only(body.title, [edit.model_dump() for edit in body.scenes])
+
     from ..video.types import Scene
 
     clip = _own_clip(clip_id, user, db)
@@ -382,6 +399,7 @@ def approve_script(clip_id: uuid.UUID, user: User = Depends(get_current_user), d
     clip = _own_clip(clip_id, user, db)
     if clip.status != "script_ready" or not clip.script:
         raise HTTPException(409, "This clip has no script awaiting approval.")
+    _require_sports_only(clip.script)
     clip.script_approved = True
     clip.status = "queued"
     clip.stage_index = 0
@@ -400,6 +418,8 @@ def regenerate_script(
 ):
     """Reject the current script and write a different one. Free — only the
     render costs real money, and it hasn't started."""
+    _require_sports_only(body.feedback)
+
     from ..services import credits
 
     clip = _own_clip(clip_id, user, db)
@@ -470,6 +490,8 @@ def rerender_scenes(
     quoted here and charged only when the new cut lands; the untouched
     scenes are reused from disk. A failed edit leaves the original video
     exactly as it was."""
+    _require_sports_only([edit.model_dump() for edit in body.scenes])
+
     from ..services import credits
     from ..video import runner as runner_mod
     from ..video.types import Scene
@@ -531,6 +553,7 @@ def retry_clip(clip_id: uuid.UUID, user: User = Depends(get_current_user), db: S
     clip = _own_clip(clip_id, user, db)
     if clip.status not in ("failed", "paused"):
         raise HTTPException(409, "Only failed or paused jobs can be retried.")
+    _require_sports_only(clip.take, clip.script, clip.edit_pending)
     # Nothing is charged here: a resumed job reuses its checkpointed scenes
     # and the single charge happens when the video completes. The balance
     # check just keeps that completion charge from landing on an empty

@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Building BanterClips Mobile with Claude Code</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  /* ── Tokens: shared with CODEBASE-ATLAS.html and MOBILE-ROADMAP.html ──── */
+  :root {
+    --ground:      #f4f6f9;
+    --surface:     #ffffff;
+    --surface-2:   #eceff4;
+    --ink:         #0e1622;
+    --ink-2:       #35455a;
+    --muted:       #64748b;
+    --line:        #dbe1ea;
+    --line-soft:   #e7ecf2;
+
+    --accent:      #0b7f95;
+    --accent-soft: #e0f4f8;
+    --accent-ink:  #06555f;
+    --violet:      #6d28d9;
+    --violet-soft: #efe8fe;
+
+    --ok:          #17795a;
+    --warn:        #9a6206;
+    --crit:        #b1332f;
+    --ok-bg:       #e2f4ec;
+    --warn-bg:     #fbf0da;
+    --crit-bg:     #fbe6e5;
+
+    --code-bg:     #f1f4f8;
+    --shadow:      0 1px 2px rgba(14,22,34,.06), 0 8px 24px -16px rgba(14,22,34,.28);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body:    "Source Sans 3", -apple-system, "Segoe UI", sans-serif;
+    --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #070b12;
+      --surface:     #0e1622;
+      --surface-2:   #16202e;
+      --ink:         #e8eef6;
+      --ink-2:       #b9c7d8;
+      --muted:       #7f90a5;
+      --line:        #223042;
+      --line-soft:   #1a2634;
+
+      --accent:      #38d6ee;
+      --accent-soft: #0d2b33;
+      --accent-ink:  #8ce9f8;
+      --violet:      #a482ff;
+      --violet-soft: #1e1638;
+
+      --ok:          #4bcf9a;
+      --warn:        #e0ad4d;
+      --crit:        #f0736d;
+      --ok-bg:       #0d2a20;
+      --warn-bg:     #2c2210;
+      --crit-bg:     #2e1516;
+
+      --code-bg:     #101a27;
+      --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #070b12;
+    --surface:     #0e1622;
+    --surface-2:   #16202e;
+    --ink:         #e8eef6;
+    --ink-2:       #b9c7d8;
+    --muted:       #7f90a5;
+    --line:        #223042;
+    --line-soft:   #1a2634;
+
+    --accent:      #38d6ee;
+    --accent-soft: #0d2b33;
+    --accent-ink:  #8ce9f8;
+    --violet:      #a482ff;
+    --violet-soft: #1e1638;
+
+    --ok:          #4bcf9a;
+    --warn:        #e0ad4d;
+    --crit:        #f0736d;
+    --ok-bg:       #0d2a20;
+    --warn-bg:     #2c2210;
+    --crit-bg:     #2e1516;
+
+    --code-bg:     #101a27;
+    --shadow:      0 1px 2px rgba(0,0,0,.5), 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+
+  /* ── Base ─────────────────────────────────────────────────────────────── */
+  * { box-sizing: border-box; }
+  body {
+    background: var(--ground); color: var(--ink-2); font-family: var(--body);
+    font-size: 16.5px; line-height: 1.62; margin: 0; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+  h1, h2, h3, h4 { font-family: var(--display); color: var(--ink); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+  h2 { font-size: 1.72rem; font-weight: 700; line-height: 1.18; }
+  h3 { font-size: 1.12rem; font-weight: 600; letter-spacing: 0.004em; }
+  h4 { font-size: .93rem; font-weight: 600; }
+  p  { margin: 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  em { font-style: italic; }
+  code {
+    font-family: var(--mono); font-size: .855em; background: var(--code-bg);
+    border: 1px solid var(--line-soft); border-radius: 4px; padding: .08em .34em;
+    color: var(--ink); word-break: break-word;
+  }
+  kbd {
+    font-family: var(--mono); font-size: .78em; background: var(--surface-2);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: .06em .38em; color: var(--ink); white-space: nowrap;
+  }
+
+  /* ── Shell ────────────────────────────────────────────────────────────── */
+  .shell { max-width: 1220px; margin: 0 auto; padding: 0 24px 120px; }
+  .cols { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 56px; align-items: start; }
+  @media (max-width: 940px) { .cols { grid-template-columns: minmax(0,1fr); gap: 0; } .toc { display: none; } }
+
+  /* ── Masthead ─────────────────────────────────────────────────────────── */
+  .mast { padding: 64px 0 40px; border-bottom: 1px solid var(--line); margin-bottom: 44px; }
+  .mast .kicker {
+    font-family: var(--mono); font-size: .705rem; letter-spacing: .17em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  }
+  .mast .kicker::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, var(--line), transparent); }
+  .mast h1 {
+    font-size: clamp(2.3rem, 5.4vw, 3.5rem); font-weight: 700; line-height: 1.02;
+    letter-spacing: -0.032em; margin-bottom: 20px;
+  }
+  .mast .lede { font-size: 1.11rem; max-width: 66ch; color: var(--ink-2); }
+  .mast .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .fact {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .04em;
+    padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--muted);
+  }
+  .fact b { color: var(--ink); font-weight: 600; }
+
+  /* ── TOC ──────────────────────────────────────────────────────────────── */
+  .toc { position: sticky; top: 28px; padding-top: 6px; }
+  .toc .lbl {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 14px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; counter-reset: t; }
+  .toc a {
+    display: flex; gap: 9px; font-size: .795rem; line-height: 1.35; color: var(--muted);
+    text-decoration: none; padding: 4px 8px 4px 6px; border-radius: 5px; border-left: 2px solid transparent;
+  }
+  .toc a::before {
+    counter-increment: t; content: counter(t, decimal-leading-zero);
+    font-family: var(--mono); font-size: .66rem; color: var(--line); padding-top: 1px;
+  }
+  .toc a:hover { color: var(--ink); background: var(--surface); border-left-color: var(--accent); }
+  .toc a:hover::before { color: var(--accent); }
+  .toc .grp {
+    font-family: var(--mono); font-size: .6rem; letter-spacing: .15em; text-transform: uppercase;
+    color: var(--line); margin: 14px 0 5px 6px;
+  }
+
+  /* ── Sections ─────────────────────────────────────────────────────────── */
+  section { scroll-margin-top: 24px; padding-bottom: 54px; }
+  .sec-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .sec-num {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); display: flex; align-items: baseline; gap: 12px;
+  }
+  .sec-num span { color: var(--muted); letter-spacing: .11em; }
+  .sec-head p { color: var(--muted); font-size: .96rem; max-width: 70ch; }
+  .prose { display: flex; flex-direction: column; gap: 17px; max-width: 74ch; }
+  .prose > h3 { margin-top: 16px; }
+  .prose > h4 { margin-top: 10px; color: var(--muted); font-family: var(--mono);
+                font-size: .69rem; letter-spacing: .14em; text-transform: uppercase; }
+
+  /* ── Cards, tables, callouts ──────────────────────────────────────────── */
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(198px, 1fr)); }
+  .card h4 { margin-bottom: 10px; }
+  .card h4 .pill { margin-right: 8px; vertical-align: 2px; }
+
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .875rem; min-width: 520px; }
+  thead th {
+    text-align: left; font-family: var(--mono); font-weight: 600; font-size: .655rem;
+    letter-spacing: .13em; text-transform: uppercase; color: var(--muted);
+    padding: 11px 15px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody td { padding: 11px 15px; border-bottom: 1px solid var(--line-soft); vertical-align: top; color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; font-size: .93rem; color: var(--ink-2);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .note.crit { border-left-color: var(--crit); background: var(--crit-bg); }
+  .note .t { font-family: var(--display); font-weight: 600; color: var(--ink); font-size: .8rem; letter-spacing: .05em; text-transform: uppercase; }
+  .note ul.clean li::marker { color: currentColor; }
+
+  pre {
+    font-family: var(--mono); font-size: .78rem; line-height: 1.62; background: var(--code-bg);
+    border: 1px solid var(--line); border-radius: 9px; padding: 16px 18px; overflow-x: auto;
+    color: var(--ink-2); margin: 0;
+  }
+  pre b { color: var(--accent); font-weight: 600; }
+  pre i { color: var(--muted); font-style: normal; }
+
+  /* ── Prompt block — the signature element: what you literally type ────── */
+  .prompt {
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--violet); border-radius: 0 9px 9px 0;
+    padding: 13px 18px 15px; box-shadow: var(--shadow);
+  }
+  .prompt .lbl {
+    font-family: var(--mono); font-size: .625rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--violet); margin-bottom: 9px; display: flex; align-items: center; gap: 7px;
+  }
+  .prompt .lbl::before { content: "▸"; font-size: .8em; }
+  .prompt p, .prompt div.q {
+    font-family: var(--mono); font-size: .775rem; line-height: 1.66; color: var(--ink);
+    white-space: pre-wrap;
+  }
+  .prompt p + p { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line); }
+  .prompt code { background: none; border: none; padding: 0; color: var(--accent); font-size: 1em; }
+
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: .655rem; letter-spacing: .06em;
+    padding: 2px 7px; border-radius: 4px; font-weight: 600; white-space: nowrap;
+  }
+  .p-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .p-warn { background: var(--warn-bg); color: var(--warn); }
+  .p-crit { background: var(--crit-bg); color: var(--crit); }
+  .p-acc  { background: var(--accent-soft); color: var(--accent-ink); }
+  .p-vio  { background: var(--violet-soft); color: var(--violet); }
+
+  ul.clean, ol.clean { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+  ul.clean li::marker { color: var(--accent); }
+  ol.clean li::marker { color: var(--muted); font-family: var(--mono); font-size: .85em; }
+  ul.tight, ol.tight { gap: 5px; }
+  ul.clean.vio li::marker { color: var(--violet); }
+
+  figure { margin: 0; }
+  figure svg { display: block; width: 100%; height: auto; }
+  figcaption { font-size: .79rem; color: var(--muted); margin-top: 10px; font-family: var(--mono); letter-spacing: .02em; }
+
+  .path { font-family: var(--mono); font-size: .78rem; color: var(--accent); }
+  hr.rule { border: none; border-top: 1px solid var(--line); margin: 0; }
+
+  .phase-bar {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 14px;
+    padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 20px;
+  }
+  .phase-bar h2 { font-size: 1.5rem; }
+  .phase-bar .when {
+    font-family: var(--mono); font-size: .69rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-left: auto; white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="shell">
+
+  <header class="mast">
+    <div class="kicker">Working method · companion to MOBILE-ROADMAP.html</div>
+    <h1>Building the app with Claude&nbsp;Code</h1>
+    <p class="lede">
+      The roadmap says <em>what</em> to build. This says <em>how to actually get it built</em> when
+      Claude Code is writing most of the Dart. The short version: Claude Code writes, and
+      <strong>you are the eyes</strong> — it cannot see the running app, and a UI project lives or dies
+      on that one limitation. Everything below is built around it.
+    </p>
+    <div class="facts">
+      <span class="fact"><b>16 weeks</b> · same plan</span>
+      <span class="fact">Figma MCP · <b>connected</b></span>
+      <span class="fact">One task · <b>one session</b></span>
+      <span class="fact"><b>Two gates</b> before "done"</span>
+      <span class="fact">You still learn · <b>ask, don't just accept</b></span>
+    </div>
+  </header>
+
+  <div class="cols">
+
+    <nav class="toc">
+      <div class="lbl">Contents</div>
+      <div class="grp">The method</div>
+      <ol>
+        <li><a href="#split">Who does what</a></li>
+        <li><a href="#loop">The build loop</a></li>
+        <li><a href="#setup">Session zero</a></li>
+        <li><a href="#hygiene">Session hygiene</a></li>
+      </ol>
+      <div class="grp">Phase by phase</div>
+      <ol start="5" style="counter-reset: t 4;">
+        <li><a href="#p1">Machine &amp; repo</a></li>
+        <li><a href="#p2">Learning Dart</a></li>
+        <li><a href="#p3">Figma → theme</a></li>
+        <li><a href="#p4">API &amp; auth</a></li>
+        <li><a href="#p5">The screens</a></li>
+        <li><a href="#p6">Native config</a></li>
+        <li><a href="#p7">Test &amp; store prep</a></li>
+        <li><a href="#p8">Release</a></li>
+      </ol>
+      <div class="grp">Staying safe</div>
+      <ol start="13" style="counter-reset: t 12;">
+        <li><a href="#limits">Where it lets you down</a></li>
+        <li><a href="#guardrails">Guardrails</a></li>
+        <li><a href="#learning">Still learning, not just shipping</a></li>
+        <li><a href="#week1">Your first session</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+    <!-- ═══ 01 ═══════════════════════════════════════════════════════════ -->
+    <section id="split">
+      <div class="sec-head">
+        <div class="sec-num">01 <span>· The method</span></div>
+        <h2>Who does what</h2>
+        <p>Be honest about the split from day one. Most people waste weeks either doing work Claude Code could do in a minute, or waiting for it to do something it fundamentally cannot.</p>
+      </div>
+
+      <div class="grid g2" style="margin-bottom:20px">
+        <div class="card">
+          <h4><span class="pill p-acc">CLAUDE</span> Does this genuinely well</h4>
+          <ul class="clean tight" style="font-size:.9rem">
+            <li><strong>Porting from a spec.</strong> Turning <code>api.js</code> into a Dart <code>ApiClient</code> is close to ideal work for it — the contract is fully written down.</li>
+            <li><strong>Typed models from JSON.</strong> Reading your OpenAPI schema and emitting <code>freezed</code> classes.</li>
+            <li><strong>Reading your React code</strong> and telling you what a screen actually does, in order.</li>
+            <li><strong>Boilerplate-heavy native config</strong> — manifests, plists, Gradle — where the syntax is exacting and well documented.</li>
+            <li><strong>Running and fixing <code>flutter analyze</code> / <code>flutter test</code></strong> in a loop until clean.</li>
+            <li><strong>Explaining errors.</strong> Paste a RenderFlex overflow and ask why, not just for the fix.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4><span class="pill p-vio">YOU</span> Only you can do this</h4>
+          <ul class="clean tight vio" style="font-size:.9rem">
+            <li><strong>Look at the screen.</strong> Claude can launch the app; it cannot see it. This is the big one.</li>
+            <li><strong>Tap through it.</strong> Touch targets, scroll feel, keyboard behaviour, whether it feels fast.</li>
+            <li><strong>Compare against Figma.</strong> Only you can say "that padding is wrong".</li>
+            <li><strong>Log into portals</strong> — Play Console, App Store Connect, Meta for Developers, Firebase, Supabase dashboard.</li>
+            <li><strong>Plug in a phone</strong>, accept licences, click through Xcode signing.</li>
+            <li><strong>Decide.</strong> The billing model, the scope cuts, the price. Claude will give you options; the call is yours.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="prose">
+        <div class="note crit">
+          <p class="t">The failure mode to avoid</p>
+          <p>
+            Asking for three screens in one go, accepting the output because it compiles, and moving on.
+            Six sessions later nothing renders correctly and you cannot tell which of six hundred edits
+            broke it. <strong>Compiling is not working.</strong> A screen is done when you have looked at
+            it running on a device — not before.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 02 ═══════════════════════════════════════════════════════════ -->
+    <section id="loop">
+      <div class="sec-head">
+        <div class="sec-num">02 <span>· The method</span></div>
+        <h2>The build loop</h2>
+        <p>Every piece of work runs through the same four steps. Two are Claude's, two are yours, and they alternate — that alternation is the whole discipline.</p>
+      </div>
+
+      <div class="card">
+        <figure>
+          <svg viewBox="0 0 900 250" role="img" aria-label="A four-step loop: you scope the task, Claude writes the code, Claude runs the machine gate of flutter analyze and tests, then you run the human gate by launching the app and looking at it, which loops back to scoping the next task.">
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"/>
+              </marker>
+            </defs>
+
+            <!-- boxes -->
+            <g>
+              <rect x="16"  y="34" width="190" height="96" rx="10" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.2"/>
+              <rect x="248" y="34" width="190" height="96" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+              <rect x="480" y="34" width="190" height="96" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.2"/>
+              <rect x="712" y="34" width="172" height="96" rx="10" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.2"/>
+            </g>
+
+            <!-- numbers -->
+            <g font-family="JetBrains Mono, monospace" font-size="10" font-weight="600" letter-spacing="1.5">
+              <text x="34" y="56" fill="var(--violet)">01 · YOU</text>
+              <text x="266" y="56" fill="var(--accent-ink)">02 · CLAUDE</text>
+              <text x="498" y="56" fill="var(--accent-ink)">03 · CLAUDE</text>
+              <text x="730" y="56" fill="var(--violet)">04 · YOU</text>
+            </g>
+
+            <!-- titles -->
+            <g font-family="Archivo, sans-serif" font-size="15" font-weight="600" fill="var(--ink)">
+              <text x="34" y="82">Scope one task</text>
+              <text x="266" y="82">Write the code</text>
+              <text x="498" y="82">Machine gate</text>
+              <text x="730" y="82">Human gate</text>
+            </g>
+
+            <!-- subtitles -->
+            <g font-family="Source Sans 3, sans-serif" font-size="11.5" fill="var(--ink-2)">
+              <text x="34" y="102">One screen. Name the</text>
+              <text x="34" y="118">behaviour + design refs.</text>
+              <text x="266" y="102">Plan mode first if it</text>
+              <text x="266" y="118">touches architecture.</text>
+              <text x="498" y="102">flutter analyze, tests,</text>
+              <text x="498" y="118">format — until clean.</text>
+              <text x="730" y="102">flutter run. Look at it.</text>
+              <text x="730" y="118">Screenshot back if wrong.</text>
+            </g>
+
+            <!-- arrows between -->
+            <g stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#ah)">
+              <line x1="210" y1="82" x2="242" y2="82"/>
+              <line x1="442" y1="82" x2="474" y2="82"/>
+              <line x1="674" y1="82" x2="706" y2="82"/>
+            </g>
+
+            <!-- return path -->
+            <path d="M 798 134 L 798 186 L 111 186 L 111 136" stroke="var(--muted)" stroke-width="1.4"
+                  fill="none" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+            <text x="454" y="180" font-family="JetBrains Mono, monospace" font-size="10"
+                  fill="var(--muted)" text-anchor="middle">next task — or back to step 02 with what you saw</text>
+
+            <!-- footnote -->
+            <text x="16" y="222" font-family="Source Sans 3, sans-serif" font-size="11.5" fill="var(--muted)">
+              Step 03 is the one people skip. Let Claude run it itself — give it permission once and it will
+              self-correct without asking you.
+            </text>
+            <text x="16" y="240" font-family="Source Sans 3, sans-serif" font-size="11.5" fill="var(--muted)">
+              Step 04 is the one that cannot be delegated, ever. Claude has no eyes.
+            </text>
+          </svg>
+          <figcaption>Violet = you. Cyan = Claude. If two of your steps ever run back to back, you skipped a gate.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 03 ═══════════════════════════════════════════════════════════ -->
+    <section id="setup">
+      <div class="sec-head">
+        <div class="sec-num">03 <span>· The method</span></div>
+        <h2>Session zero: set the repo up so Claude gets it right by default</h2>
+        <p>Two hours here saves you from repeating yourself in every session for four months. Do it before phase 1.</p>
+      </div>
+
+      <div class="prose">
+
+        <h4>1 · Write mobile/CLAUDE.md</h4>
+        <p>
+          Claude Code reads <code>CLAUDE.md</code> from the working directory and its parents, so a file
+          at <code>mobile/CLAUDE.md</code> loads automatically whenever you work on the app. This is the
+          single highest-leverage file in the project. Run <code>/init</code> to get a first draft, then
+          make it say the things Claude cannot infer:
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Write mobile/CLAUDE.md. It must cover:
+
+- The backend at api.banterclips.com is the source of truth and is NOT to be
+  modified from this directory. frontend/src/lib/api.js is the API contract.
+- Never invent an endpoint. Check /docs or api.js. If it's not there, ask me.
+- Behaviour reference for any screen is the matching file in frontend/src/pages/.
+  Read it before building. Do not port the JSX or Tailwind classes.
+- Never port frontend/src/admin/ — the admin console stays web-only.
+- All colours/type come from lib/theme/. No hardcoded Color(0xFF...) anywhere.
+- Commands: flutter analyze, flutter test, dart format lib/
+- Run analyze and tests after every change and fix what they report.
+- Session JWT goes in flutter_secure_storage, never shared_preferences.
+- Ask before adding any new package to pubspec.yaml.
+
+Keep it under 60 lines. Be terse — it's read every session.</p>
+        </div>
+        <div class="note">
+          <p class="t">Keep it short on purpose</p>
+          <p>
+            CLAUDE.md is loaded into context on every single session, so length has a real cost and
+            long files get diluted. Rules that keep being ignored usually need to be
+            <em>fewer and sharper</em>, not more detailed. Prune it monthly.
+          </p>
+        </div>
+
+        <h4>2 · Grant permissions once</h4>
+        <p>
+          By default Claude Code asks before each command. For a Flutter project that means approving
+          <code>flutter analyze</code> forty times a day, and the friction makes you stop asking it to
+          verify its own work — which breaks gate 3. Allowlist the safe, read-only, repeatable ones:
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>/permissions</p>
+          <p>Then add: <code>Bash(flutter analyze:*)</code>, <code>Bash(flutter test:*)</code>, <code>Bash(dart format:*)</code>,
+<code>Bash(flutter pub get:*)</code>, <code>Bash(dart run build_runner:*)</code></p>
+        </div>
+        <p>
+          Leave <code>flutter build</code>, <code>git push</code>, and anything touching
+          <code>backend/</code> or <code>deploy/</code> asking for approval. Those are the ones where a
+          mistake costs you something.
+        </p>
+
+        <h4>3 · Confirm the Figma connection</h4>
+        <p>
+          Figma's MCP server is already configured in this workspace, which means Claude can read your
+          actual design file — exact variables, layout, and screenshots — instead of guessing from your
+          description. Verify it before phase 3, not during:
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>/mcp</p>
+          <p>Then, with a frame URL from your file:
+
+Read this Figma frame and tell me what components and variables it uses.
+Don't write any code yet. &lt;paste figma url&gt;</p>
+        </div>
+
+        <h4>4 · Add a screen-scaffolding command</h4>
+        <p>
+          You are going to build nine screens with the same structure. Put that structure in
+          <code>.claude/commands/screen.md</code> once and invoke it with <code>/screen clips</code>
+          instead of re-typing the conventions every time:
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Create .claude/commands/screen.md — a custom slash command that takes a
+screen name as $ARGUMENTS and:
+
+1. reads frontend/src/pages/&lt;Name&gt;.jsx for the behaviour
+2. lists which existing widgets in lib/widgets/ it will reuse, and
+   asks me before creating any new one
+3. builds the screen with all four states: loading, empty, error, content
+4. wires it into the go_router config
+5. runs flutter analyze and fixes anything it reports
+
+It must stop and show me the widget-reuse list before writing code.</p>
+        </div>
+
+        <h4>5 · Auto-format on save <span class="pill p-warn">optional</span></h4>
+        <p>
+          A <code>PostToolUse</code> hook in <code>.claude/settings.json</code> can run
+          <code>dart format</code> after every file edit, so formatting never shows up as noise in your
+          diffs. Ask Claude to set it up — it knows the schema.
+        </p>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 04 ═══════════════════════════════════════════════════════════ -->
+    <section id="hygiene">
+      <div class="sec-head">
+        <div class="sec-num">04 <span>· The method</span></div>
+        <h2>Session hygiene</h2>
+        <p>Four habits. They are unglamorous and they are the difference between Claude Code speeding you up and Claude Code producing a mess you cannot debug.</p>
+      </div>
+
+      <div class="prose">
+        <ul class="clean">
+          <li>
+            <strong>One task per session, then <code>/clear</code>.</strong> A session that has been
+            running for four hours across three features gives noticeably worse answers than a fresh one
+            — old context crowds out the thing you actually care about. Finish the Clips screen, clear,
+            start Account. Use <code>/compact</code> only when you genuinely need the history.
+          </li>
+          <li>
+            <strong>Plan mode before anything structural.</strong> Press <kbd>Shift</kbd>+<kbd>Tab</kbd>
+            twice to enter it. Claude investigates and proposes without editing, and you approve or
+            redirect before a single file changes. Use it for the API layer, routing, state management,
+            and any refactor. Skip it for "build this one screen".
+          </li>
+          <li>
+            <strong>Point at files with <code>@</code>.</strong> <code>@frontend/src/pages/Clips.jsx</code>
+            is precise; "the clips page" makes it go searching and sometimes guess. Precision in the
+            prompt is the cheapest quality improvement available to you.
+          </li>
+          <li>
+            <strong>Commit at every green gate.</strong> When a screen renders correctly, commit. Small
+            commits on the <code>mobile-app</code> branch mean a bad session costs a session, and
+            <code>git diff</code> stays readable enough that you can actually review what changed.
+          </li>
+        </ul>
+
+        <div class="note warn">
+          <p class="t">Review the diff, don't just run the app</p>
+          <p>
+            You are trying to <em>learn</em> mobile development, not just possess an app. Read every diff
+            before committing. When something is unfamiliar, ask — <em>"why a StatefulWidget here and not
+            Stateless?"</em>, <em>"what does this FutureBuilder do while it's waiting?"</em> The answers
+            are the actual education, and they cost you nothing but the asking.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 05 ═══════════════════════════════════════════════════════════ -->
+    <section id="p1">
+      <div class="sec-num" style="margin-bottom:10px">05 <span>· Phase 1</span></div>
+      <div class="phase-bar">
+        <h2>Machine &amp; repo</h2>
+        <span class="when">Week 1 · mostly yours</span>
+      </div>
+      <div class="prose">
+        <p>
+          Claude cannot install Android Studio or accept SDK licences for you. What it can do is
+          diagnose, scaffold, and set up the repo conventions.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Run flutter doctor and go through the output line by line. For each
+problem, tell me exactly what to click or run on Windows 11 to fix it,
+and which ones I can ignore because I'm not targeting iOS yet.</p>
+          <p>Create the Flutter project as a sibling of frontend/ and backend/:
+org com.banterclips, project name banterclips, directory mobile/.
+Then show me what it generated and explain what android/ and ios/
+actually contain — I want to understand those folders, not ignore them.</p>
+          <p>Add mobile/ entries to .gitignore: build artifacts, .dart_tool,
+any keystore or google-services.json. Explain each line.</p>
+        </div>
+        <div class="note crit">
+          <p class="t">Do this one yourself, first</p>
+          <p>
+            Your folder is an unzipped download with no git history. <code>git clone</code> the repo
+            properly and <code>git checkout -b mobile-app</code> <strong>before</strong> letting Claude
+            write anything. Without git you cannot revert a session that went wrong — and one will.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 06 ═══════════════════════════════════════════════════════════ -->
+    <section id="p2">
+      <div class="sec-num" style="margin-bottom:10px">06 <span>· Phase 2</span></div>
+      <div class="phase-bar">
+        <h2>Learning Dart — with your own code as the textbook</h2>
+        <span class="when">Weeks 1–3 · don't delegate this one</span>
+      </div>
+      <div class="prose">
+        <p>
+          This is the phase where it is most tempting to let Claude write everything and skip the
+          learning. Resist that, because every later phase gets slower if you cannot read what it
+          produces. The trick is to use Claude as a tutor working from code you already understand.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>I know React and JavaScript well. Rewrite the request() helper from
+@frontend/src/lib/api.js in Dart, then walk me through it line by line —
+especially every place Dart's null safety forced a change JS didn't need.
+Don't simplify it; I want the real version.</p>
+          <p>Now quiz me. Give me five short Dart snippets from that file with a
+null-safety bug in each. Don't tell me the answers until I guess.</p>
+          <p>Explain Flutter's Column/Row/Expanded by rebuilding the layout of
+@frontend/src/components/AppShell.jsx as a Flutter widget tree. Map each
+Tailwind class to its Flutter equivalent so I can see the translation.</p>
+        </div>
+        <div class="note">
+          <p class="t">Learn the error messages, not just the fixes</p>
+          <p>
+            When you hit <em>"RenderFlex overflowed by 37 pixels"</em> — and you will, weekly — paste it
+            and ask <strong>"why does this happen and what are the three usual causes?"</strong> rather
+            than "fix it". After the third time you will diagnose it yourself in five seconds, which is
+            worth far more than three fast fixes.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 07 ═══════════════════════════════════════════════════════════ -->
+    <section id="p3">
+      <div class="sec-num" style="margin-bottom:10px">07 <span>· Phase 3</span></div>
+      <div class="phase-bar">
+        <h2>Figma → design system</h2>
+        <span class="when">Week 4 · the MCP earns its keep</span>
+      </div>
+      <div class="prose">
+        <p>
+          Because the Figma MCP is connected, Claude reads your real file rather than your description
+          of it. Insist on the audit step before any code — that is what stops you ending up with
+          nineteen near-identical greys hardcoded across forty widgets.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this — in order, over 3–4 sessions</div>
+          <p>Read these Figma frames and produce a deduplicated token audit:
+every distinct colour, text style, corner radius and spacing value,
+with a note where two values are near-duplicates I should collapse.
+Output a table. Write NO code yet. &lt;paste 3–4 frame urls&gt;</p>
+          <p>Good. Now write lib/theme/ from that agreed token list:
+colors.dart as a ThemeExtension, typography.dart as a TextTheme,
+app_theme.dart assembling both into ThemeData. Light theme only for now.</p>
+          <p>Build lib/widgets/ from the Figma components in these frames — button,
+text field, chip selector, clip card. Every widget gets all its states:
+default, pressed, disabled, loading. Pull colours from the theme only.
+&lt;paste component frame urls&gt;</p>
+          <p>Now build a throwaway gallery screen at /debug/gallery that renders
+every widget in lib/widgets/ in every state on one scrollable page.</p>
+        </div>
+        <p>
+          Then run it, screenshot the gallery, and put the screenshot next to Figma on your monitor.
+          Everything wrong will be obvious in ninety seconds. Paste the screenshot back:
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this — with the screenshot pasted in</div>
+          <p>Here's the gallery running next to the Figma frame. The card padding
+is too tight and the disabled button is the wrong grey. Fix both in
+the theme, not in the individual widgets.</p>
+        </div>
+        <div class="note crit">
+          <p class="t">Say no to Figma auto-export plugins</p>
+          <p>
+            If Claude ever offers to generate widgets straight from a Figma export, decline. That
+            output is thousands of lines of absolutely-positioned, unnamed widgets that break on any
+            screen size but the artboard's — and you will learn nothing from code you cannot read.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 08 ═══════════════════════════════════════════════════════════ -->
+    <section id="p4">
+      <div class="sec-num" style="margin-bottom:10px">08 <span>· Phase 4</span></div>
+      <div class="phase-bar">
+        <h2>API client &amp; auth</h2>
+        <span class="when">Weeks 5–6 · Claude's best phase</span>
+      </div>
+      <div class="prose">
+        <p>
+          Porting a fully-specified contract into a typed client is the thing Claude Code does best,
+          because nothing has to be invented. Use plan mode for the structure, then let it work.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this — plan mode on for the first two</div>
+          <p>Read @frontend/src/lib/api.js end to end. Produce a table of every
+endpoint: method, path, request body, response shape, and what the UI
+does with it. Flag anything the mobile app won't need. No code yet.</p>
+          <p>Fetch https://api.banterclips.com/openapi.json and generate freezed
+models from the ACTUAL response schemas — User, Clip, ScriptLine,
+SocialAccount, Usage, Publish. Do not guess field names; if the schema
+is ambiguous, list the ambiguity and ask me.</p>
+          <p>Now build lib/api/client.dart with dio. Mirror the error contract from
+api.js exactly: the backend returns {detail: {code, message}} and the UI
+switches on `code`. Add an interceptor that attaches the bearer token
+from flutter_secure_storage and clears it on 401.</p>
+          <p>Wire up auth, mirroring the two-step flow in @backend/app/routers/auth.py:
+supabase_flutter signs in, then POST /auth/supabase exchanges the Supabase
+token for our own 30-day session JWT. Store that JWT in secure storage.</p>
+          <p>Build one ugly debug screen — no styling at all — with four buttons:
+sign in, GET /me, list clips, create a clip. I want to prove the whole
+stack works before we build any real UI.</p>
+        </div>
+        <div class="note warn">
+          <p class="t">Watch for invented endpoints</p>
+          <p>
+            This is the phase where a wrong guess is most likely and most expensive. If Claude produces
+            a method you do not recognise from api.js, ask <strong>"which line of api.js or which entry
+            in openapi.json is this from?"</strong> A real answer cites one. An invented one won't.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 09 ═══════════════════════════════════════════════════════════ -->
+    <section id="p5">
+      <div class="sec-num" style="margin-bottom:10px">09 <span>· Phase 5</span></div>
+      <div class="phase-bar">
+        <h2>The screens</h2>
+        <span class="when">Weeks 7–10 · one screen, one session</span>
+      </div>
+      <div class="prose">
+        <p>
+          Nine screens, in the order given in the roadmap. Each gets its own session, its own gate-4
+          check, and its own commit. This is where the <code>/screen</code> command from session zero
+          pays for itself.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this — per screen</div>
+          <p>/screen clips</p>
+          <p>Or the long form, if you skipped the custom command:
+
+Build the Clips library screen.
+- Behaviour reference: @frontend/src/pages/Clips.jsx — read it first and
+  tell me the load order and every error state before you write anything.
+- Design: &lt;figma frame url&gt;
+- Reuse widgets from lib/widgets/. List what you'll reuse and what you
+  think needs a new widget, and wait for me to approve the new ones.
+- All four states: loading (skeletons, not a spinner), empty, error, content.
+- Pull-to-refresh, delete with confirmation, share via share_plus.</p>
+        </div>
+        <p>Then gate 4, every time — no exceptions:</p>
+        <div class="prompt">
+          <div class="lbl">Type this — then actually look at the emulator</div>
+          <p>Run the app on the emulator and tell me the route to navigate to.</p>
+          <p>&lt;screenshot pasted&gt; The clip cards are right but the empty state
+is centred vertically and Figma has it at the top third. Also the
+delete confirmation has no cancel button. Fix both.</p>
+        </div>
+        <div class="note">
+          <p class="t">The Studio screen is three sessions, not one</p>
+          <p>
+            Studio is roughly 40% of the app. Split it exactly as the roadmap does — take input, script
+            review, generation progress — and gate each part separately. Asking for the whole thing at
+            once produces something that compiles and that neither of you can debug.
+          </p>
+        </div>
+        <div class="note warn">
+          <p class="t">Bring blocker 4 up explicitly</p>
+          <p>
+            When you reach the generation screen, say so directly: <em>"the web polls every second, but
+            this is a phone — implement the polling with WidgetsBindingObserver so it stops on background
+            and refetches on resume."</em> Claude will happily port the web's 1-second interval verbatim
+            if you don't mention it, and battery drain is invisible in an emulator.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 10 ═══════════════════════════════════════════════════════════ -->
+    <section id="p6">
+      <div class="sec-num" style="margin-bottom:10px">10 <span>· Phase 6</span></div>
+      <div class="phase-bar">
+        <h2>Native config</h2>
+        <span class="when">Weeks 11–12 · slow down here</span>
+      </div>
+      <div class="prose">
+        <p>
+          Manifests and plists are exactly the kind of exacting, well-documented boilerplate Claude
+          handles well — and also where a plausible-looking hallucinated key wastes an afternoon. Ask
+          for explanation alongside every diff, both to catch errors and because this is the phase where
+          you actually learn Android and iOS.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Add the banterclips:// custom URL scheme for the Instagram OAuth return.
+Show me the exact AndroidManifest.xml and Info.plist changes as a diff and
+explain what every element does BEFORE you apply anything. I want to
+understand intent filters and CFBundleURLTypes, not just have them.</p>
+          <p>Now the backend side: @backend/app/routers/socials.py rejects any `next`
+that doesn't start with "/". I need it to also accept exactly
+banterclips://oauth/instagram — as an explicit allowlist entry, not by
+loosening the check. Show me the diff and explain the open-redirect risk
+you're avoiding.</p>
+          <p>Walk me through generating the Android upload keystore. Explain what it
+is, why losing it is unrecoverable, where to back it up, and how to wire
+it into build.gradle without the password ever touching the repo.</p>
+        </div>
+        <div class="note crit">
+          <p class="t">Three things Claude must never touch</p>
+          <ul class="clean tight">
+            <li><strong>Your keystore, and its passwords.</strong> Generate it yourself. Never paste the password into a session.</li>
+            <li><strong><code>.env</code>, <code>google-services.json</code>, service keys.</strong> Confirm they are gitignored before they exist, not after.</li>
+            <li><strong>Anything in <code>backend/</code> or <code>deploy/</code> without you reading the diff.</strong> That is live production serving real users.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 11 ═══════════════════════════════════════════════════════════ -->
+    <section id="p7">
+      <div class="sec-num" style="margin-bottom:10px">11 <span>· Phase 7</span></div>
+      <div class="phase-bar">
+        <h2>Test &amp; store prep</h2>
+        <span class="when">Weeks 13–15</span>
+      </div>
+      <div class="prose">
+        <p>
+          Tests are ideal delegation — tedious, mechanical, and machine-verifiable. Store policy is the
+          opposite: Claude's knowledge of Apple and Google guidelines has a cutoff, and both change
+          quietly. Use it to <em>prepare</em>, then verify against the live policy pages yourself.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Write unit tests for lib/api/ — happy path, 401, 403 quota-exceeded,
+network failure. Port the cases from @frontend/src/lib/format.js too.
+Then run flutter test and fix until green.</p>
+          <p>Write widget tests for everything in lib/widgets/, covering each state.</p>
+          <p>/code-review</p>
+          <p>/security-review</p>
+          <p>Draft the Play data-safety answers and the App Store privacy nutrition
+label from what the app actually collects — read @backend/app/models.py
+and the API client to ground it. Flag anything you're unsure about rather
+than guessing; I'll verify each answer against the live form.</p>
+          <p>Draft store listing copy — name, subtitle, description, keywords —
+using the positioning in @SEO.md and @BRD.md.</p>
+        </div>
+        <div class="note warn">
+          <p class="t">Verify policy claims yourself</p>
+          <p>
+            Anything Claude tells you about Guideline 1.2, 3.1.1 or 4.2, or the Play closed-testing
+            rules, is worth checking against the current policy page before you submit. It is a good
+            drafting partner here and a bad final authority — the rules move, and the cost of being
+            wrong is a rejected release.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 12 ═══════════════════════════════════════════════════════════ -->
+    <section id="p8">
+      <div class="sec-num" style="margin-bottom:10px">12 <span>· Phase 8</span></div>
+      <div class="phase-bar">
+        <h2>Release</h2>
+        <span class="when">Week 16 onward · mostly yours</span>
+      </div>
+      <div class="prose">
+        <p>
+          Claude cannot log into Play Console or App Store Connect. What it can do is automate the build
+          and upload path, which is also your route to iOS without owning a Mac.
+        </p>
+        <div class="prompt">
+          <div class="lbl">Type this</div>
+          <p>Set up a GitHub Actions workflow that builds the Android app bundle on
+a tag push and uploads it to Play internal testing. Explain where each
+secret goes and why none of them belong in the repo.</p>
+          <p>Now add a macos-latest job for the iOS build and TestFlight upload —
+I don't own a Mac, so CI is my only path to iOS. Tell me honestly what
+this setup will and won't let me do without a Mac in front of me.</p>
+          <p>Add Crashlytics before we ship. Then explain how I read a crash report
+and get from a stack trace back to a line of Dart.</p>
+        </div>
+        <div class="note">
+          <p class="t">After launch, one rule changes permanently</p>
+          <p>
+            Old app versions stay installed for months, so the API can no longer make breaking changes
+            freely. Add that to <code>backend/CLAUDE.md</code> the day you ship: <em>"a mobile client is
+            in the wild — every endpoint change must be additive or versioned."</em> Otherwise a routine
+            backend edit will silently break users you cannot update.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 13 ═══════════════════════════════════════════════════════════ -->
+    <section id="limits">
+      <div class="sec-head">
+        <div class="sec-num">13 <span>· Staying safe</span></div>
+        <h2>Where Claude Code will let you down</h2>
+        <p>Knowing these in advance turns them from confusing failures into expected ones you route around.</p>
+      </div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Limit</th><th>What it looks like</th><th>Your workaround</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>No eyes</td>
+              <td>Confident "the screen is complete" for something that renders as a grey rectangle.</td>
+              <td>Gate 4, every time. Screenshot back when wrong — it reads images well.</td>
+            </tr>
+            <tr>
+              <td>No hands on the device</td>
+              <td>Cannot test scroll feel, touch targets, keyboard behaviour, or whether it feels fast.</td>
+              <td>Your weekly real-device pass. Emulators lie about performance.</td>
+            </tr>
+            <tr>
+              <td>Policy drift</td>
+              <td>Store guideline details stated confidently but slightly out of date.</td>
+              <td>Draft with Claude, verify on the live policy page before submitting.</td>
+            </tr>
+            <tr>
+              <td>Package churn</td>
+              <td>An API from an older version of a Flutter package; the code won't compile.</td>
+              <td>Let <code>flutter analyze</code> catch it — gate 3 exists for exactly this.</td>
+            </tr>
+            <tr>
+              <td>Plausible invention</td>
+              <td>An endpoint or field name that reads perfectly and isn't in your API.</td>
+              <td>Ask it to cite the line in api.js or openapi.json. Real answers cite.</td>
+            </tr>
+            <tr>
+              <td>Context decay</td>
+              <td>Late in a long session it forgets a convention it followed earlier.</td>
+              <td><code>/clear</code> between tasks. Put durable rules in CLAUDE.md, not in chat.</td>
+            </tr>
+            <tr>
+              <td>Over-eagerness</td>
+              <td>You asked for one screen; it also refactored the theme and added two packages.</td>
+              <td>Plan mode for anything structural. "Only touch these files" in the prompt.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 14 ═══════════════════════════════════════════════════════════ -->
+    <section id="guardrails">
+      <div class="sec-head">
+        <div class="sec-num">14 <span>· Staying safe</span></div>
+        <h2>Guardrails</h2>
+        <p>Five rules. They cost you seconds each and prevent the failures that cost days.</p>
+      </div>
+      <div class="prose">
+        <ol class="clean">
+          <li><strong>Nothing enters <code>pubspec.yaml</code> without your approval.</strong> It is in your CLAUDE.md for a reason. Every package is code you didn't write, in a language you're learning, that can break on the next Flutter release.</li>
+          <li><strong>Secrets never enter a session.</strong> Not keystore passwords, not service keys, not the contents of <code>.env</code>. Reference the file by name; never paste its contents.</li>
+          <li><strong><code>backend/</code> and <code>deploy/</code> are production.</strong> Read every diff there yourself. The mobile app is greenfield and forgiving; your live API serving real users is neither.</li>
+          <li><strong>Never commit what you haven't read.</strong> If a diff is too big to review, the task was too big. Split it and redo it.</li>
+          <li><strong>When it says "done", check.</strong> Compiling is not working; passing tests is not looking right. Gate 3 and gate 4 are different gates and you need both.</li>
+        </ol>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 15 ═══════════════════════════════════════════════════════════ -->
+    <section id="learning">
+      <div class="sec-head">
+        <div class="sec-num">15 <span>· Staying safe</span></div>
+        <h2>Still learning, not just shipping</h2>
+        <p>You said you want to get good at Android and iOS development. Shipping an app you cannot read would not be that, so build the learning into the workflow rather than hoping it happens.</p>
+      </div>
+      <div class="prose">
+        <ul class="clean">
+          <li><strong>Read every diff before committing.</strong> Non-negotiable. This alone is most of the education.</li>
+          <li><strong>Ask "why this and not that?"</strong> — StatefulWidget vs Stateless, FutureBuilder vs a manual load, Riverpod vs setState. The tradeoff is the lesson; the code is just the artifact.</li>
+          <li><strong>Type one screen yourself.</strong> Account is small and self-contained. Build it with no Claude assistance, then ask for a review. The gap between what you wrote and what comes back is the most precise measurement of your level you will ever get.</li>
+          <li><strong>Live in <code>android/</code> and <code>ios/</code>.</strong> Flutter hides the platforms; those folders are where they stop being hidden. Ask what each file does when you first meet it.</li>
+          <li><strong>Predict before you run.</strong> Before gate 4, guess what the screen will look like and what will be wrong. You will be bad at this for a month and then suddenly good, and that transition is what expertise actually feels like.</li>
+        </ul>
+        <div class="note">
+          <p class="t">A reasonable target</p>
+          <p>
+            By phase 5 you should be able to read any screen file in your own app and explain what every
+            line does. If you cannot, slow down — that is the signal to type more yourself and delegate
+            less, not to push on faster.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" style="margin-bottom:54px">
+
+    <!-- ═══ 16 ═══════════════════════════════════════════════════════════ -->
+    <section id="week1">
+      <div class="sec-head">
+        <div class="sec-num">16 <span>· Start here</span></div>
+        <h2>Your first session</h2>
+        <p>In order. This is a real afternoon's work and it sets up everything after it.</p>
+      </div>
+      <div class="prose">
+        <ol class="clean">
+          <li><strong>Clone the repo properly</strong> and <code>git checkout -b mobile-app</code>. Do this before Claude writes anything at all.</li>
+          <li><strong>Install Flutter and Android Studio</strong>, then let Claude walk you through <code>flutter doctor</code> line by line.</li>
+          <li><strong>Create <code>mobile/</code></strong> with the org string <code>com.banterclips</code>. Get it right the first time.</li>
+          <li><strong>Write <code>mobile/CLAUDE.md</code></strong> using the prompt in section 03. This is the highest-leverage thing you will do all month.</li>
+          <li><strong>Set permissions</strong> so <code>flutter analyze</code> and <code>flutter test</code> run without asking. Gate 3 only works if it is frictionless.</li>
+          <li><strong>Register the Play developer account</strong> ($25) — the 14-day closed-testing clock should start now, in the background, while you learn Dart.</li>
+          <li><strong>Then start phase 2</strong>, and let Claude teach you Dart out of your own <code>api.js</code>.</li>
+        </ol>
+
+        <div class="note">
+          <p class="t">The one sentence to remember</p>
+          <p>
+            <strong>Claude Code writes; you look.</strong> Every habit in this document is downstream of
+            that — one task per session so the writing stays reviewable, two gates so nothing is called
+            done unseen, and every diff read so that in sixteen weeks you have both an app and the
+            ability to maintain it.
+          </p>
+        </div>
+
+        <p style="color:var(--muted); font-size:.88rem; border-top:1px solid var(--line); padding-top:16px; margin-top:8px">
+          Companion to <a href="MOBILE-ROADMAP.html">MOBILE-ROADMAP.html</a> (what to build) and
+          <a href="CODEBASE-ATLAS.html">CODEBASE-ATLAS.html</a> (how the existing system works).
+          Claude Code's features and both stores' policies change over time — re-check anything
+          load-bearing before you rely on it.
+        </p>
+      </div>
+    </section>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>
