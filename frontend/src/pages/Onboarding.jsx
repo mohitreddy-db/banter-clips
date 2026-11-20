@@ -195,7 +195,7 @@ function OnboardingFlow() {
 
         {step === 1 && (
           <div className="ob-sports" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-            {SPORTS.map(({ key: s, icon }) => {
+            {SPORTS.map(({ key: s, icon, label }) => {
               const on = sports.includes(s);
               return (
                 <button
@@ -211,7 +211,7 @@ function OnboardingFlow() {
                   }}
                 >
                   <span style={{ fontSize: 26 }}>{icon}</span>
-                  {s}
+                  {label || s}
                 </button>
               );
             })}
@@ -220,10 +220,10 @@ function OnboardingFlow() {
 
         {step === 2 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-            <TagField label="FAVORITE TEAMS" placeholder="Search teams — Lakers, Chiefs, Real Madrid…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))}
+            <TagField label="SIDES YOU FOLLOW" placeholder="my club, our rivals, the title race…" input={teamInput} setInput={setTeamInput} tags={teams} onAdd={() => addTag(teamInput, teams, setTeams, setTeamInput)} onRemove={(t) => setTeams(teams.filter((x) => x !== t))}
               suggestions={suggestionsFor(sports, "teams", 10).filter((t) => !teams.includes(t))}
               onPick={(t) => setTeams([...teams, t])} />
-            <TagField label="FAVORITE PLAYERS" placeholder="Search players — LeBron, Mahomes, Messi…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))}
+            <TagField label="ROLES YOU ROAST" placeholder="the striker, the rookie QB, the manager…" input={playerInput} setInput={setPlayerInput} tags={players} onAdd={() => addTag(playerInput, players, setPlayers, setPlayerInput)} onRemove={(t) => setPlayers(players.filter((x) => x !== t))}
               suggestions={suggestionsFor(sports, "players", 10).filter((p) => !players.includes(p))}
               onPick={(p) => setPlayers([...players, p])} />
           </div>

@@ -6,7 +6,7 @@ import { resolutionLabel } from "../lib/format.js";
 import { UpgradeModal, PublishModal, TopUpModal } from "../components/Modals.jsx";
 import ScriptView, { ScriptDialog } from "../components/ScriptView.jsx";
 import Trending from "../components/Trending.jsx";
-import { SPORT_KEYS, sportIcon, suggestionsFor } from "../lib/sports.js";
+import { SPORT_KEYS, sportIcon, sportLabel, suggestionsFor } from "../lib/sports.js";
 import DownloadButton from "../components/DownloadButton.jsx";
 import { PublishedTo } from "../components/SocialIcon.jsx";
 
@@ -461,7 +461,7 @@ export default function Studio() {
             <textarea
               value={take}
               onChange={(e) => setTake(e.target.value)}
-              placeholder="Messi is still the GOAT."
+              placeholder="Our keeper is the problem, not the manager."
               rows={4}
               className="panel"
               style={{ width: "100%", padding: "clamp(16px, 4vw, 22px) clamp(16px, 4vw, 24px)", fontSize: "clamp(16px, 4.5vw, 19px)", fontWeight: 500, color: "var(--app-text)", resize: "vertical", background: "var(--app-surface)", border: "1.5px solid var(--app-border)", borderRadius: 20, lineHeight: 1.45, boxSizing: "border-box" }}
@@ -604,7 +604,7 @@ export default function Studio() {
                     onClick={() => setSports(on ? sports.filter((x) => x !== s) : [...sports, s].slice(0, 4))}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
-                    <span aria-hidden="true">{sportIcon(s)}</span> {s}
+                    <span aria-hidden="true">{sportIcon(s)}</span> {sportLabel(s)}
                   </button>
                 );
               })}
@@ -635,7 +635,7 @@ export default function Studio() {
                 if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSubject(subjectInput); }
               }}
               onBlur={() => addSubject(subjectInput)}
-              placeholder="Add a team or player — Arsenal, Mbappé, LeBron…"
+              placeholder="Add a side or a role — my club, the striker, the ref…"
               className="panel"
               style={{ padding: "11px 14px", fontSize: 14.5, color: "var(--app-text)", background: "var(--app-surface)", border: "1px solid var(--app-border)", borderRadius: 12, boxSizing: "border-box", width: "100%" }}
             />

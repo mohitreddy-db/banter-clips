@@ -290,12 +290,12 @@ export function Terms() {
 
       <H>AI-generated parody</H>
       <P>
-        Videos are entirely AI-generated satire and parody. They may depict
-        real athletes and kits in fictional, comedic scenarios; they contain
-        no real match footage or broadcast material, and they do not represent
-        real events, statements, or endorsements. BanterClips is not
-        affiliated with, sponsored by, or endorsed by any league, club, or
-        athlete.
+        Videos are entirely AI-generated satire and parody, cast from
+        BanterClips&rsquo; own original characters in invented club colours.
+        They do not depict real athletes, coaches, clubs or kits, contain no
+        real match footage or broadcast material, and do not represent real
+        events, statements or endorsements. BanterClips is not affiliated
+        with, sponsored by or endorsed by any league, club or athlete.
       </P>
 
       <H>Acceptable use</H>

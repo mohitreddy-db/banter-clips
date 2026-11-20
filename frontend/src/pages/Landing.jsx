@@ -8,14 +8,18 @@ import Logo from "../components/BrandMark.jsx";
 // The clip the hero tile and the "Publish or download" card demo. Follows
 // whatever leads the catalog, so refreshing the showcase refreshes the whole
 // page instead of leaving two hard-coded slugs behind.
-const LEAD_CLIP = showcaseClips[0].slug;
+//
+// Null while the catalog is empty (see lib/showcase.js — the old clips all
+// starred real athletes). Both surfaces fall back to a non-video treatment
+// rather than requesting a slug that no longer exists.
+const LEAD_CLIP = showcaseClips[0]?.slug ?? null;
 
 import { useSeo } from "../lib/seo.js";
 /* Faithful port of the client's landing page (slim MVP prototype).
    Layout, copy, colors and animations preserved; only the pricing
    preview reflects the real two-plan model (client non-negotiable #1). */
 
-const FULL_TAKE = "Lakers won't make the playoffs.";
+const FULL_TAKE = "Our keeper won't last the season.";
 
 const logos = ["HOOPSDAILY", "THE PODCAST", "GRIDIRON+", "FOOTYWORLD", "COURTSIDE"];
 
@@ -23,7 +27,7 @@ const logos = ["HOOPSDAILY", "THE PODCAST", "GRIDIRON+", "FOOTYWORLD", "COURTSID
 // visitor a feature exists; a caption actually popping in tells them what it
 // looks like, which is the thing they are trying to picture.
 const features = [
-  { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — real players, real kits.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
+  { key: "video",    title: "AI Video Generator",  desc: "Type an opinion, get a finished 9:16 sports video — our own characters, in their own club's kit.", c1: "#7c3aed", c2: "#2563eb", span: "span 1" },
   { key: "voice",    title: "AI Voiceovers",       desc: "Characters speak their own lines, lip-synced, with crowd noise underneath.", c1: "#0891b2", c2: "#0ea5e9", span: "span 1" },
   { key: "captions", title: "Animated Captions",   desc: "Burned in and timed to the dialogue, so it lands with the sound off.", c1: "#16a34a", c2: "#65a30d", span: "span 1" },
   { key: "publish",  title: "One-Click Publishing", desc: "Straight to Instagram, TikTok or YouTube Shorts when you press Publish. No download, no re-upload.", c1: "#db2777", c2: "#f43f5e", span: "span 1" },
@@ -52,19 +56,31 @@ function FeatureVisual({ f }) {
     // vertical" message, so the image only has to look like a real broadcast
     // frame. `center 34%` puts the crop band on the face rather than the
     // midriff, which is what a plain centred cover would land on.
-    const src = `${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg`;
+    const src = LEAD_CLIP ? `${SHOWCASE_BASE}/${LEAD_CLIP}/poster.jpg` : null;
     return (
       <div style={frame}>
-        <img
-          src={src}
-          alt="A frame from a clip made with BanterClips"
-          loading="lazy"
-          style={{
-            position: "absolute", inset: 0, width: "100%", height: "100%",
-            objectFit: "cover", objectPosition: "center 34%",
-            animation: "slowZoom 9s ease-in-out infinite alternate",
-          }}
-        />
+        {src ? (
+          <img
+            src={src}
+            alt="A frame from a clip made with BanterClips"
+            loading="lazy"
+            style={{
+              position: "absolute", inset: 0, width: "100%", height: "100%",
+              objectFit: "cover", objectPosition: "center 34%",
+              animation: "slowZoom 9s ease-in-out infinite alternate",
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(135deg,#131a2e,#0b1020)",
+              display: "grid", placeItems: "center", fontSize: 40,
+            }}
+          >
+            🎬
+          </div>
+        )}
         {/* Keeps the white badge legible over floodlights and pale kits. */}
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,#000000a6,transparent 42%)" }} />
         <div style={{ position: "absolute", right: 10, bottom: 9, color: "#fff", fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textShadow: "0 1px 4px #000" }}>
@@ -416,7 +432,7 @@ export default function Landing() {
                     <>
                       <div className="demo-capwrap" style={{ position: "absolute", left: 12, right: 12, bottom: 64, textAlign: "center" }}>
                         <span className="demo-caption" style={{ display: "inline", background: "#000000c2", color: "#fff", fontFamily: "var(--display)", fontWeight: 700, fontSize: 20, lineHeight: 1.5, padding: "3px 6px", boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone", animation: "pop .4s ease both" }}>
-                        NO WAY the Lakers <span style={{ color: "oklch(0.85 0.17 152)" }}>MISS</span> the playoffs 😤
+                        NO WAY our keeper <span style={{ color: "oklch(0.85 0.17 152)" }}>LASTS</span> the season 😤
                         </span>
                       </div>
                       <div style={{ position: "absolute", left: 12, right: 12, bottom: 44, height: 4, background: "#ffffff35", borderRadius: 3, overflow: "hidden" }}>
@@ -475,7 +491,8 @@ export default function Landing() {
         <HowItWorks />
       </div>
 
-      {/* examples */}
+      {/* examples — hidden while the showcase catalog is empty (lib/showcase.js) */}
+      {examples.length > 0 && (
       <div id="examples" style={{ padding: "20px 0 60px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 28px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
           <h2 style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: "clamp(25px, 6vw, 32px)", letterSpacing: "-.02em", margin: 0 }}>Made with BanterClips</h2>
@@ -488,6 +505,7 @@ export default function Landing() {
           ))}
         </div>
       </div>
+      )}
 
       {/* testimonials */}
       <Testimonials />
@@ -501,7 +519,7 @@ export default function Landing() {
           {[
             [VIDEO_RES, "Vertical, H.264 — posts straight to Reels"],
             ["~2 minutes", "From a one-line take to a finished clip"],
-            ["Real players", "Recognisable faces in the right kit"],
+            ["Original cast", "Our own characters, in their own club's kit"],
             ["Captions burned in", "Timed to the dialogue, no editor needed"],
           ].map(([big, small]) => (
             <div key={big} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16, padding: "20px 18px" }}>
@@ -648,10 +666,10 @@ function Testimonials() {
   );
 }
 
-const DEMO_TAKE = "Wemby's so tall the Spurs just pass him the roof.";
+const DEMO_TAKE = "Our centre is so tall they just pass him the roof.";
 const DEMO_STAGES = [
   "Writing your script",
-  "Casting Victor Wembanyama",
+  "Casting the rookie centre",
   "Designing scene 1 of 2",
   "Bringing scene 1 to life",
   "Adding captions",
@@ -773,7 +791,7 @@ function HowItWorks() {
       <div style={card}>
         <span style={label}>3 · Publish or download</span>
         <div style={{ ...mediaStage, background: "#0b1020", display: "grid", placeItems: "center" }}>
-          {phase === "ready" ? (
+          {phase === "ready" && LEAD_CLIP ? (
             // `center 62%` biases the crop downward so the burned-in captions
             // this card advertises stay in shot; a plain centred cover would
             // cut them off along with the bottom of the kit.
@@ -791,6 +809,10 @@ function HowItWorks() {
                 animation: "floatUp .5s ease both",
               }}
             />
+          ) : phase === "ready" ? (
+            <span style={{ fontSize: 13, color: "var(--muted2)" }}>
+              🎬 Your clip is ready — 9:16, captions burned in.
+            </span>
           ) : (
             <span style={{ fontSize: 13, color: "var(--muted2)" }}>waiting for the render…</span>
           )}

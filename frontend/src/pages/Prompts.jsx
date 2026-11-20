@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useSeo } from "../lib/seo.js";
 
 const LIBRARY = {
-  "Hot Takes": ["Arsenal fans are celebrating too early", "This NBA contender is one injury away from disaster"],
+  "Hot Takes": ["My club's fans are celebrating too early", "This contender is one injury away from disaster"],
   Roasts: ["Roast my team after that embarrassing performance", "This manager has run out of excuses"],
   Predictions: ["Predict the next shock result everyone will dismiss", "This rookie will own the league within two years"],
-  GOAT: ["Messi is still the GOAT and it is not close", "Make the case for LeBron over Jordan"],
-  "Player Battles": ["Mbappé vs Haaland: who would you build a team around?", "Who wins one-on-one: prime Kobe or prime Jordan?"],
+  GOAT: ["Our captain is the greatest this club has had, and it is not close", "Make the case for the veteran over the new star"],
+  "Player Battles": ["The striker or the winger: who would you build a team around?", "Who wins one-on-one: the veteran in his prime or the wonderkid?"],
   "Team Battles": ["Which club has the most intimidating home crowd?", "Compare these two teams at their absolute peak"],
   "Match Day": ["The one matchup that will decide tonight's game", "Why the favorite should be nervous before kickoff"],
   "Post-Match": ["The scoreline hides what really happened in this match", "Name the player who changed the game"],

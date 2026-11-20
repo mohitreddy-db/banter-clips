@@ -84,14 +84,21 @@ export function ShowcaseIndex() {
           Made with BanterClips
         </h1>
         <p style={{ fontSize: 15.5, color: "var(--app-muted)", maxWidth: 620, lineHeight: 1.55, margin: "0 0 32px" }}>
-          Every clip below started as one written sentence. The pipeline wrote the script, cast the
-          scene, generated the voiceover and burned in the captions — these are the unedited results.
+          Every clip starts as one written sentence. The pipeline writes the script, casts the
+          scene, generates the voiceover and burns in the captions — these are the unedited results.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
-          {showcaseClips.map((c) => (
-            <ClipCard key={c.slug} clip={c} />
-          ))}
-        </div>
+        {showcaseClips.length === 0 ? (
+          <p style={{ fontSize: 15.5, color: "var(--app-muted)", maxWidth: 620, lineHeight: 1.55 }}>
+            Fresh examples are on the way. Write a take and make the first one yourself — your
+            first video is free.
+          </p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+            {showcaseClips.map((c) => (
+              <ClipCard key={c.slug} clip={c} />
+            ))}
+          </div>
+        )}
       </div>
     </PublicFrame>
   );

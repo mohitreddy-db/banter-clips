@@ -12,14 +12,18 @@
  * move week to week.
  */
 
+// `key` is the API value stored on every clip and preference and cannot
+// change. `label` is what people see: league names (NBA, NFL, MLB, NHL, F1)
+// are registered marks and were showing in App Store screenshots as filter
+// chips, so the chips now name the sport instead.
 export const SPORTS = [
   { key: "Soccer", icon: "⚽" },
-  { key: "NBA", icon: "🏀" },
-  { key: "NFL", icon: "🏈" },
-  { key: "MLB", icon: "⚾" },
-  { key: "NHL", icon: "🏒" },
+  { key: "NBA", icon: "🏀", label: "Basketball" },
+  { key: "NFL", icon: "🏈", label: "American Football" },
+  { key: "MLB", icon: "⚾", label: "Baseball" },
+  { key: "NHL", icon: "🏒", label: "Ice Hockey" },
   { key: "Tennis", icon: "🎾" },
-  { key: "F1", icon: "🏎" },
+  { key: "F1", icon: "🏎", label: "Motorsport" },
   { key: "Cricket", icon: "🏏" },
   { key: "Golf", icon: "⛳" },
   { key: "Boxing", icon: "🥊" },
@@ -30,55 +34,61 @@ export const SPORTS = [
 
 export const SPORT_KEYS = SPORTS.map((s) => s.key);
 export const sportIcon = (key) => SPORTS.find((s) => s.key === key)?.icon || "🎯";
+export const sportLabel = (key) => SPORTS.find((s) => s.key === key)?.label || key;
 
+/**
+ * Per-sport suggestions for sides and roles.
+ *
+ * These were real clubs and real players until App Review rejected the app
+ * under guideline 4.1(a) for trading on sports celebrities without the rights
+ * to them. The generator refuses a real name now (see
+ * `backend/app/services/content_safety.py`), so suggesting one would hand the
+ * user a dead end. Kept in step with `mobile/lib/models/catalog.dart`.
+ */
 export const SUGGESTIONS = {
   Soccer: {
-    teams: ["Arsenal", "Real Madrid", "Barcelona", "Man City", "Liverpool", "Man Utd", "Chelsea", "Bayern", "PSG", "Inter Milan"],
-    players: ["Mbappé", "Haaland", "Vinícius Jr", "Bellingham", "Saka", "Yamal", "Salah", "Messi", "Ronaldo", "Ødegaard"],
+    teams: ["my club", "the league leaders", "our rivals", "the title race", "the relegation scrap", "the derby", "the away end", "the cup draw"],
+    players: ["the striker", "the keeper", "the captain", "the new signing", "the wonderkid", "the manager", "the referee", "the pundit", "the winger", "the holding midfielder"],
   },
   NBA: {
-    teams: ["Lakers", "Celtics", "Warriors", "Knicks", "Nuggets", "Bucks", "Heat", "Thunder", "Mavericks", "76ers"],
-    players: ["LeBron", "Curry", "Jokić", "Dončić", "Giannis", "Wembanyama", "Tatum", "Durant", "Brunson", "Edwards"],
+    teams: ["my team", "the top seed", "our rivals", "the playoff race", "the rebuild", "the trade deadline", "the bench mob", "the draft"],
+    players: ["the franchise guy", "the rookie", "the sixth man", "the point guard", "the centre", "the head coach", "the ref", "the sideline reporter", "the sharpshooter", "the veteran"],
   },
   NFL: {
-    teams: ["Chiefs", "Eagles", "49ers", "Cowboys", "Bills", "Ravens", "Lions", "Packers", "Dolphins", "Steelers"],
-    players: ["Mahomes", "Josh Allen", "Lamar Jackson", "Kelce", "Burrow", "Jefferson", "Hurts", "Tyreek Hill", "Micah Parsons", "CMC"],
+    teams: ["my team", "the number one seed", "our division rivals", "the playoffs", "the draft", "free agency", "the offensive line", "the defence"],
+    players: ["the quarterback", "the rookie QB", "the running back", "the lineman", "the kicker", "the head coach", "the coordinator", "the commentator", "the wide receiver", "the veteran"],
   },
   MLB: {
-    teams: ["Yankees", "Dodgers", "Red Sox", "Mets", "Braves", "Astros", "Cubs", "Phillies", "Padres", "Orioles"],
-    players: ["Ohtani", "Aaron Judge", "Mookie Betts", "Juan Soto", "Acuña Jr", "Freeman", "Skenes", "Witt Jr", "Harper", "Machado"],
+    teams: ["my team", "the division leaders", "our rivals", "the wild card", "the trade deadline", "the farm system", "the bullpen", "the lineup"],
+    players: ["the slugger", "the ace", "the closer", "the rookie", "the catcher", "the manager", "the umpire", "the broadcaster", "the leadoff hitter", "the utility guy"],
   },
   NHL: {
-    teams: ["Maple Leafs", "Oilers", "Bruins", "Rangers", "Panthers", "Avalanche", "Canadiens", "Golden Knights", "Penguins", "Lightning"],
-    players: ["McDavid", "Crosby", "Ovechkin", "Matthews", "MacKinnon", "Draisaitl", "Makar", "Bedard", "Hellebuyck", "Kucherov"],
+    teams: ["my team", "the conference leaders", "our rivals", "the playoff push", "the trade deadline", "the fourth line", "the power play", "the draft"],
+    players: ["the captain", "the goalie", "the rookie", "the enforcer", "the sniper", "the head coach", "the ref", "the analyst", "the defenceman", "the veteran"],
   },
   Tennis: {
-    teams: ["Wimbledon", "US Open", "Roland Garros", "Australian Open", "ATP Finals", "Davis Cup"],
-    players: ["Alcaraz", "Sinner", "Djokovic", "Medvedev", "Zverev", "Świątek", "Sabalenka", "Gauff", "Nadal", "Federer"],
-  },
-  F1: {
-    teams: ["Red Bull", "Ferrari", "McLaren", "Mercedes", "Aston Martin", "Williams", "Alpine"],
-    players: ["Verstappen", "Norris", "Leclerc", "Hamilton", "Piastri", "Russell", "Alonso", "Sainz"],
+    teams: ["the draw", "the seeds", "centre court", "the final", "the qualifiers", "the tour", "the rankings", "the doubles"],
+    players: ["the top seed", "the qualifier", "the big server", "the grinder", "the teenager", "the comeback player", "the umpire", "the coach", "the crowd favourite", "the veteran"],
   },
   Cricket: {
-    teams: ["India", "Australia", "England", "Pakistan", "Mumbai Indians", "Chennai Super Kings", "RCB", "New Zealand"],
-    players: ["Virat Kohli", "Rohit Sharma", "Bumrah", "Babar Azam", "Joe Root", "Ben Stokes", "Smith", "Rashid Khan"],
+    teams: ["my side", "the table toppers", "our rivals", "the series", "the selectors", "the dressing room", "the tail", "the top order"],
+    players: ["the opener", "the captain", "the spinner", "the quick", "the wicketkeeper", "the all-rounder", "the umpire", "the commentator", "the nightwatchman", "the veteran"],
   },
   Golf: {
-    teams: ["The Masters", "The Open", "PGA Championship", "US Open", "Ryder Cup", "LIV Golf"],
-    players: ["Scottie Scheffler", "Rory McIlroy", "Tiger Woods", "Jon Rahm", "Bryson DeChambeau", "Xander Schauffele"],
+    teams: ["the leaderboard", "the final group", "the cut", "the majors", "the back nine", "the tour", "the gallery", "the team event"],
+    players: ["the leader", "the rookie", "the long hitter", "the putter", "the caddie", "the playing captain", "the rules official", "the commentator", "the journeyman", "the veteran"],
   },
   Boxing: {
-    teams: ["Heavyweight", "Middleweight", "Welterweight", "Undisputed"],
-    players: ["Canelo", "Usyk", "Tyson Fury", "Anthony Joshua", "Terence Crawford", "Mike Tyson", "Jake Paul"],
+    teams: ["the undercard", "the main event", "the belts", "the division", "the weigh-in", "the judges", "the promotion", "the rematch"],
+    players: ["the champion", "the challenger", "the prospect", "the journeyman", "the trainer", "the cutman", "the referee", "the ring announcer", "the promoter", "the veteran"],
   },
   MMA: {
-    teams: ["UFC", "Bellator", "PFL", "Lightweight", "Heavyweight"],
-    players: ["Jon Jones", "Islam Makhachev", "Conor McGregor", "Alex Pereira", "Sean O'Malley", "Khabib", "Ilia Topuria"],
+    teams: ["the main card", "the title picture", "the division", "the weigh-in", "the judges", "the promotion", "the rematch", "the prelims"],
+    players: ["the champion", "the challenger", "the prospect", "the grappler", "the striker", "the coach", "the referee", "the commentator", "the short-notice replacement", "the veteran"],
   },
   Esports: {
-    teams: ["T1", "G2 Esports", "Fnatic", "NAVI", "Team Liquid", "Cloud9", "FaZe Clan", "100 Thieves"],
-    players: ["Faker", "s1mple", "ZywOo", "Caps", "TenZ", "Bugha", "Chovy", "donk"],
+    teams: ["my team", "the top seed", "our rivals", "the group stage", "the roster move", "the bootcamp", "the grand final", "the meta"],
+    players: ["the star player", "the rookie", "the in-game leader", "the support", "the coach", "the analyst", "the caster", "the sub", "the free agent", "the veteran"],
   },
   Other: { teams: [], players: [] },
 };
@@ -88,7 +98,7 @@ export function suggestionsFor(sports, kind, limit = 12) {
   const picked = sports?.length ? sports : ["Soccer", "NBA"];
   const out = [];
   // Round-robin across the chosen sports so a two-sport fan sees both, rather
-  // than ten Arsenal players and nothing else.
+  // than ten soccer roles and nothing else.
   for (let i = 0; out.length < limit && i < 12; i += 1) {
     for (const sport of picked) {
       const item = SUGGESTIONS[sport]?.[kind]?.[i];

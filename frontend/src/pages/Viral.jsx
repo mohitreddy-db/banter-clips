@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../state/AppContext.jsx";
 import { api } from "../lib/api.js";
-import { SPORT_KEYS, sportIcon } from "../lib/sports.js";
+import { SPORT_KEYS, sportIcon, sportLabel } from "../lib/sports.js";
 import { agoLabel, useTrendingFeed } from "../lib/trending.js";
 import { useSeo } from "../lib/seo.js";
 
@@ -96,7 +96,7 @@ export default function Viral() {
           const on = s === sport;
           return (
             <button key={s} type="button" className={`chip${on ? " on" : ""}`} onClick={() => setSport(s)} style={{ padding: "9px 14px", fontSize: 13.5 }}>
-              {sportIcon(s)} {s}
+              {sportIcon(s)} {sportLabel(s)}
             </button>
           );
         })}
